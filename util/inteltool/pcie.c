@@ -158,6 +158,24 @@ static const io_register_t haswell_ult_dmi_registers[] = {
 /*  ... - Reserved */
 };
 
+static const io_register_t haswell_e_dmi_registers[] = {
+	{ 0x10, 4, "DMIVC0RCAP" }, //DMI VC0 Resource Capability
+	{ 0x14, 4, "DMIVC0RCTL" }, //DMI VC0 Resource Control
+	{ 0x1a, 2, "DMIVC0RSTS" }, //DMI VC0 Resource Status
+	{ 0x1c, 4, "DMIVC1RCAP" }, //DMI VC1 Resource Capability
+	{ 0x20, 4, "DMIVC1RCTL" }, //DMI VC1 Resource Control
+	{ 0x26, 2, "DMIVC1RSTS" }, //DMI VC1 Resource Status
+	{ 0x28, 4, "DMIVCPRCAP" }, //DMI VCP Resource Capability
+	{ 0x2c, 4, "DMIVCPRCTL" }, //DMI VCP Resource Control
+	{ 0x32, 2, "DMIVCPRSTS" }, //DMI VCP Resource Status
+	{ 0x34, 4, "DMIVCMRCAP" }, //DMI VCM Resource Capability
+	{ 0x38, 4, "DMIVCMRCTL" }, //DMI VCM Resource Control
+	{ 0x3e, 2, "DMIVCMRSTS" }, //DMI VCM Resource Status
+	{ 0x60, 4, "DMIVC1CDTTHROTTLE" }, //DMI VC1 Credit Throttle
+	{ 0x64, 4, "DMIVCPCDTTHROTTLE" }, //DMI VCP Credit Throttle
+	{ 0x68, 4, "DMIVCMCDTTHROTTLE" }, //DMI VCM Credit Throttle
+};
+
 /*
  * All Skylake-S/H DMI Registers per
  *
@@ -384,6 +402,11 @@ int print_dmibar(struct pci_dev *nb)
 		dmibar_phys = pci_read_long(nb, 0x68);
 		dmibar_phys |= ((uint64_t)pci_read_long(nb, 0x6c)) << 32;
 		dmibar_phys &= 0x0000007ffffff000UL; /* 38:12 */
+		break;
+	case PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_E: //DMIRCBAR
+		dmibar_phys = pci_read_long(nb, 0x50) & 0xfffff000;
+		dmi_registers = haswell_e_dmi_registers;
+		size = ARRAY_SIZE(haswell_e_dmi_registers);
 		break;
 	case PCI_DEVICE_ID_INTEL_CORE_6TH_GEN_D2:
 	case PCI_DEVICE_ID_INTEL_CORE_6TH_GEN_U:

@@ -448,6 +448,30 @@ static const io_register_t baytrail_score_ssus_gpio_registers[] = {
 	{ 0x80 + 0x38, 4, "SUS_WAKE_EN_43_32_" }
 };
 
+/* Wellsburg (X99/C610) */
+static const gpio_default_t wellsburg_defaults[] = {
+	{ 0x00, 0x9F7FA1FF },
+	{ 0x04, 0xC8EB6EFF },
+	{ 0x0c, 0x22FE1100 },
+	{ 0x18, 0x00040000 },
+	{ 0x1c, 0x00000000 },
+	{ 0x20, 0x00080000 },
+	{ 0x24, 0x00000000 },
+	{ 0x28, 0x0000 },
+	{ 0x2a, 0x0000 },
+	{ 0x2c, 0x00000000 },
+	{ 0x30, 0x2383F0FF },
+	{ 0x34, 0x1F57FFF4 },
+	{ 0x38, 0xA4AA0007 },
+	{ 0x40, 0x00000330 },
+	{ 0x44, 0x00000FF0 },
+	{ 0x48, 0x000000C0 },
+	{ 0x4c, 0x00000000 },
+	{ 0x60, 0x01000000 },
+	{ 0x64, 0x00000000 },
+	{ 0x68, 0x00000000 },
+};
+
 /* Description of GPIO 'bank' ex. {ncore, score. ssus} */
 struct gpio_bank {
 	const uint32_t gpio_count;
@@ -947,6 +971,13 @@ int print_gpios(struct pci_dev *sb, int show_all, int show_diffs)
 		gpio_defaults = pp_pch_mobile_defaults;
 		defaults_size = ARRAY_SIZE(pp_pch_mobile_defaults);
 		break;
+	case PCI_DEVICE_ID_INTEL_WELLSBURG:
+		gpiobase = pci_read_word(sb, 0x48) & 0xff80;
+		gpio_registers = pch_gpio_registers;
+		size = ARRAY_SIZE(pch_gpio_registers);
+		gpio_defaults = wellsburg_defaults;
+		defaults_size = ARRAY_SIZE(wellsburg_defaults);
+		break;
 	case PCI_DEVICE_ID_INTEL_ICH10:
 	case PCI_DEVICE_ID_INTEL_ICH10D:
 	case PCI_DEVICE_ID_INTEL_ICH10DO:
@@ -1008,7 +1039,6 @@ int print_gpios(struct pci_dev *sb, int show_all, int show_diffs)
 		gpio_registers = ich0_gpio_registers;
 		size = ARRAY_SIZE(ich0_gpio_registers);
 		break;
-
 	case PCI_DEVICE_ID_INTEL_I63XX:
 		gpiobase = pci_read_word(sb, 0x48) & 0xfffc;
 		gpio_registers = i631x_gpio_registers;

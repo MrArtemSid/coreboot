@@ -97,7 +97,8 @@ static const io_register_t pch_pm_registers[] = {
 	{ 0x52, 2, "RESERVED" },
 	{ 0x54, 4, "RESERVED" },
 	{ 0x58, 4, "RESERVED" },
-	{ 0x5c, 4, "RESERVED" },
+	{ 0x5c, 2, "ALT_GPI_SMI_EN2" },
+	{ 0x5e, 2, "ALT_GPI_SMI_STS2" },
 	/* The TCO registers start here. */
 	{ 0x60, 2, "TCO_RLD" },
 	{ 0x62, 1, "TCO_DAT_IN" },
@@ -751,6 +752,7 @@ int print_pmbase(struct pci_dev *sb, struct pci_access *pacc)
 	case PCI_DEVICE_ID_INTEL_HM75:
 	case PCI_DEVICE_ID_INTEL_HM70:
 	case PCI_DEVICE_ID_INTEL_BAYTRAIL_LPC:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG:
 	case PCI_DEVICE_ID_INTEL_C8_MOBILE:
 	case PCI_DEVICE_ID_INTEL_C8_DESKTOP:
 	case PCI_DEVICE_ID_INTEL_Z87:

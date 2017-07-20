@@ -48,8 +48,8 @@ static const io_register_t spi_bar_registers[] = {
 	{ 0x7c, 4, "FPR0 Flash Protected Range 2" },
 	{ 0x80, 4, "FPR0 Flash Protected Range 3" },
 	{ 0x84, 4, "FPR0 Flash Protected Range 4" },
-	{ 0x90, 1, "SSFSTS - Software Sequencing Flash Status" },
-	{ 0x91, 3, "SSFSTS - Software Sequencing Flash Status" },
+	{ 0x90, 1, "SSFS - Software Sequencing Flash Status" },
+	{ 0x91, 3, "SSFC - Software Sequencing Flash Control" },
 	{ 0x94, 2, "PREOP - Prefix opcode Configuration" },
 	{ 0x96, 2, "OPTYPE - Opcode Type Configuration" },
 	{ 0x98, 8, "OPMENU - Opcode Menu Configuration" },
@@ -132,6 +132,7 @@ static int print_bioscntl(struct pci_dev *sb)
 	case PCI_DEVICE_ID_INTEL_PM55:
 	case PCI_DEVICE_ID_INTEL_QM57:
 	case PCI_DEVICE_ID_INTEL_QS57:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG:
 	case PCI_DEVICE_ID_INTEL_Z68:
 	case PCI_DEVICE_ID_INTEL_P67:
 	case PCI_DEVICE_ID_INTEL_UM67:
@@ -321,6 +322,7 @@ static int print_spibar(struct pci_dev *sb) {
 	case PCI_DEVICE_ID_INTEL_LYNXPOINT_LP_BASE:
 	case PCI_DEVICE_ID_INTEL_WILDCATPOINT_LP_PREM:
 	case PCI_DEVICE_ID_INTEL_WILDCATPOINT_LP:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG:
 	case PCI_DEVICE_ID_INTEL_C8_MOBILE:
 	case PCI_DEVICE_ID_INTEL_C8_DESKTOP:
 	case PCI_DEVICE_ID_INTEL_Z87:

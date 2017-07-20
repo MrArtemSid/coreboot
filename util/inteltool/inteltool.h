@@ -158,6 +158,7 @@ static inline uint32_t inl(unsigned port)
 #define PCI_DEVICE_ID_INTEL_TIGERPOINT_U_BASE	0xa083
 #define PCI_DEVICE_ID_INTEL_TIGERPOINT_Y_SUPER	0xa086
 #define PCI_DEVICE_ID_INTEL_TIGERPOINT_Y_PREM	0xa087
+#define PCI_DEVICE_ID_INTEL_WELLSBURG		0x8d47
 #define PCI_DEVICE_ID_INTEL_H110		0xa143
 #define PCI_DEVICE_ID_INTEL_H170		0xa144
 #define PCI_DEVICE_ID_INTEL_Z170		0xa145
@@ -339,6 +340,7 @@ static inline uint32_t inl(unsigned port)
 #define PCI_DEVICE_ID_INTEL_CORE_3RD_GEN_E3	0x0158 /* Ivy Bridge (Xeon E3 v2) */
 #define PCI_DEVICE_ID_INTEL_CORE_3RD_GEN_015c	0x015c /* Ivy Bridge (?) */
 #define PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_D	0x0c00 /* Haswell (Desktop) */
+#define PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_E	0x2f00 /* Haswell (Extreme) */
 #define PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_M	0x0c04 /* Haswell (Mobile) */
 #define PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_E3	0x0c08 /* Haswell (Xeon E3 v3) */
 #define PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_U	0x0a04 /* Haswell-ULT */

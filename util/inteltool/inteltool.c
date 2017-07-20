@@ -99,6 +99,8 @@ static const struct {
 	  "3rd generation (Ivy Bridge family) Core Processor" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_D,
 	  "4th generation (Haswell family) Core Processor (Desktop)" },
+	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_E,
+	  "4th generation (Haswell family) Core Processor (Extreme)" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_M,
 	  "4th generation (Haswell family) Core Processor (Mobile)" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_CORE_4TH_GEN_E3,
@@ -312,6 +314,8 @@ static const struct {
 	  "Tiger Point Y Engineering Sample" },
 	{ PCI_VENDOR_ID_INTEL,  PCI_DEVICE_ID_INTEL_TIGERPOINT_Y_PREM,
 	  "Tiger Point Y Premium/Tigerlake" },
+	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_WELLSBURG,
+	  "Wellsburg (X99/C610)" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_H110, "H110" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_H170, "H170" },
 	{ PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_Z170, "Z170" },
@@ -686,7 +690,8 @@ static void print_system_info(struct pci_dev *nb, struct pci_dev *sb, struct pci
 int main(int argc, char *argv[])
 {
 	struct pci_access *pacc;
-	struct pci_dev *sb = NULL, *nb, *gfx = NULL, *ahci = NULL, *dev;
+	struct pci_dev *sb = NULL, *nb, *gfx = NULL, *dev;
+	struct pci_dev *ahci = NULL, *ahci2 = NULL;
 	const char *dump_spd_file = NULL;
 	int opt, option_index = 0;
 
@@ -928,7 +933,8 @@ int main(int argc, char *argv[])
 				   PCI_FILL_CLASS);
 		if ((gfx->device_class & 0xff00) != 0x0300)
 			gfx = NULL;
-		else if (gfx->vendor_id != PCI_VENDOR_ID_INTEL)
+		else if (gfx->vendor_id != PCI_VENDOR_ID_INTEL||
+		    gfx->device_class != PCI_CLASS_DISPLAY_VGA)
 			gfx = NULL;
 	}
 
@@ -938,7 +944,8 @@ int main(int argc, char *argv[])
 		ahci = pci_get_dev(pacc, 0, 0, 0x1f, 2);
 		if (ahci) {
 			pci_fill_info(ahci, PCI_FILL_CLASS);
-			if (ahci->device_class != PCI_CLASS_STORAGE_SATA)
+			if (ahci->device_class != PCI_CLASS_STORAGE_SATA &&
+			    ahci->device_class != PCI_CLASS_STORAGE_RAID)
 				ahci = pci_get_dev(pacc, 0, 0, 0x17, 0);
 		}
 	}
@@ -948,8 +955,15 @@ int main(int argc, char *argv[])
 				    PCI_FILL_CLASS);
 
 		if (ahci->vendor_id != PCI_VENDOR_ID_INTEL ||
-		    ahci->device_class != PCI_CLASS_STORAGE_SATA)
+		    (ahci->device_class != PCI_CLASS_STORAGE_SATA &&
+		     ahci->device_class != PCI_CLASS_STORAGE_RAID))
 			ahci = NULL;
+	}
+
+	if (sb->device_id == PCI_DEVICE_ID_INTEL_WELLSBURG) {
+		ahci2 = pci_get_dev(pacc, 0, 0, 0x11, 4);
+		pci_fill_info(ahci2, PCI_FILL_IDENT | PCI_FILL_BASES |
+			PCI_FILL_CLASS);
 	}
 
 	print_system_info(nb, sb, gfx);
@@ -1012,8 +1026,10 @@ int main(int argc, char *argv[])
 	if (dump_gfx)
 		print_gfx(gfx);
 
-	if (dump_ahci)
+	if (dump_ahci) {
 		print_ahci(ahci);
+		print_ahci(ahci2);
+	}
 
 	if (dump_sgx)
 		print_sgx();
@@ -1031,6 +1047,8 @@ int main(int argc, char *argv[])
 	pcr_cleanup();
 	if (ahci)
 		pci_free_dev(ahci);
+	if (ahci2)
+		pci_free_dev(ahci2);
 	if (gfx)
 		pci_free_dev(gfx);
 	pci_free_dev(nb);
