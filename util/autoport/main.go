@@ -30,9 +30,12 @@ type PCIDevice interface {
 }
 
 type InteltoolData struct {
-	GPIO map[uint16]uint32
-	RCBA map[uint16]uint32
-	IGD  map[uint32]uint32
+	GPIO   map[uint16]uint32
+	RCBA   map[uint16]uint32
+	IOBP   map[uint32]uint32
+	IGD    map[uint32]uint32
+	MCHBAR map[uint16]uint32
+	PMBASE map[uint16]uint32
 }
 
 type DMIData struct {
@@ -258,6 +261,7 @@ type DevTreeNode struct {
 	SubVendor     uint16
 	SubSystem     uint16
 	Chip          string
+	Ops           string
 	Comment       string
 }
 
@@ -385,6 +389,10 @@ func WriteDev(dt *os.File, offset int, alias string, dev DevTreeNode) {
 		fmt.Fprintf(dt, " # %s", dev.Comment)
 	}
 	fmt.Fprintf(dt, "\n")
+	if dev.Ops != "" {
+		Offset(dt, offset+1)
+		fmt.Fprintf(dt, "ops %s\n", dev.Ops)
+	}
 	if dev.Chip == "pci" && dev.SubSystem != 0 && dev.SubVendor != 0 {
 		Offset(dt, offset+1)
 		fmt.Fprintf(dt, "subsystemid 0x%04x 0x%04x\n", dev.SubVendor, dev.SubSystem)
