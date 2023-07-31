@@ -23,6 +23,8 @@ static struct {
 	{ CPUID_HASWELL_C0,       "Haswell C0" },
 	{ CPUID_HASWELL_ULT_B0,   "Haswell ULT B0" },
 	{ CPUID_HASWELL_ULT_C0,   "Haswell ULT C0 or D0" },
+	{ CPUID_HASWELL_EP_A0,   "Haswell-EP A0" },
+	{ CPUID_HASWELL_EP_B0,   "Haswell-EP B0" },
 	{ CPUID_CRYSTALWELL_C0,   "Haswell Perf Halo" },
 	{ CPUID_BROADWELL_ULT_C0, "Broadwell C0" },
 	{ CPUID_BROADWELL_ULT_D0, "Broadwell D0" },

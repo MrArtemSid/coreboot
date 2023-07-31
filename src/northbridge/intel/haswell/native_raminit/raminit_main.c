@@ -27,9 +27,11 @@ static enum generic_stepping get_stepping(const uint32_t cpuid)
 {
 	switch (cpuid) {
 	case CPUID_HASWELL_A0:
+	case CPUID_HASWELL_EP_A0:
 		die("Haswell stepping A0 is not supported\n");
 	case CPUID_HASWELL_B0:
 	case CPUID_HASWELL_ULT_B0:
+	case CPUID_HASWELL_EP_B0:
 	case CPUID_CRYSTALWELL_B0:
 		return STEPPING_B0;
 	case CPUID_HASWELL_C0:
