@@ -119,14 +119,14 @@ func init() {
 	RegisterPCI(0x8086, 0x0c00, haswellmc{variant: "Desktop"})
 	RegisterPCI(0x8086, 0x0c04, haswellmc{variant: "Mobile"})
 	RegisterPCI(0x8086, 0x0a04, haswellmc{variant: "ULT"})
-	RegisterPCI(0x8086, 0x0c08, haswellmc{variant: "Server"})
+	RegisterPCI(0x8086, 0x2f00, haswellmc{variant: "Server"})
 	RegisterPCI(0x8086, 0x0d00, haswellmc{variant: "Crystal Well Desktop"})
 	RegisterPCI(0x8086, 0x0d04, haswellmc{variant: "Crystal Well Mobile"})
 	RegisterPCI(0x8086, 0x0d08, haswellmc{variant: "Crystal Well Server"})
 	for _, id := range []uint16{
 		0x0402, 0x0412, 0x0422, /* Desktop */
 		0x0406, 0x0416, 0x0426, /* Mobile */
-		0x040a, 0x041a, 0x042a, /* Server */
+		//0x040a, 0x041a, 0x042a, /* Server */
 		0x0a06, 0x0a16, 0x0a26, /* ULT */
 		0x0d16, 0x0d22, 0x0d26, 0x0d36, /* Mobile 4+3, GT3e */
 	} {
