@@ -1,0 +1,23 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config CPU_INTEL_HASWELL_EP
+	bool
+	select ARCH_X86
+	select SSE2
+	select UDELAY_TSC
+	select TSC_MONOTONIC_TIMER
+	select TSC_SYNC_MFENCE
+	select CPU_INTEL_COMMON
+	select CPU_INTEL_COMMON_TIMEBASE
+	select SUPPORT_CPU_UCODE_IN_CBFS
+
+if CPU_INTEL_HASWELL_EP
+
+config MAX_CPUS
+	int
+	default 1
+	help
+	  Only the BSP is used by the diagnostic bring-up path. AP startup,
+	  SMM and runtime CPU initialization are not implemented yet.
+
+endif

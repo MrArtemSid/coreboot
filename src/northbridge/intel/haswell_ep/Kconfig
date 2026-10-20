@@ -1,0 +1,25 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config NORTHBRIDGE_INTEL_HASWELL_EP
+	bool
+	select CPU_INTEL_HASWELL_EP
+	select SEPARATE_ROMSTAGE
+	select NO_ECAM_MMCONF_SUPPORT
+
+if NORTHBRIDGE_INTEL_HASWELL_EP
+
+config DCACHE_RAM_BASE
+	hex
+	default 0xfe100000
+
+config DCACHE_RAM_SIZE
+	hex
+	default 0x100000
+
+config DCACHE_BSP_STACK_SIZE
+	hex
+	default 0x10000
+	help
+	  Stack for coreboot diagnostics only, not for the stock Uncore PEIM.
+
+endif
