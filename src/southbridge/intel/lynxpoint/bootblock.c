@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <arch/bootblock.h>
+#include <device/mmio.h>
 #include <device/pci_ops.h>
 #include <southbridge/intel/common/early_spi.h>
 #include "pch.h"
