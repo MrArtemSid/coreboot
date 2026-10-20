@@ -12,6 +12,7 @@ endif
 bootblock-y += platform.c
 romstage-y += platform.c
 romstage-y += romstage.c
+romstage-y += native_raminit/spd.c
 
 # There is deliberately no ramstage/resource map or memory-init substitute.
 .PHONY: grantley-no-raminit
