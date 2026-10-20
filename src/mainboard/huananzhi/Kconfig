@@ -1,0 +1,17 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_HUANANZHI
+
+choice
+	prompt "Mainboard model"
+
+source "src/mainboard/huananzhi/x99_ep/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/huananzhi/x99_ep/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Huananzhi"
+
+endif

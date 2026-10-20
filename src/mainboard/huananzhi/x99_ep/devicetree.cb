@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Minimal static tree for LPC diagnostic setup, not a runtime resource map.
+chip southbridge/intel/lynxpoint
+	device domain 0 on
+		device pci 1f.0 on end
+	end
+end

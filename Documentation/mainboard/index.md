@@ -178,6 +178,14 @@ EliteBook Folio 9480m <hp/folio_9480m.md>
 EliteBook 820 G2 <hp/elitebook_820_g2.md>
 ```
 
+## Huananzhi
+
+```{toctree}
+:maxdepth: 1
+
+X99-QD4 / X99-BD4 (diagnostic bring-up only) <huananzhi/x99_ep.md>
+```
+
 ## Intel
 
 ```{toctree}
