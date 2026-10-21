@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <arch/romstage.h>
+#include <cbmem.h>
 #include <cbfs.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
@@ -10,7 +12,13 @@
 #include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
 #include <post.h>
 #include <romstage_common.h>
+#include <romstage_handoff.h>
 #include "platform.h"
+
+/* Static CAR storage for PEI runner services and HOB list */
+static struct grantley_uncore_state uncore_state;
+static uint8_t pei_pool[64 * 1024] __aligned(16);
+static uint8_t pei_hob[16 * 1024] __aligned(16);
 
 void __noreturn romstage_main(void)
 {
@@ -42,10 +50,51 @@ void __noreturn romstage_main(void)
 
 		if (!uncore_bin) {
 			printk(BIOS_ERR, "Grantley: uncore.bin not found in CBFS\n");
-		} else {
-			printk(BIOS_INFO, "Grantley: found uncore.bin (%zu bytes) at %p\n",
-			       uncore_size, uncore_bin);
+			post_code(0xee);
+			die("Grantley: uncore.bin required but missing from CBFS!\n");
 		}
+
+		printk(BIOS_INFO, "Grantley: found uncore.bin (%zu bytes) at %p\n",
+		       uncore_size, uncore_bin);
+
+		/* Initialise PEI Services in CAR */
+		EFI_STATUS status = grantley_pei_services_init(
+			&uncore_state,
+			pei_pool, sizeof(pei_pool),
+			pei_hob, sizeof(pei_hob));
+
+		if (status != EFI_SUCCESS) {
+			printk(BIOS_ERR, "Grantley: failed to init PEI services: 0x%lx\n",
+			       (unsigned long)status);
+			post_code(0xef);
+			die("Grantley: PEI services init failure\n");
+		}
+
+		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
+		grantley_pei_set_mmcfg(&uncore_state, 0x80000000UL);
+
+		post_code(0x35);
+		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");
+
+		status = grantley_run_uncore_peim(uncore_bin, &uncore_state);
+		if (status != EFI_SUCCESS) {
+			printk(BIOS_ERR, "Grantley: uncore PEIM returned error: 0x%lx\n",
+			       (unsigned long)status);
+			post_code(0xe4);
+			die("Grantley: uncore memory initialization failed!\n");
+		}
+
+		post_code(0x36);
+		printk(BIOS_INFO, "Grantley: DRAM training complete! Detected %llu MB\n",
+		       (unsigned long long)(uncore_state.dram_size >> 20));
+
+		/* Memory is online: initialise CBMEM and hand off to postcar */
+		cbmem_initialize_empty();
+		romstage_handoff_init(false);
+
+		post_code(0x37);
+		printk(BIOS_INFO, "Grantley: tearing down CAR and transferring to ramstage...\n");
+		prepare_and_run_postcar();
 	}
 
 	/* Do not invoke the client MRC, train DRAM, publish CBMEM or leave CAR. */
