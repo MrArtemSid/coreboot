@@ -20,7 +20,7 @@ DefinitionBlock(
 
 	Device (\_SB.PCI0)
 	{
-		#include <northbridge/intel/haswell/acpi/hostbridge.asl>
+		#include <northbridge/intel/grantley/acpi/hostbridge.asl>
 		#include <southbridge/intel/lynxpoint/acpi/pch.asl>
 	}
 
