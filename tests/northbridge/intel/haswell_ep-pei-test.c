@@ -1,0 +1,180 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#include <string.h>
+#include <tests/test.h>
+#undef NULL
+#include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
+
+static struct grantley_uncore_state state;
+static UINT8 pool[4096];
+static UINT8 hob_buffer[4096];
+
+static const EFI_GUID test_guid_1 = {
+	0x11111111, 0x1111, 0x1111, { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11 }
+};
+static const EFI_GUID test_guid_2 = {
+	0x22222222, 0x2222, 0x2222, { 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22 }
+};
+static const EFI_GUID dummy_guid = {
+	0x99999999, 0x9999, 0x9999, { 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99 }
+};
+
+static int setup(void **s)
+{
+	memset(pool, 0, sizeof(pool));
+	memset(hob_buffer, 0, sizeof(hob_buffer));
+	assert_int_equal(grantley_pei_services_init(&state, pool, sizeof(pool),
+						   hob_buffer, sizeof(hob_buffer)),
+			 EFI_SUCCESS);
+	return 0;
+}
+
+static void test_pei_services_init(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+	assert_non_null(services);
+	assert_non_null(*services);
+
+	assert_int_equal((*services)->Hdr.Signature, PEI_SERVICES_SIGNATURE);
+	assert_int_equal((*services)->Hdr.Revision, PEI_SERVICES_REVISION);
+	assert_int_equal((*services)->Hdr.HeaderSize, sizeof(EFI_TABLE_HEADER));
+
+	EFI_BOOT_MODE boot_mode = 0xff;
+	assert_int_equal((*services)->GetBootMode(services, &boot_mode), EFI_SUCCESS);
+	assert_int_equal(boot_mode, BOOT_WITH_FULL_CONFIGURATION);
+
+	VOID *hob_list = NULL;
+	assert_int_equal((*services)->GetHobList(services, &hob_list), EFI_SUCCESS);
+	assert_ptr_equal(hob_list, hob_buffer);
+
+	EFI_HOB_HANDOFF_INFO_TABLE *hit = (EFI_HOB_HANDOFF_INFO_TABLE *)hob_list;
+	assert_int_equal(hit->Header.HobType, EFI_HOB_TYPE_HANDOFF);
+	assert_int_equal(hit->Header.HobLength, sizeof(EFI_HOB_HANDOFF_INFO_TABLE));
+}
+
+static void test_ppi_install_locate_reinstall(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+	int iface_1 = 42;
+	int iface_2 = 84;
+	int iface_2_new = 168;
+
+	EFI_PEI_PPI_DESCRIPTOR list[] = {
+		{
+			EFI_PEI_PPI_DESCRIPTOR_PPI,
+			(EFI_GUID *)&test_guid_1,
+			&iface_1,
+		},
+		{
+			EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
+			(EFI_GUID *)&test_guid_2,
+			&iface_2,
+		},
+	};
+
+	assert_int_equal((*services)->InstallPpi(services, list), EFI_SUCCESS);
+
+	void *found_iface = NULL;
+	EFI_PEI_PPI_DESCRIPTOR *found_desc = NULL;
+	assert_int_equal((*services)->LocatePpi(services, &test_guid_1, 0, &found_desc, &found_iface),
+			 EFI_SUCCESS);
+	assert_ptr_equal(found_iface, &iface_1);
+	assert_ptr_equal(found_desc, &list[0]);
+
+	assert_int_equal((*services)->LocatePpi(services, &test_guid_2, 0, &found_desc, &found_iface),
+			 EFI_SUCCESS);
+	assert_ptr_equal(found_iface, &iface_2);
+
+	/* Unregistered GUID must return NOT_FOUND */
+	assert_int_equal((*services)->LocatePpi(services, &dummy_guid, 0, NULL, &found_iface),
+			 EFI_NOT_FOUND);
+
+	/* Reinstall test */
+	EFI_PEI_PPI_DESCRIPTOR new_desc = {
+		EFI_PEI_PPI_DESCRIPTOR_PPI,
+		(EFI_GUID *)&test_guid_2,
+		&iface_2_new,
+	};
+	assert_int_equal((*services)->ReInstallPpi(services, &list[1], &new_desc), EFI_SUCCESS);
+
+	assert_int_equal((*services)->LocatePpi(services, &test_guid_2, 0, NULL, &found_iface),
+			 EFI_SUCCESS);
+	assert_ptr_equal(found_iface, &iface_2_new);
+}
+
+static void test_pool_and_memory_helpers(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+
+	void *buf1 = NULL;
+	void *buf2 = NULL;
+	assert_int_equal((*services)->AllocatePool(services, 30, &buf1), EFI_SUCCESS);
+	assert_non_null(buf1);
+	assert_int_equal(((uintptr_t)buf1) & 7, 0); /* 8-byte aligned */
+
+	assert_int_equal((*services)->AllocatePool(services, 64, &buf2), EFI_SUCCESS);
+	assert_non_null(buf2);
+	assert_true((uint8_t *)buf2 >= (uint8_t *)buf1 + 32);
+
+	/* SetMem and CopyMem check */
+	(*services)->SetMem(buf1, 30, 0xaa);
+	for (int i = 0; i < 30; i++)
+		assert_int_equal(((uint8_t *)buf1)[i], 0xaa);
+
+	(*services)->CopyMem(buf2, buf1, 30);
+	for (int i = 0; i < 30; i++)
+		assert_int_equal(((uint8_t *)buf2)[i], 0xaa);
+
+	/* Excessive allocation fails cleanly */
+	void *huge_buf = NULL;
+	assert_int_equal((*services)->AllocatePool(services, 100000, &huge_buf),
+			 EFI_OUT_OF_RESOURCES);
+}
+
+static void test_create_hob(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+
+	void *new_hob = NULL;
+	assert_int_equal((*services)->CreateHob(services, EFI_HOB_TYPE_RESOURCE_DESCRIPTOR,
+					       sizeof(EFI_HOB_RESOURCE_DESCRIPTOR), &new_hob),
+			 EFI_SUCCESS);
+	assert_non_null(new_hob);
+
+	EFI_HOB_GENERIC_HEADER *hdr = (EFI_HOB_GENERIC_HEADER *)new_hob;
+	assert_int_equal(hdr->HobType, EFI_HOB_TYPE_RESOURCE_DESCRIPTOR);
+	assert_true(hdr->HobLength >= sizeof(EFI_HOB_RESOURCE_DESCRIPTOR));
+
+	/* Verify the next HOB in list is END_OF_HOB_LIST */
+	EFI_HOB_GENERIC_HEADER *next_hdr = (EFI_HOB_GENERIC_HEADER *)((uint8_t *)new_hob + hdr->HobLength);
+	assert_int_equal(next_hdr->HobType, EFI_HOB_TYPE_END_OF_HOB_LIST);
+}
+
+static void test_install_pei_memory(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+
+	assert_false(state.dram_initialized);
+
+	EFI_PHYSICAL_ADDRESS base = 0x0;
+	UINT64 size = 0x400000000ULL; /* 16 GiB */
+
+	assert_int_equal((*services)->InstallPeiMemory(services, base, size), EFI_SUCCESS);
+
+	assert_true(state.dram_initialized);
+	assert_int_equal(state.dram_base, 0);
+	assert_int_equal(state.dram_size, 0x400000000ULL);
+}
+
+int main(void)
+{
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test_setup(test_pei_services_init, setup),
+		cmocka_unit_test_setup(test_ppi_install_locate_reinstall, setup),
+		cmocka_unit_test_setup(test_pool_and_memory_helpers, setup),
+		cmocka_unit_test_setup(test_create_hob, setup),
+		cmocka_unit_test_setup(test_install_pei_memory, setup),
+	};
+
+	return cb_run_group_tests(tests, NULL, NULL);
+}

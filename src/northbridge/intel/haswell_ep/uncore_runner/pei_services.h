@@ -1,0 +1,48 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#ifndef NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
+#define NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
+
+#include <PiPei.h>
+#include <Ppi/CpuIo.h>
+#include <Ppi/PciCfg2.h>
+#include <Ppi/ReadOnlyVariable2.h>
+
+#define MAX_GRANTLEY_PPI_DESCRIPTORS 32
+
+struct grantley_uncore_state {
+	struct _EFI_PEI_SERVICES services;
+	const struct _EFI_PEI_SERVICES *services_ptr;
+
+	/* PPI Registry */
+	const EFI_PEI_PPI_DESCRIPTOR * ppi_descriptors[MAX_GRANTLEY_PPI_DESCRIPTORS];
+	UINTN ppi_count;
+
+	/* HOB storage */
+	void *hob_list;
+	UINTN hob_size;
+	UINTN hob_allocated;
+
+	/* Pool memory */
+	UINT8 *pool_base;
+	UINTN pool_size;
+	UINTN pool_allocated;
+
+	/* Boot Mode */
+	EFI_BOOT_MODE boot_mode;
+
+	/* Resulting initialized DRAM info */
+	EFI_PHYSICAL_ADDRESS dram_base;
+	UINT64 dram_size;
+	BOOLEAN dram_initialized;
+};
+
+/* Global or context accessor for PEI services */
+struct grantley_uncore_state *grantley_get_uncore_state(void);
+
+/* Initialize PEI services table and internal storage */
+EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
+				    void *pool_buf, UINTN pool_size,
+				    void *hob_buf, UINTN hob_size);
+
+#endif /* NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H */

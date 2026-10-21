@@ -105,10 +105,13 @@ def main():
             raise RuntimeError("Unexpected flashable image")
         report[board]["image_guards_passed"] = 3
         print(f"PASS: {board}: both stages linked, microcode checked, image builds blocked")
-    run(["make", "build-tests/northbridge/haswell_ep-platform-test", "build-tests/northbridge/haswell_ep-spd-test"])
+    run(["make", "build-tests/northbridge/haswell_ep-platform-test",
+                 "build-tests/northbridge/haswell_ep-spd-test",
+                 "build-tests/northbridge/haswell_ep-pei-test"])
     # Invoke the binary directly: make's per-test runner deliberately ignores failures.
     print(run(["build/tests/tests/northbridge/haswell_ep-platform-test/run"]), end="")
     print(run(["build/tests/tests/northbridge/haswell_ep-spd-test/run"]), end="")
+    print(run(["build/tests/tests/northbridge/haswell_ep-pei-test/run"]), end="")
     output = ROOT / "build/grantley-diagnostic-results.json"
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(f"Results: {output.relative_to(ROOT)}")
