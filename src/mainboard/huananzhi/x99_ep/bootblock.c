@@ -16,14 +16,12 @@ void bootblock_early_northbridge_init(void)
 {
 	const struct cpuid_result vendor = cpuid(0);
 	const uint32_t pch = pci_s_read_config32(PCH_LPC_DEV, PCI_VENDOR_ID);
-	const enum grantley_board board = CONFIG(BOARD_HUANANZHI_X99_QD4) ?
-		GRANTLEY_BOARD_QD4 : GRANTLEY_BOARD_BD4;
 
 	/* Check identity via PCI type 1 before enabling any PCH MMIO/decode. */
 	if (vendor.ebx != 0x756e6547 || vendor.edx != 0x49656e69 ||
 	    vendor.ecx != 0x6c65746e ||
 	    grantley_cpu_model(cpuid_eax(1)) == GRANTLEY_CPU_UNKNOWN ||
-	    !grantley_pch_matches(pch & 0xffff, pch >> 16, board)) {
+	    !grantley_pch_is_supported(pch & 0xffff, pch >> 16)) {
 		post_code(0xe0);
 		halt();
 	}

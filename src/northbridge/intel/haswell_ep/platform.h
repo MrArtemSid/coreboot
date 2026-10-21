@@ -13,12 +13,26 @@ enum grantley_cpu {
 	GRANTLEY_BROADWELL_EP,
 };
 
-enum grantley_board {
-	GRANTLEY_BOARD_QD4,
-	GRANTLEY_BOARD_BD4,
+enum grantley_cpu grantley_cpu_model(uint32_t signature);
+
+/* Supported PCH device IDs on Grantley hybrid / native platforms. */
+enum grantley_pch_device {
+	GRANTLEY_PCH_Z87  = 0x8c44,
+	GRANTLEY_PCH_H87  = 0x8c4a,
+	GRANTLEY_PCH_Q85  = 0x8c4c,
+	GRANTLEY_PCH_Q87  = 0x8c4e,
+	GRANTLEY_PCH_B85  = 0x8c50,
+	GRANTLEY_PCH_C222 = 0x8c52,
+	GRANTLEY_PCH_C224 = 0x8c54,
+	GRANTLEY_PCH_C226 = 0x8c56,
+	GRANTLEY_PCH_H81  = 0x8c5c,
+	GRANTLEY_PCH_Z97  = 0x8cc4,
+	GRANTLEY_PCH_H97  = 0x8cc6,
+	GRANTLEY_PCH_C612 = 0x8d44,
+	GRANTLEY_PCH_X99  = 0x8d50,
 };
 
-enum grantley_cpu grantley_cpu_model(uint32_t signature);
-bool grantley_pch_matches(uint16_t vendor, uint16_t device, enum grantley_board board);
+/* PCH compatibility check for Grantley platform (Lynx Point, Wildcat Point, Wellsburg). */
+bool grantley_pch_is_supported(uint16_t vendor, uint16_t device);
 
 #endif

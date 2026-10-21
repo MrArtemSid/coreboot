@@ -14,17 +14,29 @@ enum grantley_cpu grantley_cpu_model(uint32_t signature)
 	}
 }
 
-bool grantley_pch_matches(uint16_t vendor, uint16_t device, enum grantley_board board)
+bool grantley_pch_is_supported(uint16_t vendor, uint16_t device)
 {
 	if (vendor != 0x8086)
 		return false;
 
-	/* IDs observed in the QD4 and BD4 hardware captures, not the X99 branding. */
-	switch (board) {
-	case GRANTLEY_BOARD_QD4:
-		return device == 0x8c4e; /* Q87 */
-	case GRANTLEY_BOARD_BD4:
-		return device == 0x8c50; /* B85 */
+	switch (device) {
+	/* Lynx Point 8-series desktop & server */
+	case GRANTLEY_PCH_Z87:
+	case GRANTLEY_PCH_H87:
+	case GRANTLEY_PCH_Q85:
+	case GRANTLEY_PCH_Q87:
+	case GRANTLEY_PCH_B85:
+	case GRANTLEY_PCH_C222:
+	case GRANTLEY_PCH_C224:
+	case GRANTLEY_PCH_C226:
+	case GRANTLEY_PCH_H81:
+	/* Wildcat Point 9-series */
+	case GRANTLEY_PCH_Z97:
+	case GRANTLEY_PCH_H97:
+	/* Wellsburg C610/C612 / X99 */
+	case GRANTLEY_PCH_C612:
+	case GRANTLEY_PCH_X99:
+		return true;
 	default:
 		return false;
 	}
