@@ -181,6 +181,11 @@ func (b lynxpoint) Scan(ctx Context, addr PCIDevData) {
 		fmt.Printf("Different SATA Gen3 port1 DTLE data and edge values are used.\n")
 	}
 
+	sataPortMap := "0x3f"
+	if sataDev, ok := PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 2}]; ok && len(sataDev.ConfigDump) > 0x92 {
+		sataPortMap = fmt.Sprintf("0x%x", sataDev.ConfigDump[0x92]&0x3f)
+	}
+
 	cur := DevTreeNode{
 		Chip:    "southbridge/intel/lynxpoint",
 		Comment: "Intel 8 Series Lynx Point PCH",
@@ -191,7 +196,7 @@ func (b lynxpoint) Scan(ctx Context, addr PCIDevData) {
 			"gen2_dec":             FormatGenDec("gen2_dec", PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 0}].ConfigDump[0x88:0x8c]),
 			"gen3_dec":             FormatGenDec("gen3_dec", PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 0}].ConfigDump[0x8c:0x90]),
 			"gen4_dec":             FormatGenDec("gen4_dec", PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 0}].ConfigDump[0x90:0x94]),
-			"sata_port_map":        fmt.Sprintf("0x%x", PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 2}].ConfigDump[0x92]&0x3f),
+			"sata_port_map":        sataPortMap,
 			"docking_supported":    (FormatBool((FADT[113] & (1 << 1)) != 0)),
 			"sata_port0_gen3_dtle": fmt.Sprintf("0x%x", sp0dtle_data),
 			"sata_port1_gen3_dtle": fmt.Sprintf("0x%x", sp1dtle_data),
