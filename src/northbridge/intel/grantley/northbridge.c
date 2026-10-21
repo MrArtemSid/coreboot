@@ -75,6 +75,6 @@ struct device_operations grantley_cpu_bus_ops = {
 	.init             = mp_cpu_bus_init,
 };
 
-struct chip_operations northbridge_intel_haswell_ep_ops = {
+struct chip_operations northbridge_intel_grantley_ops = {
 	.name = "Intel Haswell-EP / Broadwell-EP Northbridge",
 };

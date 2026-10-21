@@ -1,7 +1,7 @@
 ## SPDX-License-Identifier: GPL-2.0-or-later
 
-chip northbridge/intel/haswell_ep
-	chip cpu/intel/haswell_ep
+chip northbridge/intel/grantley
+	chip cpu/intel/grantley
 		device cpu_cluster 0x0 on
 			ops grantley_cpu_bus_ops
 		end

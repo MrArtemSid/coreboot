@@ -7,7 +7,7 @@
 #include <device/pci_ops.h>
 #include <device/pnp_ops.h>
 #include <halt.h>
-#include <northbridge/intel/haswell_ep/platform.h>
+#include <northbridge/intel/grantley/platform.h>
 #include <post.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include <superio/nuvoton/common/nuvoton.h>

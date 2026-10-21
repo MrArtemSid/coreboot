@@ -1,6 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-config CPU_INTEL_HASWELL_EP
+config CPU_INTEL_GRANTLEY
 	bool
 	select ARCH_X86
 	select SSE2
@@ -11,7 +11,7 @@ config CPU_INTEL_HASWELL_EP
 	select CPU_INTEL_COMMON_TIMEBASE
 	select SUPPORT_CPU_UCODE_IN_CBFS
 
-if CPU_INTEL_HASWELL_EP
+if CPU_INTEL_GRANTLEY
 
 config SMM_TSEG_SIZE
 	hex

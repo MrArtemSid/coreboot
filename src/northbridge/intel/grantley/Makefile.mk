@@ -1,6 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-ifeq ($(CONFIG_NORTHBRIDGE_INTEL_HASWELL_EP),y)
+ifeq ($(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY),y)
 ifeq ($(CONFIG_HAVE_INTEL_UNCORE_BIN),)
 # Reject image builds if uncore reference blob is not configured.
 ifeq ($(strip $(MAKECMDGOALS)),)

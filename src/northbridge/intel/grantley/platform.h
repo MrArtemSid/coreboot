@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef NORTHBRIDGE_INTEL_HASWELL_EP_PLATFORM_H
-#define NORTHBRIDGE_INTEL_HASWELL_EP_PLATFORM_H
+#ifndef NORTHBRIDGE_INTEL_GRANTLEY_PLATFORM_H
+#define NORTHBRIDGE_INTEL_GRANTLEY_PLATFORM_H
 
 #include <stdbool.h>
 #include <stdint.h>

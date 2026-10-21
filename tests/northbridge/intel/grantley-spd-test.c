@@ -2,7 +2,7 @@
 
 #include <device/dram/ddr4.h>
 #include <device/smbus_host.h>
-#include <northbridge/intel/haswell_ep/native_raminit/spd.h>
+#include <northbridge/intel/grantley/native_raminit/spd.h>
 #include <spd_bin.h>
 #include <string.h>
 #include <tests/test.h>

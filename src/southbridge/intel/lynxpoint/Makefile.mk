@@ -35,7 +35,7 @@ bootblock-y += early_pch.c
 romstage-y += early_usb.c me_status.c early_pch.c
 # The client ME helper reads client System Agent registers; Grantley has a
 # different address map and does not implement that memory-init contract.
-ifneq ($(CONFIG_NORTHBRIDGE_INTEL_HASWELL_EP),y)
+ifneq ($(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY),y)
 romstage-y += early_me.c
 endif
 romstage-y += pmutil.c

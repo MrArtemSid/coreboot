@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <northbridge/intel/haswell_ep/platform.h>
+#include <northbridge/intel/grantley/platform.h>
 #include <tests/test.h>
 
 static void test_haswell_ep_model(void **state)

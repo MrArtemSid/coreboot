@@ -4,7 +4,7 @@
 #include <tests/test.h>
 #include <commonlib/region.h>
 #undef NULL
-#include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
+#include <northbridge/intel/grantley/uncore_runner/pei_services.h>
 
 static struct grantley_uncore_state state;
 static UINT8 pool[4096];

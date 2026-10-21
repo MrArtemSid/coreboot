@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef NORTHBRIDGE_INTEL_HASWELL_EP_SPD_H
-#define NORTHBRIDGE_INTEL_HASWELL_EP_SPD_H
+#ifndef NORTHBRIDGE_INTEL_GRANTLEY_SPD_H
+#define NORTHBRIDGE_INTEL_GRANTLEY_SPD_H
 
 #include <device/dram/ddr4.h>
 
@@ -16,4 +16,4 @@ enum grantley_spd_status {
 enum grantley_spd_status grantley_read_spd(uintptr_t base, uint8_t address,
 					 struct dimm_attr_ddr4_st *dimm);
 
-#endif
+#endif /* NORTHBRIDGE_INTEL_GRANTLEY_SPD_H */

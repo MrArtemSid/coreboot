@@ -8,8 +8,8 @@
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
-#include <northbridge/intel/haswell_ep/native_raminit/spd.h>
-#include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
+#include <northbridge/intel/grantley/native_raminit/spd.h>
+#include <northbridge/intel/grantley/uncore_runner/pei_services.h>
 #include <post.h>
 #include <romstage_common.h>
 #include <romstage_handoff.h>
