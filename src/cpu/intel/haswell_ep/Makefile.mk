@@ -6,6 +6,8 @@ bootblock-y += ../../x86/early_reset.S
 
 postcar-y += ../car/non-evict/exit_car.S
 
+smm-$(CONFIG_HAVE_SMI_HANDLER) += ../haswell/smm_finalize.c
+
 # No client Haswell power management, SMM relocation or memory-init ABI.
 subdirs-y += ../microcode
 cpu_microcode_bins += $(wildcard 3rdparty/intel-microcode/intel-ucode/06-3f-02)

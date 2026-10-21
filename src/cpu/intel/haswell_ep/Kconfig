@@ -27,9 +27,8 @@ config SMM_RESERVED_SIZE
 
 config MAX_CPUS
 	int
-	default 1
+	default 44
 	help
-	  Only the BSP is used by the diagnostic bring-up path. AP startup,
-	  SMM and runtime CPU initialization are not implemented yet.
+	  Supports up to 22-core / 44-thread Xeon E5 v3 and v4 processors.
 
 endif
