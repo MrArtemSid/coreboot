@@ -9,11 +9,11 @@ are deliberately rejected. Do not flash these artifacts.
 
 The implementation is separate from the client Haswell CPU/northbridge code:
 
-- `src/cpu/intel/haswell_ep`: generic non-eviction CAR entry and EP microcode
+- `src/cpu/intel/grantley`: generic non-eviction CAR entry and EP microcode
   selection, without client power-management or SMM initialization.
-- `src/northbridge/intel/haswell_ep`: CPU-model/PCH identification and a romstage
-  that reports platform identity and stops before memory initialization.
-- `src/mainboard/huananzhi/x99_ep`: board selection and early LPC UART setup.
+- `src/northbridge/intel/grantley`: CPU-model/PCH identification and a romstage
+  flow running Intel Uncore PEIM via native PEI runner.
+- `src/mainboard/huananzhi/x99-series`: board selection and early LPC UART setup.
 
 The existing nested `x99-series` reference material is not used as executable
 mainboard code.

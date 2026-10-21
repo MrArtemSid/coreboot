@@ -5,11 +5,11 @@ if VENDOR_HUANANZHI
 choice
 	prompt "Mainboard model"
 
-source "src/mainboard/huananzhi/x99_ep/Kconfig.name"
+source "src/mainboard/huananzhi/x99-series/Kconfig.name"
 
 endchoice
 
-source "src/mainboard/huananzhi/x99_ep/Kconfig"
+source "src/mainboard/huananzhi/x99-series/Kconfig"
 
 config MAINBOARD_VENDOR
 	default "Huananzhi"

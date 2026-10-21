@@ -183,7 +183,7 @@ EliteBook 820 G2 <hp/elitebook_820_g2.md>
 ```{toctree}
 :maxdepth: 1
 
-X99-QD4 / X99-BD4 (diagnostic bring-up only) <huananzhi/x99_ep.md>
+X99-QD4 / X99-BD4 (diagnostic bring-up only) <huananzhi/x99-series.md>
 ```
 
 ## Intel

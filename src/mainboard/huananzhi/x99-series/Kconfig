@@ -15,11 +15,11 @@ config BOARD_SPECIFIC_OPTIONS
 	select HAVE_ACPI_RESUME
 
 config MAINBOARD_DIR
-	default "huananzhi/x99_ep"
+	default "huananzhi/x99-series"
 
 config VARIANT_DIR
-	default "QD4" if BOARD_HUANANZHI_X99_QD4
-	default "BD4" if BOARD_HUANANZHI_X99_BD4
+	default "qd4" if BOARD_HUANANZHI_X99_QD4
+	default "bd4" if BOARD_HUANANZHI_X99_BD4
 
 config OVERRIDE_DEVICETREE
 	default "variants/\$(CONFIG_VARIANT_DIR)/overridetree.cb"

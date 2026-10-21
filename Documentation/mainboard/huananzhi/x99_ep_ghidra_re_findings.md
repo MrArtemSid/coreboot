@@ -51,7 +51,7 @@ flash controller directly below the 4 GiB boundary:
 3. **Exit EFM**: Write `0xaa` to port `0x2e`.
 
 ### coreboot Mapping:
-The configuration in `src/mainboard/huananzhi/x99_ep/variants/QD4/overridetree.cb`
+The configuration in `src/mainboard/huananzhi/x99-series/variants/qd4/overridetree.cb`
 and `superio/nuvoton/nct5539d` exactly matches this register table. Early serial
 console output over COM1 (`0x3f8`, 115200 8N1) is enabled during the bootblock.
 

@@ -11,15 +11,14 @@ chip northbridge/intel/grantley
 						irq 0x70 = 4
 					end
 					device pnp 2e.5 on # PS/2 KBC
-						io  0x61 = 0x60
-						io  0x63 = 0x64
+						io  0x60 = 0x60
+						io  0x62 = 0x64
 						irq 0x70 = 1
 						irq 0x72 = 12
 					end
 					device pnp 2e.b on # HW Monitor
 						io  0x60 = 0xa20
-						io  0x62 = 0x0a
-						io  0x63 = 0x30
+						io  0x62 = 0xa30
 						irq 0x70 = 0
 					end
 				end
