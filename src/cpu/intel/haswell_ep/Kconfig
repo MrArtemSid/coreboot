@@ -13,6 +13,18 @@ config CPU_INTEL_HASWELL_EP
 
 if CPU_INTEL_HASWELL_EP
 
+config SMM_TSEG_SIZE
+	hex
+	default 0x800000
+
+config IED_REGION_SIZE
+	hex
+	default 0x400000
+
+config SMM_RESERVED_SIZE
+	hex
+	default 0x100000
+
 config MAX_CPUS
 	int
 	default 1
