@@ -668,6 +668,23 @@ void grantley_pei_set_var_store(struct grantley_uncore_state *state,
 	state->var_store_rdev = rdev;
 }
 
+void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
+				 uint16_t max_dram_speed_mts,
+				 uint8_t tcl, uint8_t trcd, uint8_t trp,
+				 uint8_t tras, uint8_t command_rate, bool ecc_en)
+{
+	if (!state)
+		return;
+
+	state->max_dram_speed_mts = max_dram_speed_mts;
+	state->tcl = tcl;
+	state->trcd = trcd;
+	state->trp = trp;
+	state->tras = tras;
+	state->command_rate = command_rate;
+	state->ecc_en = ecc_en;
+}
+
 static EFI_STATUS EFIAPI grantley_get_variable(
 	const struct _EFI_PEI_SERVICES **services,
 	const void *variable_name,
@@ -697,6 +714,50 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 
 	uint32_t size = (uint32_t)*data_size;
 	enum cb_err err = efi_fv_get_option(state->var_store_rdev, vendor_guid, ascii_name, data, &size);
+
+	/* If NVRAM store doesn't have IntelSetup, check if mainboard supplied manual overrides */
+	if (err != CB_SUCCESS && strcmp(ascii_name, "IntelSetup") == 0) {
+		bool has_override = (state->max_dram_speed_mts != 0 ||
+				     state->tcl != 0 || state->trcd != 0 ||
+				     state->trp != 0 || state->tras != 0 ||
+				     state->command_rate != 0 || state->ecc_en);
+
+		if (has_override) {
+			if (*data_size < 0x200) {
+				*data_size = 0x200;
+				return EFI_BUFFER_TOO_SMALL;
+			}
+			memset(data, 0, *data_size);
+
+			uint8_t *setup = (uint8_t *)data;
+
+			/* Map max_dram_speed_mts to Intel Grantley DdrFreqLimit (offset 0x6e) */
+			if (state->max_dram_speed_mts >= 2400)
+				setup[0x6e] = 0xd; /* DDR_2400 */
+			else if (state->max_dram_speed_mts >= 2133)
+				setup[0x6e] = 0xb; /* DDR_2133 */
+			else if (state->max_dram_speed_mts >= 1866)
+				setup[0x6e] = 0x9; /* DDR_1866 */
+			else if (state->max_dram_speed_mts >= 1600)
+				setup[0x6e] = 0x7; /* DDR_1600 */
+			else if (state->max_dram_speed_mts >= 1333)
+				setup[0x6e] = 0x5; /* DDR_1333 */
+
+			/* Timings (offsets in Intel Grantley SystemConfiguration structure) */
+			setup[0x70] = state->tcl;
+			setup[0x71] = state->trcd;
+			setup[0x72] = state->trp;
+			setup[0x73] = state->tras;
+			setup[0x74] = state->command_rate;
+			if (state->ecc_en)
+				setup[0x75] = 1;
+
+			*data_size = 0x200;
+			if (attributes)
+				*attributes = 0;
+			return EFI_SUCCESS;
+		}
+	}
 
 	if (err == CB_ERR_ARG)
 		return EFI_BUFFER_TOO_SMALL;

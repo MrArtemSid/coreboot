@@ -15,6 +15,11 @@
 #include <romstage_handoff.h>
 #include "platform.h"
 
+void __weak mainboard_memory_init_params(struct grantley_memory_params *params)
+{
+	/* Default implementation: leave all parameters as 0 for safe auto detection */
+}
+
 /* Static CAR storage for PEI runner services and HOB list */
 static struct grantley_uncore_state uncore_state;
 static uint8_t pei_pool[64 * 1024] __aligned(16);
@@ -72,6 +77,18 @@ void __noreturn romstage_main(void)
 
 		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
 		grantley_pei_set_mmcfg(&uncore_state, 0x80000000UL);
+
+		/* Query mainboard for optional memory parameter overrides */
+		struct grantley_memory_params mem_params = { 0 };
+		mainboard_memory_init_params(&mem_params);
+		grantley_pei_set_mem_params(&uncore_state,
+					    mem_params.max_dram_speed_mts,
+					    mem_params.tcl,
+					    mem_params.trcd,
+					    mem_params.trp,
+					    mem_params.tras,
+					    mem_params.command_rate,
+					    mem_params.ecc_en);
 
 		post_code(0x35);
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");

@@ -276,6 +276,25 @@ static void test_read_only_variable2_ppi(void **s)
 	/* Formatted empty store still returns EFI_NOT_FOUND cleanly */
 	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
 	assert_int_equal(status, EFI_NOT_FOUND);
+
+	/* Test manual memory overrides through grantley_pei_set_mem_params */
+	grantley_pei_set_mem_params(&state, 2133, 15, 15, 15, 35, 1, true);
+	buf_size = sizeof(buf);
+	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
+	assert_int_equal(status, EFI_BUFFER_TOO_SMALL);
+	assert_int_equal(buf_size, 0x200);
+
+	uint8_t large_buf[0x200];
+	buf_size = sizeof(large_buf);
+	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, large_buf);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_int_equal(large_buf[0x6e], 0x0b); /* DDR_2133 */
+	assert_int_equal(large_buf[0x70], 15);   /* tCL */
+	assert_int_equal(large_buf[0x71], 15);   /* tRCD */
+	assert_int_equal(large_buf[0x72], 15);   /* tRP */
+	assert_int_equal(large_buf[0x73], 35);   /* tRAS */
+	assert_int_equal(large_buf[0x74], 1);    /* 1T */
+	assert_int_equal(large_buf[0x75], 1);    /* ECC en */
 }
 
 static EFI_STATUS mock_peim_entry(

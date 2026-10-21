@@ -6,6 +6,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+struct grantley_memory_params {
+	uint16_t max_dram_speed_mts; /* 0 = Auto/SPD, 1600, 1866, 2133, 2400 */
+	uint8_t tcl;                 /* 0 = Auto */
+	uint8_t trcd;                /* 0 = Auto */
+	uint8_t trp;                 /* 0 = Auto */
+	uint8_t tras;                /* 0 = Auto */
+	uint8_t command_rate;        /* 0 = Auto, 1 = 1T, 2 = 2T */
+	bool ecc_en;                 /* Force ECC enable */
+};
+
+/* Optional mainboard hook to provide memory override parameters */
+void mainboard_memory_init_params(struct grantley_memory_params *params);
+
 /* Model classification only: not a claim of validated socket/stepping support. */
 enum grantley_cpu {
 	GRANTLEY_CPU_UNKNOWN,

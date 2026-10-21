@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
-#define NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
+#ifndef NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H
+#define NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H
 
 #include <rules.h>
 #include <stddef.h>
@@ -66,6 +66,15 @@ struct grantley_uncore_state {
 	/* Boot Mode */
 	EFI_BOOT_MODE boot_mode;
 
+	/* Override parameters provided by mainboard / configuration */
+	uint16_t max_dram_speed_mts;
+	uint8_t tcl;
+	uint8_t trcd;
+	uint8_t trp;
+	uint8_t tras;
+	uint8_t command_rate;
+	bool ecc_en;
+
 	/* Resulting initialized DRAM info */
 	EFI_PHYSICAL_ADDRESS dram_base;
 	UINT64 dram_size;
@@ -89,6 +98,12 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 void grantley_pei_set_var_store(struct grantley_uncore_state *state,
 				const struct region_device *rdev);
 
+/* Configure memory override parameters (or clear to 0 for automatic SPD detection) */
+void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
+				 uint16_t max_dram_speed_mts,
+				 uint8_t tcl, uint8_t trcd, uint8_t trp,
+				 uint8_t tras, uint8_t command_rate, bool ecc_en);
+
 /* Execute UncoreInitPeim module */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_state *state);
 
@@ -97,4 +112,4 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *pool_buf, UINTN pool_size,
 				    void *hob_buf, UINTN hob_size);
 
-#endif /* NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H */
+#endif /* NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H */
