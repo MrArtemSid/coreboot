@@ -12,6 +12,7 @@ endif
 endif
 
 bootblock-y += platform.c
+bootblock-y += bootblock.c
 romstage-y += platform.c
 ramstage-y += platform.c
 romstage-y += romstage.c
