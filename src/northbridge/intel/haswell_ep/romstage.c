@@ -32,9 +32,9 @@ void __noreturn romstage_main(void)
 	       grantley_cpu_model(signature) == GRANTLEY_HASWELL_EP ?
 	       "Haswell-EP" : "Broadwell-EP (not hardware-validated)");
 
-	/* Probe SMBus SPD on standard DIMM addresses (0x50..0x53) */
+	/* Probe SMBus SPD on standard DIMM addresses (0x50..0x57) */
 	enable_smbus();
-	for (uint8_t addr = 0x50; addr <= 0x53; addr++) {
+	for (uint8_t addr = 0x50; addr <= 0x57; addr++) {
 		struct dimm_attr_ddr4_st dimm;
 		enum grantley_spd_status st = grantley_read_spd(smbus_base(), addr, &dimm);
 		if (st == GRANTLEY_SPD_OK) {

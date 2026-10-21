@@ -316,7 +316,7 @@ static void test_run_uncore_peim(void **s)
 	mock_pe_buffer[0x82] = '\0';
 	mock_pe_buffer[0x83] = '\0';
 
-	/* Entry point RVA at pe_hdr + 0x28 (0x80 + 0x28 = 0xa8) */
+	/* Test dynamic entry RVA calculation (as seen in QD4: 0x195c0 vs BD4: 0x195a0) */
 	intptr_t diff = (intptr_t)mock_peim_entry - (intptr_t)mock_pe_buffer;
 	*(int32_t *)&mock_pe_buffer[0x80 + 0x28] = (int32_t)diff;
 
