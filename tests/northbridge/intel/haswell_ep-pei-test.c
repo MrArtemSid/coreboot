@@ -278,6 +278,54 @@ static void test_read_only_variable2_ppi(void **s)
 	assert_int_equal(status, EFI_NOT_FOUND);
 }
 
+static EFI_STATUS mock_peim_entry(
+	void *file_handle,
+	const struct _EFI_PEI_SERVICES **services)
+{
+	/* Simulate PEIM completing memory training and calling InstallPeiMemory */
+	return (*services)->InstallPeiMemory(services, 0, 0x800000000ULL);
+}
+
+static uint8_t mock_pe_buffer[512] __aligned(16);
+
+static void test_run_uncore_peim(void **s)
+{
+	/* Build a minimal valid PE header that points to mock_peim_entry */
+	memset(mock_pe_buffer, 0, sizeof(mock_pe_buffer));
+
+	/* DOS header: 'MZ' and e_lfanew at 0x3c */
+	mock_pe_buffer[0] = 'M';
+	mock_pe_buffer[1] = 'N'; /* deliberately corrupt to test signature rejection */
+	*(uint32_t *)&mock_pe_buffer[0x3c] = 0x80;
+
+	EFI_STATUS status = grantley_run_uncore_peim(mock_pe_buffer, &state);
+	assert_int_equal(status, EFI_UNSUPPORTED);
+
+	/* Fix MZ signature */
+	mock_pe_buffer[1] = 'Z';
+
+	/* Corrupt PE signature */
+	mock_pe_buffer[0x80] = 'N';
+	mock_pe_buffer[0x81] = 'O';
+	status = grantley_run_uncore_peim(mock_pe_buffer, &state);
+	assert_int_equal(status, EFI_UNSUPPORTED);
+
+	/* Set valid PE\0\0 signature */
+	mock_pe_buffer[0x80] = 'P';
+	mock_pe_buffer[0x81] = 'E';
+	mock_pe_buffer[0x82] = '\0';
+	mock_pe_buffer[0x83] = '\0';
+
+	/* Entry point RVA at pe_hdr + 0x28 (0x80 + 0x28 = 0xa8) */
+	intptr_t diff = (intptr_t)mock_peim_entry - (intptr_t)mock_pe_buffer;
+	*(int32_t *)&mock_pe_buffer[0x80 + 0x28] = (int32_t)diff;
+
+	status = grantley_run_uncore_peim(mock_pe_buffer, &state);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_true(state.dram_initialized);
+	assert_int_equal(state.dram_size, 0x800000000ULL);
+}
+
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
@@ -288,6 +336,7 @@ int main(void)
 		cmocka_unit_test_setup(test_install_pei_memory, setup),
 		cmocka_unit_test_setup(test_pci_cfg_and_cpu_io_ppi, setup),
 		cmocka_unit_test_setup(test_read_only_variable2_ppi, setup),
+		cmocka_unit_test_setup(test_run_uncore_peim, setup),
 	};
 
 	return cb_run_group_tests(tests, NULL, NULL);

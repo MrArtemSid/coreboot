@@ -695,6 +695,39 @@ static EFI_STATUS EFIAPI grantley_get_next_variable_name(
 	return EFI_NOT_FOUND;
 }
 
+typedef EFI_STATUS (*grantley_peim_entry_t)(
+	void *file_handle,
+	const struct _EFI_PEI_SERVICES **services);
+
+EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_state *state)
+{
+	if (!pe_base || !state)
+		return EFI_INVALID_PARAMETER;
+
+	const uint8_t *bytes = (const uint8_t *)pe_base;
+
+	/* Verify DOS header signature 'MZ' */
+	if (bytes[0] != 'M' || bytes[1] != 'Z')
+		return EFI_UNSUPPORTED;
+
+	uint32_t e_lfanew = *(const uint32_t *)&bytes[0x3c];
+	const uint8_t *pe_hdr = bytes + e_lfanew;
+
+	/* Verify PE signature 'PE\0\0' */
+	if (pe_hdr[0] != 'P' || pe_hdr[1] != 'E' || pe_hdr[2] != 0 || pe_hdr[3] != 0)
+		return EFI_UNSUPPORTED;
+
+	/* In IA-32 PE binaries (Optional Header 32-bit):
+	 * Offset 0x28 is AddressOfEntryPoint (RVA).
+	 * In flat/CAR mapping, entry_addr = pe_base + entry_rva.
+	 */
+	uint32_t entry_rva = *(const uint32_t *)&pe_hdr[0x28];
+	grantley_peim_entry_t entry_point =
+		(grantley_peim_entry_t)(uintptr_t)(bytes + (intptr_t)(int32_t)entry_rva);
+
+	return entry_point((void *)0, &state->services_ptr);
+}
+
 static EFI_STATUS EFIAPI grantley_ffs_stub(void)
 {
 	return EFI_NOT_FOUND;

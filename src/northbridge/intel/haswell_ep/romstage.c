@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <cbfs.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
 #include <northbridge/intel/haswell_ep/native_raminit/spd.h>
+#include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
 #include <post.h>
 #include <romstage_common.h>
 #include "platform.h"
@@ -30,6 +32,19 @@ void __noreturn romstage_main(void)
 		if (st == GRANTLEY_SPD_OK) {
 			printk(BIOS_INFO, "DIMM at 0x%02x: %u MB, %u ranks, type %u, part %s\n",
 			       addr, dimm.size_mb, dimm.ranks, dimm.dimm_type, dimm.part_number);
+		}
+	}
+
+	/* Check for Intel Grantley Uncore reference blob (UncoreInitPeim) */
+	if (CONFIG(HAVE_INTEL_UNCORE_BIN)) {
+		size_t uncore_size = 0;
+		const void *uncore_bin = cbfs_ro_map("uncore.bin", &uncore_size);
+
+		if (!uncore_bin) {
+			printk(BIOS_ERR, "Grantley: uncore.bin not found in CBFS\n");
+		} else {
+			printk(BIOS_INFO, "Grantley: found uncore.bin (%zu bytes) at %p\n",
+			       uncore_size, uncore_bin);
 		}
 	}
 

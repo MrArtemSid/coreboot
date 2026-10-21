@@ -19,6 +19,20 @@ config DCACHE_RAM_SIZE
 	hex
 	default 0x100000
 
+config HAVE_INTEL_UNCORE_BIN
+	bool "Add Intel Grantley Uncore binary (UncoreInitPeim)"
+	default n
+	help
+	  Select this option to add Intel Grantley Uncore reference code
+	  (UncoreInitPeim) to CBFS for DDR4 memory and uncore initialization.
+
+config INTEL_UNCORE_BIN_FILE
+	string "Intel Grantley Uncore binary path and filename"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/uncore.bin"
+	help
+	  The path and filename of the UncoreInitPeim binary to add to CBFS.
+
 config DCACHE_BSP_STACK_SIZE
 	hex
 	default 0x10000

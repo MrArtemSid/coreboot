@@ -68,6 +68,9 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 void grantley_pei_set_var_store(struct grantley_uncore_state *state,
 				const struct region_device *rdev);
 
+/* Execute UncoreInitPeim module */
+EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_state *state);
+
 /* Initialize PEI services table and internal storage */
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *pool_buf, UINTN pool_size,

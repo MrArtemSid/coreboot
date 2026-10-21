@@ -15,6 +15,10 @@ romstage-y += romstage.c
 romstage-y += native_raminit/spd.c
 romstage-y += uncore_runner/pei_services.c
 
+cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
+uncore.bin-file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
+uncore.bin-type := raw
+
 # There is deliberately no ramstage/resource map or memory-init substitute.
 .PHONY: grantley-no-raminit
 grantley-no-raminit:
