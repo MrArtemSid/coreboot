@@ -407,12 +407,16 @@ func init() {
 		/* Lynx Point (8 Series PCH) */
 		0x8c42, 0x8c44, 0x8c46, 0x8c4a,
 		0x8c4c, 0x8c4e, 0x8c50, 0x8c5c,
+		/* Wellsburg (X99) */
+		0x8d4a, 0x8d50,
 	} {
 		RegisterPCI(0x8086, uint16(id), lynxpoint{variant: LYNX_POINT_DESKTOP})
 	}
 
 	for _, id := range []uint16{
 		0x8c52, 0x8c54, 0x8c56,
+		/* Wellsburg (C610 / C612) */
+		0x8d40, 0x8d44,
 	} {
 		RegisterPCI(0x8086, uint16(id), lynxpoint{variant: LYNX_POINT_SERVER})
 	}
@@ -438,6 +442,8 @@ func init() {
 		0x9c10, 0x9c12, 0x9c14, 0x9c16, 0x9c18, 0x9c1a,
 		/* Lynx Point Refresh (9 Series PCH) */
 		0x8c90, 0x8c92, 0x8c94, 0x8c96, 0x8c98, 0x8c9a, 0x8c9c, 0x8c9e,
+		/* Wellsburg (C610 / C612 / X99) */
+		0x8d10, 0x8d12, 0x8d14, 0x8d16, 0x8d18, 0x8d1a, 0x8d1c, 0x8d1e,
 	} {
 		RegisterPCI(0x8086, id, GenericPCI{})
 	}
@@ -446,6 +452,7 @@ func init() {
 	RegisterPCI(0x8086, 0x8c22, GenericPCI{MissingParent: "smbus"}) /* Lynx Point (8 Series PCH) */
 	RegisterPCI(0x8086, 0x9c22, GenericPCI{MissingParent: "smbus"}) /* Lynx Point LP */
 	RegisterPCI(0x8086, 0x8ca2, GenericPCI{MissingParent: "smbus"}) /* Lynx Point Refresh (9 Series PCH) */
+	RegisterPCI(0x8086, 0x8d22, GenericPCI{MissingParent: "smbus"}) /* Wellsburg (C610 / C612 / X99) */
 
 	/* SATA */
 	for _, id := range []uint16{
@@ -457,6 +464,8 @@ func init() {
 		/* Lynx Point Refresh (9 Series PCH) */
 		0x8c80, 0x8c82, 0x8c84, 0x8c86, 0x8c88, 0x8c8e,
 		0x8c81, 0x8c83, 0x8c85, 0x8c87, 0x8c89, 0x8c8f,
+		/* Wellsburg (C610 / C612 / X99) */
+		0x8d02, 0x8d04, 0x8d06, 0x8d62,
 	} {
 		RegisterPCI(0x8086, id, GenericPCI{})
 	}
@@ -466,6 +475,7 @@ func init() {
 		0x8c26, 0x8c2d, /* Lynx Point (8 Series PCH) */
 		0x9c26,         /* Lynx Point LP */
 		0x8ca6, 0x8cad, /* Lynx Point Refresh (9 Series PCH) */
+		0x8d26, 0x8d2d, /* Wellsburg (C610 / C612 / X99) */
 	} {
 		RegisterPCI(0x8086, id, GenericPCI{})
 	}
@@ -474,6 +484,7 @@ func init() {
 	RegisterPCI(0x8086, 0x8c31, GenericPCI{}) /* Lynx Point (8 Series PCH) */
 	RegisterPCI(0x8086, 0x9c31, GenericPCI{}) /* Lynx Point LP */
 	RegisterPCI(0x8086, 0x8cb1, GenericPCI{}) /* Lynx Point Refresh (9 Series PCH) */
+	RegisterPCI(0x8086, 0x8d31, GenericPCI{}) /* Wellsburg (C610 / C612 / X99) */
 
 	/* ME and children */
 	for _, id := range []uint16{
@@ -483,6 +494,8 @@ func init() {
 		0x9c3a, 0x9c3b, 0x9c3c, 0x9c3d,
 		/* Lynx Point Refresh (9 Series PCH) */
 		0x8cba, 0x8cbb, 0x8cbc, 0x8cbd,
+		/* Wellsburg (C610 / C612 / X99) */
+		0x8d3a, 0x8d3b, 0x8d3c, 0x8d3d,
 	} {
 		RegisterPCI(0x8086, id, GenericPCI{})
 	}
@@ -495,6 +508,7 @@ func init() {
 	RegisterPCI(0x8086, 0x8c24, GenericPCI{}) /* Lynx Point (8 Series PCH) */
 	RegisterPCI(0x8086, 0x9c24, GenericPCI{}) /* Lynx Point LP */
 	RegisterPCI(0x8086, 0x8ca4, GenericPCI{}) /* Lynx Point Refresh (9 Series PCH) */
+	RegisterPCI(0x8086, 0x8d24, GenericPCI{}) /* Wellsburg (C610 / C612 / X99) */
 
 	/* LAN Controller on LP PCH (if EEPROM has 0x0000/0xffff in DID) */
 	RegisterPCI(0x8086, 0x155a, GenericPCI{})
