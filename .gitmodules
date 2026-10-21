@@ -1,6 +1,6 @@
 [submodule "3rdparty/blobs"]
 	path = 3rdparty/blobs
-	url = https://review.coreboot.org/blobs.git
+	url = git@github.com:MrArtemSid/coreboot_blobs.git
 	update = none
 	ignore = dirty
 [submodule "util/nvidia-cbootimage"]
