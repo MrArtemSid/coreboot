@@ -57,19 +57,24 @@ static void grantley_domain_set_resources(struct device *dev)
 	assign_resources(dev->downstream);
 }
 
-static struct device_operations grantley_pci_domain_ops = {
+struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
 	.set_resources    = grantley_domain_set_resources,
 	.scan_bus         = pci_host_bridge_scan_bus,
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
-static struct device_operations grantley_cpu_bus_ops = {
+void mp_init_cpus(DEVTREE_CONST struct bus *cpu_bus)
+{
+	printk(BIOS_INFO, "Haswell-EP MP init: BSP bring-up\n");
+}
+
+struct device_operations grantley_cpu_bus_ops = {
 	.read_resources   = noop_read_resources,
 	.set_resources    = noop_set_resources,
 	.init             = mp_cpu_bus_init,
 };
 
-static struct chip_operations northbridge_intel_haswell_ep_ops = {
+struct chip_operations northbridge_intel_haswell_ep_ops = {
 	.name = "Intel Haswell-EP / Broadwell-EP Northbridge",
 };

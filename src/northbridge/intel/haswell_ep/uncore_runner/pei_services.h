@@ -3,6 +3,8 @@
 #ifndef NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
 #define NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
 
+#include <rules.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <PiPei.h>
 #include <Ppi/CpuIo.h>
@@ -59,7 +61,14 @@ struct grantley_uncore_state {
 };
 
 /* Global or context accessor for PEI services */
+#if ENV_SEPARATE_ROMSTAGE
 struct grantley_uncore_state *grantley_get_uncore_state(void);
+#else
+static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
+{
+	return NULL;
+}
+#endif
 
 /* Initialise MMCFG base address for MMIO-based PCI config access */
 void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);

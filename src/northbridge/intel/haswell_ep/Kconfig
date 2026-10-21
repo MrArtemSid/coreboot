@@ -39,4 +39,13 @@ config DCACHE_BSP_STACK_SIZE
 	help
 	  Stack for coreboot diagnostics only, not for the stock Uncore PEIM.
 
+config FIXED_MCHBAR_MMIO_BASE
+	default 0xfed10000
+
+config FIXED_DMIBAR_MMIO_BASE
+	default 0xfed18000
+
+config FIXED_EPBAR_MMIO_BASE
+	default 0xfed19000
+
 endif
