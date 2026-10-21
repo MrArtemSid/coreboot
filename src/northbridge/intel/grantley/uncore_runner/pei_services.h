@@ -31,8 +31,10 @@ struct grantley_uncore_state {
 	EFI_PEI_PPI_DESCRIPTOR cpu_io_desc;
 
 	EFI_GUID read_only_var_guid;
+	EFI_GUID read_only_var1_guid;
 	EFI_PEI_READ_ONLY_VARIABLE2_PPI read_only_var;
 	EFI_PEI_PPI_DESCRIPTOR read_only_var_desc;
+	EFI_PEI_PPI_DESCRIPTOR read_only_var1_desc;
 
 	/* Platform / Memory services PPIs */
 	EFI_GUID mem_test_guid;

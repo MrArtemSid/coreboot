@@ -255,6 +255,20 @@ static void test_read_only_variable2_ppi(void **s)
 	assert_int_equal(status, EFI_SUCCESS);
 	assert_non_null(ro_var);
 
+	/* Verify both ReadOnlyVariable2 and legacy ReadOnlyVariable GUIDs resolve */
+	static const EFI_GUID ro_var1_guid = {
+		0xbae29d7b, 0x89bb, 0x4223, { 0xaf, 0x76, 0x96, 0xd0, 0xb3, 0x24, 0x9b, 0x36 }
+	};
+	EFI_PEI_READ_ONLY_VARIABLE2_PPI *ro_var1 = NULL;
+	status = (*services)->LocatePpi(
+		services,
+		&ro_var1_guid,
+		0,
+		NULL,
+		(void **)&ro_var1);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_ptr_equal(ro_var1, ro_var);
+
 	/* When no backing store is attached, variable lookup returns EFI_NOT_FOUND */
 	CHAR16 var_name[] = { 'I', 'n', 't', 'e', 'l', 'S', 'e', 't', 'u', 'p', 0 };
 	static const EFI_GUID setup_guid = {

@@ -930,6 +930,10 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	static const EFI_GUID read_only_var_guid = {
 		0x2ab86ef5, 0xecb5, 0x4134, { 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 }
 	};
+	/* EDK II / Intel legacy ReadOnlyVariable PPI alias (DAT_ffdcfd08) */
+	static const EFI_GUID read_only_var1_guid = {
+		0xbae29d7b, 0x89bb, 0x4223, { 0xaf, 0x76, 0x96, 0xd0, 0xb3, 0x24, 0x9b, 0x36 }
+	};
 	state->read_only_var_guid = read_only_var_guid;
 	state->read_only_var.GetVariable =
 		(EFI_PEI_GET_VARIABLE2)grantley_get_variable;
@@ -940,6 +944,12 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
 	state->read_only_var_desc.Guid = &state->read_only_var_guid;
 	state->read_only_var_desc.Ppi = &state->read_only_var;
+
+	state->read_only_var1_guid = read_only_var1_guid;
+	state->read_only_var1_desc.Flags =
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->read_only_var1_desc.Guid = &state->read_only_var1_guid;
+	state->read_only_var1_desc.Ppi = &state->read_only_var;
 
 	/* Setup and install Platform/Uncore PPIs: Memory Test and Memory Size services */
 	static const EFI_GUID mem_test_guid = {
@@ -976,6 +986,7 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	grantley_install_ppi(&state->services_ptr, &state->pci_cfg_desc);
 	grantley_install_ppi(&state->services_ptr, &state->cpu_io_desc);
 	grantley_install_ppi(&state->services_ptr, &state->read_only_var_desc);
+	grantley_install_ppi(&state->services_ptr, &state->read_only_var1_desc);
 	grantley_install_ppi(&state->services_ptr, &state->mem_test_desc);
 	grantley_install_ppi(&state->services_ptr, &state->mem_size_desc);
 	grantley_install_ppi(&state->services_ptr, &state->platform_info_desc);
