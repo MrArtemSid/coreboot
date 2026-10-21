@@ -13,6 +13,7 @@ endif
 
 bootblock-y += platform.c
 romstage-y += platform.c
+ramstage-y += platform.c
 romstage-y += romstage.c
 romstage-y += memmap.c
 romstage-y += native_raminit/spd.c

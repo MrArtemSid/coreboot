@@ -1,6 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <commonlib/helpers.h>
 #include "platform.h"
+
+/* Default weak implementation: stock clocks and voltages, no unlock */
+void __weak mainboard_cpu_init_params(struct grantley_cpu_params *params)
+{
+	if (!params)
+		return;
+	params->enable_turbo_unlock = false;
+	params->core_voltage_offset_mv = 0;
+	params->uncore_voltage_offset_mv = 0;
+}
 
 enum grantley_cpu grantley_cpu_model(uint32_t signature)
 {

@@ -6,9 +6,77 @@
 #include <device/pci.h>
 #include <device/pci_ops.h>
 #include <cpu/cpu.h>
+#include <cpu/intel/microcode.h>
+#include <cpu/x86/msr.h>
 #include <cpu/x86/smm.h>
 #include <types.h>
+#include "platform.h"
 #include "uncore_runner/pei_services.h"
+
+#define MSR_OC_MAILBOX			0x150
+#define  OC_MB_COMMAND_EXEC		(1ULL << 63)
+#define  OC_MB_SET_FVIDS_RATIOS		(0x11ULL << 32)
+#define  OC_MB_DOMAIN_IACORE		(0x00ULL << 40)
+#define  OC_MB_DOMAIN_CLR		(0x02ULL << 40) /* Cache/Uncore */
+
+static uint32_t fivr_mv_to_offset_raw(int16_t offset_mv)
+{
+	/* FIVR offset is 11-bit signed fixed point in units of 1/1024 V */
+	int32_t val = ((int32_t)offset_mv * 1024) / 1000;
+	return ((uint32_t)val & 0x7ff) << 21;
+}
+
+static void oc_mailbox_write(uint64_t cmd)
+{
+	msr_t msr;
+	msr.lo = (uint32_t)(cmd & 0xffffffffULL);
+	msr.hi = (uint32_t)(cmd >> 32);
+	wrmsr(MSR_OC_MAILBOX, msr);
+}
+
+void grantley_apply_cpu_overrides(const struct grantley_cpu_params *params)
+{
+	if (!params)
+		return;
+
+	if (params->core_voltage_offset_mv != 0) {
+		uint32_t raw = fivr_mv_to_offset_raw(params->core_voltage_offset_mv);
+		uint64_t cmd = OC_MB_COMMAND_EXEC | OC_MB_SET_FVIDS_RATIOS |
+			       OC_MB_DOMAIN_IACORE | (uint64_t)raw;
+		printk(BIOS_INFO, "Grantley: Setting Core voltage offset %d mV (raw 0x%08x)\n",
+		       params->core_voltage_offset_mv, raw);
+		oc_mailbox_write(cmd);
+	}
+
+	if (params->uncore_voltage_offset_mv != 0) {
+		uint32_t raw = fivr_mv_to_offset_raw(params->uncore_voltage_offset_mv);
+		uint64_t cmd = OC_MB_COMMAND_EXEC | OC_MB_SET_FVIDS_RATIOS |
+			       OC_MB_DOMAIN_CLR | (uint64_t)raw;
+		printk(BIOS_INFO, "Grantley: Setting Uncore voltage offset %d mV (raw 0x%08x)\n",
+		       params->uncore_voltage_offset_mv, raw);
+		oc_mailbox_write(cmd);
+	}
+}
+
+/*
+ * Hook called by coreboot microcode update subsystem in ramstage.
+ * If Haswell-EP turbo unlock is requested, skip updating microcode so
+ * the CPU retains the unpatched state required for all-core turbo boost.
+ */
+int soc_skip_ucode_update(u32 current_patch_id, u32 new_patch_id)
+{
+	struct grantley_cpu_params params;
+	mainboard_cpu_init_params(&params);
+
+	if (params.enable_turbo_unlock) {
+		uint32_t sig = cpuid_eax(1);
+		if (grantley_cpu_model(sig) == GRANTLEY_HASWELL_EP) {
+			printk(BIOS_INFO, "Grantley: Haswell-EP Turbo Unlock enabled; skipping microcode update\n");
+			return 1;
+		}
+	}
+	return 0;
+}
 
 #define GRANTLEY_DEFAULT_TOLUM  0x80000000UL
 
@@ -66,7 +134,12 @@ struct device_operations grantley_pci_domain_ops = {
 
 void mp_init_cpus(DEVTREE_CONST struct bus *cpu_bus)
 {
+	struct grantley_cpu_params cpu_params;
+
 	printk(BIOS_INFO, "Haswell-EP MP init: BSP bring-up\n");
+
+	mainboard_cpu_init_params(&cpu_params);
+	grantley_apply_cpu_overrides(&cpu_params);
 }
 
 struct device_operations grantley_cpu_bus_ops = {

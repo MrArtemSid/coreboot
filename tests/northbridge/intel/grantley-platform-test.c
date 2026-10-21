@@ -71,6 +71,16 @@ static void test_unsupported_pch_rejected(void **state)
 		assert_false(grantley_pch_is_supported(0x8086, invalid_devices[i]));
 }
 
+static void test_cpu_params_default(void **state)
+{
+	struct grantley_cpu_params params;
+	mainboard_cpu_init_params(&params);
+
+	assert_false(params.enable_turbo_unlock);
+	assert_int_equal(params.core_voltage_offset_mv, 0);
+	assert_int_equal(params.uncore_voltage_offset_mv, 0);
+}
+
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
@@ -80,6 +90,7 @@ int main(void)
 		cmocka_unit_test(test_supported_lynxpoint_pch),
 		cmocka_unit_test(test_supported_wildcat_and_wellsburg_pch),
 		cmocka_unit_test(test_unsupported_pch_rejected),
+		cmocka_unit_test(test_cpu_params_default),
 	};
 
 	return cb_run_group_tests(tests, NULL, NULL);
