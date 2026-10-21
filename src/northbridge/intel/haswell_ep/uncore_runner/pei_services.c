@@ -291,6 +291,30 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 
 	state->mmcfg_base = mmcfg_base;
 	state->mmcfg_enabled = (mmcfg_base != 0);
+
+#if !ENV_TEST
+	if (mmcfg_base) {
+		/*
+		 * Program MMCFG Base on Host Bridge IIO Misc (Bus 0, Dev 5, Func 0):
+		 * - Register 0x84 (Haswell-EP) and 0x90 (Broadwell-EP) via CF8/CFC.
+		 *   Bits [31:26] set base address.
+		 * - Register 0x108 (CPUBUSNO): routes Uncore devices (IMC, HA, PCU)
+		 *   to Bus 0xff (value 0x0001ff00).
+		 */
+		const uint32_t cf8_dev5 = (1U << 31) | (5U << 11);
+
+		/* Set MMCFG base at 0x84 and 0x90 with enable bit */
+		outl(cf8_dev5 | 0x84, 0xcf8);
+		outl((uint32_t)mmcfg_base | 1, 0xcfc);
+
+		outl(cf8_dev5 | 0x90, 0xcf8);
+		outl((uint32_t)mmcfg_base | 1, 0xcfc);
+
+		/* Set CPUBUSNO at offset 0x108 through MMCFG */
+		volatile uint32_t *cpubusno = (volatile uint32_t *)(mmcfg_base + (5U << 15) + 0x108);
+		*cpubusno = 0x0001ff00;
+	}
+#endif
 }
 
 static EFI_STATUS EFIAPI grantley_pci_cfg_read(
@@ -856,10 +880,44 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->read_only_var_desc.Guid = &state->read_only_var_guid;
 	state->read_only_var_desc.Ppi = &state->read_only_var;
 
+	/* Setup and install Platform/Uncore PPIs: Memory Test and Memory Size services */
+	static const EFI_GUID mem_test_guid = {
+		0xb6ec423c, 0x21d2, 0x490d, { 0x85, 0xc6, 0xdd, 0x58, 0x64, 0xea, 0xa6, 0x74 }
+	};
+	state->mem_test_guid = mem_test_guid;
+	state->mem_test_ops[0] = (void *)grantley_report_status_code; /* Returns EFI_SUCCESS */
+	state->mem_test_desc.Flags =
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->mem_test_desc.Guid = &state->mem_test_guid;
+	state->mem_test_desc.Ppi = state->mem_test_ops;
+
+	static const EFI_GUID mem_size_guid = {
+		0x9a7ef41e, 0xc140, 0x4bd1, { 0xb8, 0x84, 0x1e, 0x11, 0x24, 0x0b, 0x4c, 0xe6 }
+	};
+	state->mem_size_guid = mem_size_guid;
+	state->mem_size_ops[0] = (void *)grantley_report_status_code; /* Returns EFI_SUCCESS */
+	state->mem_size_desc.Flags =
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->mem_size_desc.Guid = &state->mem_size_guid;
+	state->mem_size_desc.Ppi = state->mem_size_ops;
+
+	/* Setup PlatformInfo readiness signal (NULL-interface PPI) */
+	static const EFI_GUID platform_info_guid = {
+		0x1e2acc41, 0xe26a, 0x483d, { 0xaf, 0xc7, 0xa0, 0x56, 0xc3, 0x4e, 0x08, 0x7b }
+	};
+	state->platform_info_guid = platform_info_guid;
+	state->platform_info_desc.Flags =
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->platform_info_desc.Guid = &state->platform_info_guid;
+	state->platform_info_desc.Ppi = (void *)0;
+
 	/* Install core PPIs into services */
 	grantley_install_ppi(&state->services_ptr, &state->pci_cfg_desc);
 	grantley_install_ppi(&state->services_ptr, &state->cpu_io_desc);
 	grantley_install_ppi(&state->services_ptr, &state->read_only_var_desc);
+	grantley_install_ppi(&state->services_ptr, &state->mem_test_desc);
+	grantley_install_ppi(&state->services_ptr, &state->mem_size_desc);
+	grantley_install_ppi(&state->services_ptr, &state->platform_info_desc);
 
 	return EFI_SUCCESS;
 }

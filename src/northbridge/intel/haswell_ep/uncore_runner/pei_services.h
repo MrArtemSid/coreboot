@@ -34,6 +34,18 @@ struct grantley_uncore_state {
 	EFI_PEI_READ_ONLY_VARIABLE2_PPI read_only_var;
 	EFI_PEI_PPI_DESCRIPTOR read_only_var_desc;
 
+	/* Platform / Memory services PPIs */
+	EFI_GUID mem_test_guid;
+	void *mem_test_ops[1];
+	EFI_PEI_PPI_DESCRIPTOR mem_test_desc;
+
+	EFI_GUID mem_size_guid;
+	void *mem_size_ops[1];
+	EFI_PEI_PPI_DESCRIPTOR mem_size_desc;
+
+	EFI_GUID platform_info_guid;
+	EFI_PEI_PPI_DESCRIPTOR platform_info_desc;
+
 	/* Pointer to backing region device for EFI variable store */
 	const struct region_device *var_store_rdev;
 
