@@ -13,6 +13,7 @@ bootblock-y += platform.c
 romstage-y += platform.c
 romstage-y += romstage.c
 romstage-y += native_raminit/spd.c
+romstage-y += uncore_runner/pei_services.c
 
 # There is deliberately no ramstage/resource map or memory-init substitute.
 .PHONY: grantley-no-raminit

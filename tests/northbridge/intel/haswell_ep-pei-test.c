@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <tests/test.h>
+#include <commonlib/region.h>
 #undef NULL
 #include <northbridge/intel/haswell_ep/uncore_runner/pei_services.h>
 
@@ -235,6 +236,48 @@ static void test_pci_cfg_and_cpu_io_ppi(void **s)
 	assert_int_equal(*(uint32_t *)&mock_ecam[0x108], 0x12345678);
 }
 
+static void test_read_only_variable2_ppi(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+
+	/* Check that ReadOnlyVariable2 is located properly */
+	static const EFI_GUID ro_var_guid = {
+		0x2ab86ef5, 0xecb5, 0x4134, { 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 }
+	};
+	EFI_PEI_READ_ONLY_VARIABLE2_PPI *ro_var = NULL;
+
+	EFI_STATUS status = (*services)->LocatePpi(
+		services,
+		&ro_var_guid,
+		0,
+		NULL,
+		(void **)&ro_var);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_non_null(ro_var);
+
+	/* When no backing store is attached, variable lookup returns EFI_NOT_FOUND */
+	CHAR16 var_name[] = { 'I', 'n', 't', 'e', 'l', 'S', 'e', 't', 'u', 'p', 0 };
+	static const EFI_GUID setup_guid = {
+		0xec87d643, 0xeba4, 0x4bb5, { 0xa1, 0xe5, 0x3f, 0x3e, 0x36, 0xb2, 0x0d, 0xa9 }
+	};
+	UINT8 buf[64];
+	UINTN buf_size = sizeof(buf);
+
+	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
+	assert_int_equal(status, EFI_NOT_FOUND);
+
+	/* Attach a mock region device formatted with an EFI variable store */
+	uint8_t mock_nvram[0x200];
+	memset(mock_nvram, 0xff, sizeof(mock_nvram));
+	struct region_device rdev;
+	rdev_chain_mem(&rdev, mock_nvram, sizeof(mock_nvram));
+	grantley_pei_set_var_store(&state, &rdev);
+
+	/* Formatted empty store still returns EFI_NOT_FOUND cleanly */
+	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
+	assert_int_equal(status, EFI_NOT_FOUND);
+}
+
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
@@ -244,6 +287,7 @@ int main(void)
 		cmocka_unit_test_setup(test_create_hob, setup),
 		cmocka_unit_test_setup(test_install_pei_memory, setup),
 		cmocka_unit_test_setup(test_pci_cfg_and_cpu_io_ppi, setup),
+		cmocka_unit_test_setup(test_read_only_variable2_ppi, setup),
 	};
 
 	return cb_run_group_tests(tests, NULL, NULL);

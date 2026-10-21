@@ -2,9 +2,8 @@
 
 #include <stdint.h>
 #include <string.h>
-#undef NULL
-#include "pei_services.h"
-
+#include <stddef.h>
+#include <drivers/efi/efivars.h>
 /* Forward declaration of I/O and PCI operations */
 #if !defined(__TESTS__)
 #include <arch/io.h>
@@ -18,6 +17,8 @@ static inline void outb(uint8_t val, uint16_t port) { }
 static inline void outw(uint16_t val, uint16_t port) { }
 static inline void outl(uint32_t val, uint16_t port) { }
 #endif
+#undef NULL
+#include "pei_services.h"
 
 static struct grantley_uncore_state *g_state;
 
@@ -634,6 +635,66 @@ static VOID EFIAPI grantley_io_write64(
 	outl((UINT32)(data >> 32), (uint16_t)(address + 4));
 }
 
+void grantley_pei_set_var_store(struct grantley_uncore_state *state,
+				const struct region_device *rdev)
+{
+	if (!state)
+		return;
+
+	state->var_store_rdev = rdev;
+}
+
+static EFI_STATUS EFIAPI grantley_get_variable(
+	const struct _EFI_PEI_SERVICES **services,
+	const void *variable_name,
+	const void *vendor_guid,
+	UINT32 *attributes,
+	UINTN *data_size,
+	void *data)
+{
+	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	if (!state || !variable_name || !vendor_guid || !data_size)
+		return EFI_INVALID_PARAMETER;
+
+	if (!state->var_store_rdev)
+		return EFI_NOT_FOUND;
+
+	/* Convert CHAR16 UTF-16LE variable name to ASCII for coreboot efi_fv_get_option */
+	const CHAR16 *var_name16 = (const CHAR16 *)variable_name;
+	char ascii_name[64];
+	size_t i = 0;
+
+	while (var_name16[i] != 0 && i < sizeof(ascii_name) - 1) {
+		ascii_name[i] = (char)(var_name16[i] & 0x7f);
+		i++;
+	}
+	ascii_name[i] = '\0';
+
+	uint32_t size = (uint32_t)*data_size;
+	enum cb_err err = efi_fv_get_option(state->var_store_rdev, vendor_guid, ascii_name, data, &size);
+
+	if (err == CB_ERR_ARG)
+		return EFI_BUFFER_TOO_SMALL;
+	if (err != CB_SUCCESS)
+		return EFI_NOT_FOUND;
+
+	*data_size = (UINTN)size;
+	if (attributes)
+		*attributes = 0;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI grantley_get_next_variable_name(
+	const struct _EFI_PEI_SERVICES **services,
+	UINTN *variable_name_size,
+	void *variable_name,
+	void *vendor_guid)
+{
+	return EFI_NOT_FOUND;
+}
+
 static EFI_STATUS EFIAPI grantley_ffs_stub(void)
 {
 	return EFI_NOT_FOUND;
@@ -747,9 +808,25 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->cpu_io_desc.Guid = &state->cpu_io_guid;
 	state->cpu_io_desc.Ppi = &state->cpu_io;
 
-	/* Install both core PPIs into services */
+	/* Setup and install EFI_PEI_READ_ONLY_VARIABLE2_PPI */
+	static const EFI_GUID read_only_var_guid = {
+		0x2ab86ef5, 0xecb5, 0x4134, { 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 }
+	};
+	state->read_only_var_guid = read_only_var_guid;
+	state->read_only_var.GetVariable =
+		(EFI_PEI_GET_VARIABLE2)grantley_get_variable;
+	state->read_only_var.NextVariableName =
+		(EFI_PEI_GET_NEXT_VARIABLE_NAME2)grantley_get_next_variable_name;
+
+	state->read_only_var_desc.Flags =
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->read_only_var_desc.Guid = &state->read_only_var_guid;
+	state->read_only_var_desc.Ppi = &state->read_only_var;
+
+	/* Install core PPIs into services */
 	grantley_install_ppi(&state->services_ptr, &state->pci_cfg_desc);
 	grantley_install_ppi(&state->services_ptr, &state->cpu_io_desc);
+	grantley_install_ppi(&state->services_ptr, &state->read_only_var_desc);
 
 	return EFI_SUCCESS;
 }

@@ -28,6 +28,13 @@ struct grantley_uncore_state {
 	EFI_PEI_CPU_IO_PPI cpu_io;
 	EFI_PEI_PPI_DESCRIPTOR cpu_io_desc;
 
+	EFI_GUID read_only_var_guid;
+	EFI_PEI_READ_ONLY_VARIABLE2_PPI read_only_var;
+	EFI_PEI_PPI_DESCRIPTOR read_only_var_desc;
+
+	/* Pointer to backing region device for EFI variable store */
+	const struct region_device *var_store_rdev;
+
 	/* MMCFG Base configuration */
 	uintptr_t mmcfg_base;
 	BOOLEAN mmcfg_enabled;
@@ -56,6 +63,10 @@ struct grantley_uncore_state *grantley_get_uncore_state(void);
 
 /* Initialise MMCFG base address for MMIO-based PCI config access */
 void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
+
+/* Attach backing EFI variable store region device */
+void grantley_pei_set_var_store(struct grantley_uncore_state *state,
+				const struct region_device *rdev);
 
 /* Initialize PEI services table and internal storage */
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
