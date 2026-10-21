@@ -1,0 +1,7 @@
+Vendor name: Angxun
+Board name: X99-XD4
+Category: desktop
+ROM protocol: SPI
+ROM socketed: n
+Flashrom support: y
+Release year: 2022

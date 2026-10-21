@@ -1,0 +1,15 @@
+if VENDOR_ANGXUN
+
+choice
+	prompt "Mainboard model"
+
+source "src/mainboard/angxun/*/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/angxun/*/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Angxun"
+
+endif # VENDOR_ANGXUN

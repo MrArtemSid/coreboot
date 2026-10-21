@@ -1,0 +1,2 @@
+config BOARD_ANGXUN_X99_XD4
+	bool "X99-XD4"
