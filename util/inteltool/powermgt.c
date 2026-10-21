@@ -775,6 +775,8 @@ int print_pmbase(struct pci_dev *sb, struct pci_access *pacc)
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_SUPER:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_C612:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_A:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_B:
 		pmbase = pci_read_word(sb, 0x40) & 0xff80;
 		pm_registers = pch_pm_registers;
 		pm_registers_size = ARRAY_SIZE(pch_pm_registers);

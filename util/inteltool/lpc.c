@@ -153,6 +153,8 @@ int print_lpc(struct pci_dev *sb, struct pci_access *pacc)
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_SUPER:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_C612:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_A:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_B:
 		dev = pci_get_dev(pacc, sb->domain, sb->bus, sb->dev, 0);
 		if (!dev) {
 			printf("LPC interface not found.\n");

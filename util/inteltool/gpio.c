@@ -864,6 +864,8 @@ int print_gpios(struct pci_dev *sb, int show_all, int show_diffs)
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_SUPER:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_C612:
 	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_A:
+	case PCI_DEVICE_ID_INTEL_WELLSBURG_X99_B:
 		gpiobase = pci_read_word(sb, 0x48) & 0xfffc;
 		gpio_registers = pch_gpio_registers;
 		size = ARRAY_SIZE(pch_gpio_registers);
