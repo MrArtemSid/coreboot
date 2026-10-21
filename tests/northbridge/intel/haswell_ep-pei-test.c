@@ -166,6 +166,75 @@ static void test_install_pei_memory(void **s)
 	assert_int_equal(state.dram_size, 0x400000000ULL);
 }
 
+UINT64 LShiftU64(UINT64 Operand, UINTN Count);
+UINT64 LShiftU64(UINT64 Operand, UINTN Count)
+{
+	return Operand << Count;
+}
+
+static void test_pci_cfg_and_cpu_io_ppi(void **s)
+{
+	CONST EFI_PEI_SERVICES **services = &state.services_ptr;
+
+	/* Check that PciCfg2 is located properly */
+	static const EFI_GUID pci_cfg_guid = {
+		0x57a449a, 0x1fdc, 0x4c06, { 0xbf, 0xc9, 0xf5, 0x3f, 0x6a, 0x99, 0xbb, 0x92 }
+	};
+	EFI_PEI_PCI_CFG2_PPI *pci_cfg = NULL;
+
+	EFI_STATUS status = (*services)->LocatePpi(
+		services,
+		&pci_cfg_guid,
+		0,
+		NULL,
+		(void **)&pci_cfg);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_non_null(pci_cfg);
+
+	/* Check that CpuIo is located properly */
+	static const EFI_GUID cpu_io_guid = {
+		0xe682ac4, 0x6bc, 0x4bb3, { 0xa9, 0xa1, 0xdb, 0x4e, 0x70, 0xda, 0x9f, 0x30 }
+	};
+	EFI_PEI_CPU_IO_PPI *cpu_io = NULL;
+
+	status = (*services)->LocatePpi(
+		services,
+		&cpu_io_guid,
+		0,
+		NULL,
+		(void **)&cpu_io);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_non_null(cpu_io);
+
+	/* Test MMCFG read/write through PciCfg2 */
+	uint8_t mock_ecam[4096];
+	memset(mock_ecam, 0, sizeof(mock_ecam));
+	/* Set vendor/device ID at offset 0 of bus 0 dev 0 func 0 */
+	*(uint32_t *)&mock_ecam[0] = 0x2f008086;
+	/* Set a register at offset 0x108 (cpubusno) */
+	*(uint32_t *)&mock_ecam[0x108] = 0x0001ff00;
+
+	grantley_pei_set_mmcfg(&state, (uintptr_t)mock_ecam);
+
+	uint32_t val32 = 0;
+	UINT64 pci_addr = EFI_PEI_PCI_CFG_ADDRESS(0, 0, 0, 0);
+	status = pci_cfg->Read(services, pci_cfg, EfiPeiPciCfgWidthUint32, pci_addr, &val32);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_int_equal(val32, 0x2f008086);
+
+	/* Read extended register 0x108 */
+	pci_addr = EFI_PEI_PCI_CFG_ADDRESS(0, 0, 0, 0x108);
+	status = pci_cfg->Read(services, pci_cfg, EfiPeiPciCfgWidthUint32, pci_addr, &val32);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_int_equal(val32, 0x0001ff00);
+
+	/* Write and modify extended register */
+	uint32_t new_val = 0x12345678;
+	status = pci_cfg->Write(services, pci_cfg, EfiPeiPciCfgWidthUint32, pci_addr, &new_val);
+	assert_int_equal(status, EFI_SUCCESS);
+	assert_int_equal(*(uint32_t *)&mock_ecam[0x108], 0x12345678);
+}
+
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
@@ -174,6 +243,7 @@ int main(void)
 		cmocka_unit_test_setup(test_pool_and_memory_helpers, setup),
 		cmocka_unit_test_setup(test_create_hob, setup),
 		cmocka_unit_test_setup(test_install_pei_memory, setup),
+		cmocka_unit_test_setup(test_pci_cfg_and_cpu_io_ppi, setup),
 	};
 
 	return cb_run_group_tests(tests, NULL, NULL);

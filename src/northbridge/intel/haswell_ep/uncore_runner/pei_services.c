@@ -1,8 +1,23 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <stdint.h>
 #include <string.h>
 #undef NULL
 #include "pei_services.h"
+
+/* Forward declaration of I/O and PCI operations */
+#if !defined(__TESTS__)
+#include <arch/io.h>
+#include <device/pci_ops.h>
+#else
+/* Test stubs or mock declarations for unit testing */
+static inline uint8_t inb(uint16_t port) { return 0xff; }
+static inline uint16_t inw(uint16_t port) { return 0xffff; }
+static inline uint32_t inl(uint16_t port) { return 0xffffffff; }
+static inline void outb(uint8_t val, uint16_t port) { }
+static inline void outw(uint16_t val, uint16_t port) { }
+static inline void outl(uint32_t val, uint16_t port) { }
+#endif
 
 static struct grantley_uncore_state *g_state;
 
@@ -268,6 +283,357 @@ static EFI_STATUS EFIAPI grantley_reset_system(
 	return EFI_SUCCESS;
 }
 
+void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base)
+{
+	if (!state)
+		return;
+
+	state->mmcfg_base = mmcfg_base;
+	state->mmcfg_enabled = (mmcfg_base != 0);
+}
+
+static EFI_STATUS EFIAPI grantley_pci_cfg_read(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_PCI_CFG2_PPI * this,
+	EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address,
+	void *buffer)
+{
+	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	if (!state || !buffer)
+		return EFI_INVALID_PARAMETER;
+
+	UINT8 bus = (address >> 24) & 0xff;
+	UINT8 dev = (address >> 16) & 0x1f;
+	UINT8 func = (address >> 8) & 0x07;
+	UINT32 reg = (UINT32)address;
+
+	if (reg >= 256 || (address >> 32) != 0) {
+		/* Extended register: if upper 32-bit holds register offset */
+		if ((address >> 32) != 0)
+			reg = (UINT32)(address >> 32);
+	}
+
+	if (state->mmcfg_enabled) {
+		uintptr_t mmio_addr = state->mmcfg_base +
+			(((uintptr_t)bus) << 20) +
+			(((uintptr_t)dev) << 15) +
+			(((uintptr_t)func) << 12) +
+			reg;
+
+		volatile uint8_t *p8 = (volatile uint8_t *)mmio_addr;
+
+		switch (width) {
+		case EfiPeiPciCfgWidthUint8:
+			*(UINT8 *)buffer = *p8;
+			break;
+		case EfiPeiPciCfgWidthUint16:
+			*(UINT16 *)buffer = *(volatile uint16_t *)p8;
+			break;
+		case EfiPeiPciCfgWidthUint32:
+			*(UINT32 *)buffer = *(volatile uint32_t *)p8;
+			break;
+		default:
+			return EFI_INVALID_PARAMETER;
+		}
+		return EFI_SUCCESS;
+	}
+
+	/* Fallback: legacy CF8/CFC I/O config access (for standard <= 255 byte registers) */
+	if (reg >= 256)
+		return EFI_UNSUPPORTED;
+
+	uint32_t io_addr = (1U << 31) |
+		(((uint32_t)bus) << 16) |
+		(((uint32_t)dev) << 11) |
+		(((uint32_t)func) << 8) |
+		(reg & 0xfc);
+
+	outl(io_addr, 0xcf8);
+
+	switch (width) {
+	case EfiPeiPciCfgWidthUint8:
+		*(UINT8 *)buffer = inb(0xcfc + (reg & 3));
+		break;
+	case EfiPeiPciCfgWidthUint16:
+		*(UINT16 *)buffer = inw(0xcfc + (reg & 2));
+		break;
+	case EfiPeiPciCfgWidthUint32:
+		*(UINT32 *)buffer = inl(0xcfc);
+		break;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI grantley_pci_cfg_write(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_PCI_CFG2_PPI * this,
+	EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address,
+	void *buffer)
+{
+	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	if (!state || !buffer)
+		return EFI_INVALID_PARAMETER;
+
+	UINT8 bus = (address >> 24) & 0xff;
+	UINT8 dev = (address >> 16) & 0x1f;
+	UINT8 func = (address >> 8) & 0x07;
+	UINT32 reg = (UINT32)address;
+
+	if (reg >= 256 || (address >> 32) != 0) {
+		if ((address >> 32) != 0)
+			reg = (UINT32)(address >> 32);
+	}
+
+	if (state->mmcfg_enabled) {
+		uintptr_t mmio_addr = state->mmcfg_base +
+			(((uintptr_t)bus) << 20) +
+			(((uintptr_t)dev) << 15) +
+			(((uintptr_t)func) << 12) +
+			reg;
+
+		volatile uint8_t *p8 = (volatile uint8_t *)mmio_addr;
+
+		switch (width) {
+		case EfiPeiPciCfgWidthUint8:
+			*p8 = *(UINT8 *)buffer;
+			break;
+		case EfiPeiPciCfgWidthUint16:
+			*(volatile uint16_t *)p8 = *(UINT16 *)buffer;
+			break;
+		case EfiPeiPciCfgWidthUint32:
+			*(volatile uint32_t *)p8 = *(UINT32 *)buffer;
+			break;
+		default:
+			return EFI_INVALID_PARAMETER;
+		}
+		return EFI_SUCCESS;
+	}
+
+	if (reg >= 256)
+		return EFI_UNSUPPORTED;
+
+	uint32_t io_addr = (1U << 31) |
+		(((uint32_t)bus) << 16) |
+		(((uint32_t)dev) << 11) |
+		(((uint32_t)func) << 8) |
+		(reg & 0xfc);
+
+	outl(io_addr, 0xcf8);
+
+	switch (width) {
+	case EfiPeiPciCfgWidthUint8:
+		outb(*(UINT8 *)buffer, 0xcfc + (reg & 3));
+		break;
+	case EfiPeiPciCfgWidthUint16:
+		outw(*(UINT16 *)buffer, 0xcfc + (reg & 2));
+		break;
+	case EfiPeiPciCfgWidthUint32:
+		outl(*(UINT32 *)buffer, 0xcfc);
+		break;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI grantley_pci_cfg_modify(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_PCI_CFG2_PPI * this,
+	EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address,
+	void *set_bits,
+	void *clear_bits)
+{
+	UINT32 val = 0;
+	UINT32 set = 0;
+	UINT32 clr = 0;
+	EFI_STATUS status;
+
+	switch (width) {
+	case EfiPeiPciCfgWidthUint8:
+		if (set_bits)
+			set = *(UINT8 *)set_bits;
+		if (clear_bits)
+			clr = *(UINT8 *)clear_bits;
+		break;
+	case EfiPeiPciCfgWidthUint16:
+		if (set_bits)
+			set = *(UINT16 *)set_bits;
+		if (clear_bits)
+			clr = *(UINT16 *)clear_bits;
+		break;
+	case EfiPeiPciCfgWidthUint32:
+		if (set_bits)
+			set = *(UINT32 *)set_bits;
+		if (clear_bits)
+			clr = *(UINT32 *)clear_bits;
+		break;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
+
+	status = grantley_pci_cfg_read(services, this, width, address, &val);
+	if (status != EFI_SUCCESS)
+		return status;
+
+	val = (val & ~clr) | set;
+
+	return grantley_pci_cfg_write(services, this, width, address, &val);
+}
+
+static EFI_STATUS EFIAPI grantley_cpu_io_read(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI * this,
+	EFI_PEI_CPU_IO_PPI_WIDTH width,
+	UINT64 address,
+	UINTN count,
+	void *buffer)
+{
+	if (!buffer || count == 0)
+		return EFI_INVALID_PARAMETER;
+
+	UINT8 *buf = (UINT8 *)buffer;
+
+	while (count--) {
+		switch (width) {
+		case EfiPeiCpuIoWidthUint8:
+			*buf = inb((uint16_t)address);
+			buf += sizeof(UINT8);
+			address += sizeof(UINT8);
+			break;
+		case EfiPeiCpuIoWidthUint16:
+			*(UINT16 *)buf = inw((uint16_t)address);
+			buf += sizeof(UINT16);
+			address += sizeof(UINT16);
+			break;
+		case EfiPeiCpuIoWidthUint32:
+			*(UINT32 *)buf = inl((uint16_t)address);
+			buf += sizeof(UINT32);
+			address += sizeof(UINT32);
+			break;
+		default:
+			return EFI_INVALID_PARAMETER;
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS EFIAPI grantley_cpu_io_write(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI * this,
+	EFI_PEI_CPU_IO_PPI_WIDTH width,
+	UINT64 address,
+	UINTN count,
+	void *buffer)
+{
+	if (!buffer || count == 0)
+		return EFI_INVALID_PARAMETER;
+
+	const UINT8 *buf = (const UINT8 *)buffer;
+
+	while (count--) {
+		switch (width) {
+		case EfiPeiCpuIoWidthUint8:
+			outb(*buf, (uint16_t)address);
+			buf += sizeof(UINT8);
+			address += sizeof(UINT8);
+			break;
+		case EfiPeiCpuIoWidthUint16:
+			outw(*(const UINT16 *)buf, (uint16_t)address);
+			buf += sizeof(UINT16);
+			address += sizeof(UINT16);
+			break;
+		case EfiPeiCpuIoWidthUint32:
+			outl(*(const UINT32 *)buf, (uint16_t)address);
+			buf += sizeof(UINT32);
+			address += sizeof(UINT32);
+			break;
+		default:
+			return EFI_INVALID_PARAMETER;
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+
+static UINT8 EFIAPI grantley_io_read8(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address)
+{
+	return inb((uint16_t)address);
+}
+
+static UINT16 EFIAPI grantley_io_read16(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address)
+{
+	return inw((uint16_t)address);
+}
+
+static UINT32 EFIAPI grantley_io_read32(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address)
+{
+	return inl((uint16_t)address);
+}
+
+static UINT64 EFIAPI grantley_io_read64(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address)
+{
+	return (UINT64)inl((uint16_t)address) | ((UINT64)inl((uint16_t)(address + 4)) << 32);
+}
+
+static VOID EFIAPI grantley_io_write8(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address,
+	UINT8 data)
+{
+	outb(data, (uint16_t)address);
+}
+
+static VOID EFIAPI grantley_io_write16(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address,
+	UINT16 data)
+{
+	outw(data, (uint16_t)address);
+}
+
+static VOID EFIAPI grantley_io_write32(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address,
+	UINT32 data)
+{
+	outl(data, (uint16_t)address);
+}
+
+static VOID EFIAPI grantley_io_write64(
+	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_CPU_IO_PPI *this,
+	UINT64 address,
+	UINT64 data)
+{
+	outl((UINT32)data, (uint16_t)address);
+	outl((UINT32)(data >> 32), (uint16_t)(address + 4));
+}
+
 static EFI_STATUS EFIAPI grantley_ffs_stub(void)
 {
 	return EFI_NOT_FOUND;
@@ -346,6 +712,44 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->services.SetMem = (EFI_PEI_SET_MEM)grantley_set_mem;
 	state->services.ReportStatusCode = (EFI_PEI_REPORT_STATUS_CODE)grantley_report_status_code;
 	state->services.ResetSystem = (EFI_PEI_RESET_SYSTEM)grantley_reset_system;
+
+	/* Setup and install EFI_PEI_PCI_CFG2_PPI */
+	static const EFI_GUID pci_cfg_guid = {
+		0x57a449a, 0x1fdc, 0x4c06, { 0xbf, 0xc9, 0xf5, 0x3f, 0x6a, 0x99, 0xbb, 0x92 }
+	};
+	state->pci_cfg_guid = pci_cfg_guid;
+	state->pci_cfg.Read = (EFI_PEI_PCI_CFG2_PPI_IO)grantley_pci_cfg_read;
+	state->pci_cfg.Write = (EFI_PEI_PCI_CFG2_PPI_IO)grantley_pci_cfg_write;
+	state->pci_cfg.Modify = (EFI_PEI_PCI_CFG2_PPI_RW)grantley_pci_cfg_modify;
+	state->pci_cfg.Segment = 0;
+
+	state->pci_cfg_desc.Flags = EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->pci_cfg_desc.Guid = &state->pci_cfg_guid;
+	state->pci_cfg_desc.Ppi = &state->pci_cfg;
+
+	/* Setup and install EFI_PEI_CPU_IO_PPI */
+	static const EFI_GUID cpu_io_guid = {
+		0xe682ac4, 0x6bc, 0x4bb3, { 0xa9, 0xa1, 0xdb, 0x4e, 0x70, 0xda, 0x9f, 0x30 }
+	};
+	state->cpu_io_guid = cpu_io_guid;
+	state->cpu_io.Io.Read = (EFI_PEI_CPU_IO_PPI_IO_MEM)grantley_cpu_io_read;
+	state->cpu_io.Io.Write = (EFI_PEI_CPU_IO_PPI_IO_MEM)grantley_cpu_io_write;
+	state->cpu_io.IoRead8 = (EFI_PEI_CPU_IO_PPI_IO_READ8)grantley_io_read8;
+	state->cpu_io.IoRead16 = (EFI_PEI_CPU_IO_PPI_IO_READ16)grantley_io_read16;
+	state->cpu_io.IoRead32 = (EFI_PEI_CPU_IO_PPI_IO_READ32)grantley_io_read32;
+	state->cpu_io.IoRead64 = (EFI_PEI_CPU_IO_PPI_IO_READ64)grantley_io_read64;
+	state->cpu_io.IoWrite8 = (EFI_PEI_CPU_IO_PPI_IO_WRITE8)grantley_io_write8;
+	state->cpu_io.IoWrite16 = (EFI_PEI_CPU_IO_PPI_IO_WRITE16)grantley_io_write16;
+	state->cpu_io.IoWrite32 = (EFI_PEI_CPU_IO_PPI_IO_WRITE32)grantley_io_write32;
+	state->cpu_io.IoWrite64 = (EFI_PEI_CPU_IO_PPI_IO_WRITE64)grantley_io_write64;
+
+	state->cpu_io_desc.Flags = EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST;
+	state->cpu_io_desc.Guid = &state->cpu_io_guid;
+	state->cpu_io_desc.Ppi = &state->cpu_io;
+
+	/* Install both core PPIs into services */
+	grantley_install_ppi(&state->services_ptr, &state->pci_cfg_desc);
+	grantley_install_ppi(&state->services_ptr, &state->cpu_io_desc);
 
 	return EFI_SUCCESS;
 }

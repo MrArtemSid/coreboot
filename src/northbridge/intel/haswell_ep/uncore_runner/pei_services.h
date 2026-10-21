@@ -3,6 +3,7 @@
 #ifndef NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
 #define NORTHBRIDGE_INTEL_HASWELL_EP_PEI_SERVICES_H
 
+#include <stdint.h>
 #include <PiPei.h>
 #include <Ppi/CpuIo.h>
 #include <Ppi/PciCfg2.h>
@@ -17,6 +18,19 @@ struct grantley_uncore_state {
 	/* PPI Registry */
 	const EFI_PEI_PPI_DESCRIPTOR * ppi_descriptors[MAX_GRANTLEY_PPI_DESCRIPTORS];
 	UINTN ppi_count;
+
+	/* Core PPIs */
+	EFI_GUID pci_cfg_guid;
+	EFI_PEI_PCI_CFG2_PPI pci_cfg;
+	EFI_PEI_PPI_DESCRIPTOR pci_cfg_desc;
+
+	EFI_GUID cpu_io_guid;
+	EFI_PEI_CPU_IO_PPI cpu_io;
+	EFI_PEI_PPI_DESCRIPTOR cpu_io_desc;
+
+	/* MMCFG Base configuration */
+	uintptr_t mmcfg_base;
+	BOOLEAN mmcfg_enabled;
 
 	/* HOB storage */
 	void *hob_list;
@@ -39,6 +53,9 @@ struct grantley_uncore_state {
 
 /* Global or context accessor for PEI services */
 struct grantley_uncore_state *grantley_get_uncore_state(void);
+
+/* Initialise MMCFG base address for MMIO-based PCI config access */
+void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
 
 /* Initialize PEI services table and internal storage */
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
