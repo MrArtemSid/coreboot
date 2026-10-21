@@ -61,12 +61,12 @@ struct grantley_uncore_state {
 };
 
 /* Global or context accessor for PEI services */
-#if ENV_SEPARATE_ROMSTAGE
+#if ENV_SEPARATE_ROMSTAGE || ENV_TEST
 struct grantley_uncore_state *grantley_get_uncore_state(void);
 #else
 static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
 {
-	return NULL;
+	return ((void *)0);
 }
 #endif
 

@@ -1,7 +1,7 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
 config BOARD_HUANANZHI_X99_QD4
-	bool "X99-QD4 (diagnostic only, no DRAM init)"
+	bool "X99-QD4"
 
 config BOARD_HUANANZHI_X99_BD4
-	bool "X99-BD4 (diagnostic only, no DRAM init)"
+	bool "X99-BD4"
