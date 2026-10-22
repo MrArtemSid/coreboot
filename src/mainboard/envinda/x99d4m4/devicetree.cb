@@ -19,8 +19,8 @@ chip northbridge/intel/grantley
 		device pci 05.4 on end # IIO I/O APIC
 
 		chip southbridge/intel/lynxpoint
-			# Generic LPC decode ranges for NCT6779D
-			register "gen1_dec" = "0x003c0a21" # 0x0a20..0x0a3f Hardware Monitor (290h/a20h)
+			# Generic LPC decode ranges for NCT5539D/NCT5532D (0x0a00..0x0a3f)
+			register "gen1_dec" = "0x003c0a01" # 0x0a00..0x0a3f GPIO/PME/HWM
 			register "sata_port_map" = "0x3f"
 
 			device pci 14.0 on end # xHCI Controller
@@ -45,7 +45,6 @@ chip northbridge/intel/grantley
 					end
 					device pnp 2e.b on # Hardware Monitor
 						io  0x60 = 0xa20
-						io  0x62 = 0xa30
 						irq 0x70 = 0
 					end
 				end
