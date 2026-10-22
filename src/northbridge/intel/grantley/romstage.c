@@ -13,6 +13,7 @@
 #include <post.h>
 #include <romstage_common.h>
 #include <romstage_handoff.h>
+#include <southbridge/intel/lynxpoint/pch.h>
 #include "platform.h"
 
 void __weak mainboard_memory_init_params(struct grantley_memory_params *params)
@@ -30,6 +31,9 @@ void __noreturn romstage_main(void)
 	uint32_t signature = cpuid_eax(1);
 	uint32_t host = pci_s_read_config32(PCI_DEV(0, 0, 0), PCI_VENDOR_ID);
 	uint32_t pch = pci_s_read_config32(PCI_DEV(0, 0x1f, 0), PCI_VENDOR_ID);
+
+	/* Initialize PCH BARs, GPIOs and un-halt timers */
+	early_pch_init();
 
 	printk(BIOS_INFO, "Grantley diagnostic: CPUID %08x, host %08x, LPC %08x\n",
 	       signature, host, pch);
