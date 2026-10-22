@@ -873,7 +873,33 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 	if ((uintptr_t)bytes != (uintptr_t)image_base)
 		return EFI_UNSUPPORTED;
 
-	return entry_point((void *)0, &state->services_ptr);
+	/*
+	 * UncoreInitPeim allocates ~440 KB on the stack at entry
+	 * (e.g. sub $0x6db38, %esp). Switch to a dedicated stack at
+	 * top of CAR (0xfe1fffc0), providing >800 KB of headroom,
+	 * then restore coreboot's esp upon return.
+	 */
+	uintptr_t car_stack_top =
+		CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64;
+	EFI_STATUS status;
+	const void *services_arg = &state->services_ptr;
+
+	__asm__ __volatile__(
+		"movl %%esp, %[saved_esp]\n	"
+		"movl %[stack], %%esp\n	"
+		"subl $8, %%esp\n	"
+		"pushl %[services]\n	"
+		"pushl $0\n	"
+		"call *%[entry]\n	"
+		"movl %[saved_esp], %%esp\n	"
+		: [status] "=&a"(status), [saved_esp] "=m"(state->saved_esp)
+		: [stack] "r"(car_stack_top),
+		  [services] "r"(services_arg),
+		  [entry] "r"(entry_point)
+		: "ecx", "edx", "memory", "cc"
+	);
+
+	return status;
 }
 
 static EFI_STATUS EFIAPI grantley_ffs_stub(void)

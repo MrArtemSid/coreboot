@@ -51,6 +51,8 @@ struct grantley_uncore_state {
 	/* Pointer to backing region device for EFI variable store */
 	const struct region_device *var_store_rdev;
 
+	uintptr_t saved_esp;
+
 	/* MMCFG Base configuration */
 	uintptr_t mmcfg_base;
 	BOOLEAN mmcfg_enabled;
