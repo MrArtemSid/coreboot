@@ -25,8 +25,12 @@ ramstage-y += memmap.c
 ramstage-y += northbridge.c
 
 cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
-uncore.bin-file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
+uncore_bin_file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
+uncore.bin-file := $(uncore_bin_file)
 uncore.bin-type := raw
+uncore.bin-position := $(if $(wildcard $(uncore_bin_file)),\
+	$(shell $(PYTHON3) util/grantley/pe_image_base.py \
+		$(uncore_bin_file)))
 
 # There is deliberately no ramstage/resource map or memory-init substitute.
 ifeq ($(CONFIG_HAVE_INTEL_UNCORE_BIN),)

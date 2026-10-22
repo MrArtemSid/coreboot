@@ -99,7 +99,19 @@ static void grantley_domain_read_resources(struct device *dev)
 	size_t tseg_size;
 	smm_region(&tseg_base, &tseg_size);
 
-	if (state && state->dram_initialized && state->dram_size > 0) {
+	/* Read hardware memory registers populated by uncore blob */
+	const pci_devfn_t iio_dev = PCI_DEV(0, 5, 0);
+	uint32_t tolm =
+		pci_s_read_config32(iio_dev, 0xd0) & 0xfc000000;
+	uint32_t tohm_lo =
+		pci_s_read_config32(iio_dev, 0xd4) & 0xfc000000;
+	uint32_t tohm_hi = pci_s_read_config32(iio_dev, 0xd8);
+	uint64_t tohm = ((uint64_t)tohm_hi << 32) | tohm_lo;
+
+	if (tolm >= 0x40000000 && tolm <= 0xd0000000) {
+		low_ram_end = tolm;
+	} else if (state && state->dram_initialized &&
+		   state->dram_size > 0) {
 		low_ram_end = (state->dram_size < GRANTLEY_DEFAULT_TOLUM) ?
 			state->dram_size : GRANTLEY_DEFAULT_TOLUM;
 	} else {
@@ -114,7 +126,11 @@ static void grantley_domain_read_resources(struct device *dev)
 	}
 
 	/* High DRAM above 4 GiB */
-	if (state && state->dram_initialized && state->dram_size > 0x100000000ULL) {
+	if (tohm > 0x100000000ULL) {
+		uint64_t high_ram_size = tohm - 0x100000000ULL;
+		ram_range(dev, idx++, 0x100000000ULL, high_ram_size);
+	} else if (state && state->dram_initialized &&
+		   state->dram_size > 0x100000000ULL) {
 		uint64_t high_ram_size = state->dram_size - low_ram_end;
 		ram_range(dev, idx++, 0x100000000ULL, high_ram_size);
 	}

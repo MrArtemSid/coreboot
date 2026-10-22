@@ -756,9 +756,6 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	if (!state || !variable_name || !vendor_guid || !data_size)
 		return EFI_INVALID_PARAMETER;
 
-	if (!state->var_store_rdev)
-		return EFI_NOT_FOUND;
-
 	/* Convert CHAR16 UTF-16LE variable name to ASCII for coreboot efi_fv_get_option */
 	const CHAR16 *var_name16 = (const CHAR16 *)variable_name;
 	char ascii_name[64];
@@ -770,8 +767,12 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	}
 	ascii_name[i] = '\0';
 
+	enum cb_err err = CB_ERR;
 	uint32_t size = (uint32_t)*data_size;
-	enum cb_err err = efi_fv_get_option(state->var_store_rdev, vendor_guid, ascii_name, data, &size);
+	if (state->var_store_rdev)
+		err = efi_fv_get_option(state->var_store_rdev,
+					vendor_guid, ascii_name,
+					data, &size);
 
 	/* If NVRAM store doesn't have IntelSetup, check if mainboard supplied manual overrides */
 	if (err != CB_SUCCESS && strcmp(ascii_name, "IntelSetup") == 0) {
@@ -865,8 +866,12 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 	 * In flat/CAR mapping, entry_addr = pe_base + entry_rva.
 	 */
 	uint32_t entry_rva = *(const uint32_t *)&pe_hdr[0x28];
+	uint32_t image_base = *(const uint32_t *)&pe_hdr[0x34];
 	grantley_peim_entry_t entry_point =
 		(grantley_peim_entry_t)(uintptr_t)(bytes + (intptr_t)(int32_t)entry_rva);
+
+	if ((uintptr_t)bytes != (uintptr_t)image_base)
+		return EFI_UNSUPPORTED;
 
 	return entry_point((void *)0, &state->services_ptr);
 }

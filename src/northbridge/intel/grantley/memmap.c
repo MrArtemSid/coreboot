@@ -7,6 +7,7 @@
 #include <commonlib/helpers.h>
 #include <cpu/x86/mtrr.h>
 #include <cpu/x86/smm.h>
+#include <device/pci_ops.h>
 #include <stdint.h>
 #include <types.h>
 #include "uncore_runner/pei_services.h"
@@ -30,6 +31,18 @@ static uintptr_t top_of_low_usable_memory(void)
 		 */
 		uintptr_t low_ram_top = (state->dram_size < GRANTLEY_DEFAULT_TOLUM) ?
 			(uintptr_t)state->dram_size : GRANTLEY_DEFAULT_TOLUM;
+
+		if (CONFIG(SMM_TSEG) && CONFIG_SMM_TSEG_SIZE > 0)
+			low_ram_top -= CONFIG_SMM_TSEG_SIZE;
+
+		return ALIGN_DOWN(low_ram_top, 8 * MiB);
+	}
+
+	const pci_devfn_t iio_dev = PCI_DEV(0, 5, 0);
+	uint32_t tolm =
+		pci_s_read_config32(iio_dev, 0xd0) & 0xfc000000;
+	if (tolm >= 0x40000000 && tolm <= 0xd0000000) {
+		uintptr_t low_ram_top = tolm;
 
 		if (CONFIG(SMM_TSEG) && CONFIG_SMM_TSEG_SIZE > 0)
 			low_ram_top -= CONFIG_SMM_TSEG_SIZE;

@@ -105,9 +105,28 @@ void __noreturn romstage_main(void)
 			die("Grantley: uncore memory initialization failed!\n");
 		}
 
+		/* Read memory bounds populated by uncore blob */
+		const pci_devfn_t dev = PCI_DEV(0, 5, 0);
+		uint32_t tolm =
+			pci_s_read_config32(dev, 0xd0) & 0xfc000000;
+		uint32_t tohm_lo =
+			pci_s_read_config32(dev, 0xd4) & 0xfc000000;
+		uint32_t tohm_hi = pci_s_read_config32(dev, 0xd8);
+		uint64_t tohm = ((uint64_t)tohm_hi << 32) | tohm_lo;
+
+		uint64_t total_ram = tolm;
+		if (tohm > 0x100000000ULL)
+			total_ram += (tohm - 0x100000000ULL);
+
+		uncore_state.dram_base = 0;
+		uncore_state.dram_size = total_ram;
+		uncore_state.dram_initialized = TRUE;
+
+		const unsigned long long dram_mb = total_ram >> 20;
 		post_code(0x36);
-		printk(BIOS_INFO, "Grantley: DRAM training complete! Detected %llu MB\n",
-		       (unsigned long long)(uncore_state.dram_size >> 20));
+		printk(BIOS_INFO,
+		       "Grantley: RAM: %llu MB (TOLM %x, TOHM %llx)\n",
+		       dram_mb, tolm, (unsigned long long)tohm);
 
 		/* Memory is online: initialise CBMEM and hand off to postcar */
 		cbmem_initialize_empty();
