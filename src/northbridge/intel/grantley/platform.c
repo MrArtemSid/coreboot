@@ -30,6 +30,10 @@ bool grantley_pch_is_supported(uint16_t vendor, uint16_t device)
 	if (vendor != 0x8086)
 		return false;
 
+	/* Wellsburg C610/C612 / X99 family (0x8d40..0x8d5f) */
+	if (device >= GRANTLEY_PCH_WBG_MIN && device <= GRANTLEY_PCH_WBG_MAX)
+		return true;
+
 	switch (device) {
 	/* Lynx Point 8-series desktop & server */
 	case GRANTLEY_PCH_Z87:
@@ -44,9 +48,6 @@ bool grantley_pch_is_supported(uint16_t vendor, uint16_t device)
 	/* Wildcat Point 9-series */
 	case GRANTLEY_PCH_Z97:
 	case GRANTLEY_PCH_H97:
-	/* Wellsburg C610/C612 / X99 */
-	case GRANTLEY_PCH_C612:
-	case GRANTLEY_PCH_X99:
 		return true;
 	default:
 		return false;
