@@ -21,33 +21,6 @@ struct grantley_uncore_state {
 	const EFI_PEI_PPI_DESCRIPTOR * ppi_descriptors[MAX_GRANTLEY_PPI_DESCRIPTORS];
 	UINTN ppi_count;
 
-	/* Core PPIs */
-	EFI_GUID pci_cfg_guid;
-	EFI_PEI_PCI_CFG2_PPI pci_cfg;
-	EFI_PEI_PPI_DESCRIPTOR pci_cfg_desc;
-
-	EFI_GUID cpu_io_guid;
-	EFI_PEI_CPU_IO_PPI cpu_io;
-	EFI_PEI_PPI_DESCRIPTOR cpu_io_desc;
-
-	EFI_GUID read_only_var_guid;
-	EFI_GUID read_only_var1_guid;
-	EFI_PEI_READ_ONLY_VARIABLE2_PPI read_only_var;
-	EFI_PEI_PPI_DESCRIPTOR read_only_var_desc;
-	EFI_PEI_PPI_DESCRIPTOR read_only_var1_desc;
-
-	/* Platform / Memory services PPIs */
-	EFI_GUID mem_test_guid;
-	void *mem_test_ops[1];
-	EFI_PEI_PPI_DESCRIPTOR mem_test_desc;
-
-	EFI_GUID mem_size_guid;
-	void *mem_size_ops[1];
-	EFI_PEI_PPI_DESCRIPTOR mem_size_desc;
-
-	EFI_GUID platform_info_guid;
-	EFI_PEI_PPI_DESCRIPTOR platform_info_desc;
-
 	/* Pointer to backing region device for EFI variable store */
 	const struct region_device *var_store_rdev;
 
