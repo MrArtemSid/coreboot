@@ -24,10 +24,12 @@ Device (IIO)
 		MM84, 32,
 		Offset (0x90),	/* MMCFG base on Broadwell-EP */
 		MM90, 32,
-		Offset (0x9c),	/* TOLM / TOLUM register */
+		Offset (0xd0),	/* TOLM (Top of Low Memory) */
 		TOLM, 32,
-		Offset (0xa4),	/* TOHM register */
-		TOHM, 64,
+		Offset (0xd4),	/* TOHM_0 (Top of High Memory low 32-bit) */
+		TOH0, 32,
+		Offset (0xd8),	/* TOHM_1 (Top of High Memory high 32-bit) */
+		TOH1, 32,
 		Offset (0x108),	/* CPUBUSNO (uncore routing) */
 		CPUB, 32,
 	}
@@ -140,7 +142,7 @@ Method (_CRS, 0, Serialized)
 	CreateDwordField (MCRS, ^PM01._MAX, PMAX)
 	CreateDwordField (MCRS, ^PM01._LEN, PLEN)
 
-	Local0 = ^IIO.TOLM & 0xf8000000
+	Local0 = ^IIO.TOLM & 0xfc000000
 	If ((Local0 >= 0x40000000) && (Local0 <= 0xd0000000)) {
 		PMIN = Local0
 		PLEN = (PMAX - PMIN) + 1
