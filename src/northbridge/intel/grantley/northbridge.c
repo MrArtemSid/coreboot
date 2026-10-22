@@ -11,7 +11,6 @@
 #include <cpu/x86/smm.h>
 #include <types.h>
 #include "platform.h"
-#include "uncore_runner/pei_services.h"
 
 #define MSR_OC_MAILBOX			0x150
 #define  OC_MB_COMMAND_EXEC		(1ULL << 63)
@@ -84,7 +83,6 @@ static void grantley_domain_read_resources(struct device *dev)
 {
 	int idx = 10;
 	uint64_t low_ram_end;
-	const struct grantley_uncore_state *state = grantley_get_uncore_state();
 
 	pci_domain_read_resources(dev);
 
@@ -108,15 +106,10 @@ static void grantley_domain_read_resources(struct device *dev)
 	uint32_t tohm_hi = pci_s_read_config32(iio_dev, 0xd8);
 	uint64_t tohm = ((uint64_t)tohm_hi << 32) | tohm_lo;
 
-	if (tolm >= 0x40000000 && tolm <= 0xd0000000) {
+	if (tolm >= 0x40000000 && tolm <= 0xd0000000)
 		low_ram_end = tolm;
-	} else if (state && state->dram_initialized &&
-		   state->dram_size > 0) {
-		low_ram_end = (state->dram_size < GRANTLEY_DEFAULT_TOLUM) ?
-			state->dram_size : GRANTLEY_DEFAULT_TOLUM;
-	} else {
+	else
 		low_ram_end = GRANTLEY_DEFAULT_TOLUM;
-	}
 
 	if (tseg_size > 0 && tseg_base < low_ram_end) {
 		ram_from_to(dev, idx++, 1 * MiB, tseg_base);
@@ -128,10 +121,6 @@ static void grantley_domain_read_resources(struct device *dev)
 	/* High DRAM above 4 GiB */
 	if (tohm > 0x100000000ULL) {
 		uint64_t high_ram_size = tohm - 0x100000000ULL;
-		ram_range(dev, idx++, 0x100000000ULL, high_ram_size);
-	} else if (state && state->dram_initialized &&
-		   state->dram_size > 0x100000000ULL) {
-		uint64_t high_ram_size = state->dram_size - low_ram_end;
 		ram_range(dev, idx++, 0x100000000ULL, high_ram_size);
 	}
 }

@@ -10,7 +10,6 @@
 #include <device/pci_ops.h>
 #include <stdint.h>
 #include <types.h>
-#include "uncore_runner/pei_services.h"
 
 /*
  * Default Top of Low Usable Memory (TOLUM) fallback for Haswell-EP.
@@ -21,36 +20,20 @@
 
 static uintptr_t top_of_low_usable_memory(void)
 {
-	const struct grantley_uncore_state *state = grantley_get_uncore_state();
-
-	if (state && state->dram_initialized && state->dram_size > 0) {
-		/*
-		 * If total RAM is below 2 GiB, top is dram_size aligned down to 8 MiB.
-		 * Otherwise low RAM ceiling below MMIO hole is 0x80000000 (2 GiB)
-		 * minus SMM TSEG.
-		 */
-		uintptr_t low_ram_top = (state->dram_size < GRANTLEY_DEFAULT_TOLUM) ?
-			(uintptr_t)state->dram_size : GRANTLEY_DEFAULT_TOLUM;
-
-		if (CONFIG(SMM_TSEG) && CONFIG_SMM_TSEG_SIZE > 0)
-			low_ram_top -= CONFIG_SMM_TSEG_SIZE;
-
-		return ALIGN_DOWN(low_ram_top, 8 * MiB);
-	}
-
 	const pci_devfn_t iio_dev = PCI_DEV(0, 5, 0);
 	uint32_t tolm =
 		pci_s_read_config32(iio_dev, 0xd0) & 0xfc000000;
-	if (tolm >= 0x40000000 && tolm <= 0xd0000000) {
-		uintptr_t low_ram_top = tolm;
+	uintptr_t low_ram_top;
 
-		if (CONFIG(SMM_TSEG) && CONFIG_SMM_TSEG_SIZE > 0)
-			low_ram_top -= CONFIG_SMM_TSEG_SIZE;
+	if (tolm >= 0x40000000 && tolm <= 0xd0000000)
+		low_ram_top = tolm;
+	else
+		low_ram_top = GRANTLEY_DEFAULT_TOLUM;
 
-		return ALIGN_DOWN(low_ram_top, 8 * MiB);
-	}
+	if (CONFIG(SMM_TSEG) && CONFIG_SMM_TSEG_SIZE > 0)
+		low_ram_top -= CONFIG_SMM_TSEG_SIZE;
 
-	return GRANTLEY_DEFAULT_TOLUM - (CONFIG(SMM_TSEG) ? CONFIG_SMM_TSEG_SIZE : 0);
+	return ALIGN_DOWN(low_ram_top, 8 * MiB);
 }
 
 uintptr_t cbmem_top_chipset(void)

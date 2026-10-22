@@ -3,7 +3,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include <cf9_reset.h>
+#include <device/mmio.h>
 #include <drivers/efi/efivars.h>
+#include <post.h>
 /* Forward declaration of I/O and PCI operations */
 #if !defined(__TESTS__)
 #include <arch/io.h>
@@ -275,12 +278,14 @@ static EFI_STATUS EFIAPI grantley_report_status_code(
 	const void *caller_id,
 	const void *data)
 {
+	post_code((uint8_t)value);
 	return EFI_SUCCESS;
 }
 
 static EFI_STATUS EFIAPI grantley_reset_system(
 	const struct _EFI_PEI_SERVICES **services)
 {
+	system_reset();
 	return EFI_SUCCESS;
 }
 
@@ -405,17 +410,15 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_read(
 			(((uintptr_t)func) << 12) +
 			reg;
 
-		volatile uint8_t *p8 = (volatile uint8_t *)mmio_addr;
-
 		switch (width) {
 		case EfiPeiPciCfgWidthUint8:
-			*(UINT8 *)buffer = *p8;
+			*(UINT8 *)buffer = read8((void *)mmio_addr);
 			break;
 		case EfiPeiPciCfgWidthUint16:
-			*(UINT16 *)buffer = *(volatile uint16_t *)p8;
+			*(UINT16 *)buffer = read16((void *)mmio_addr);
 			break;
 		case EfiPeiPciCfgWidthUint32:
-			*(UINT32 *)buffer = *(volatile uint32_t *)p8;
+			*(UINT32 *)buffer = read32((void *)mmio_addr);
 			break;
 		default:
 			return EFI_INVALID_PARAMETER;
@@ -423,27 +426,21 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_read(
 		return EFI_SUCCESS;
 	}
 
-	/* Fallback: legacy CF8/CFC I/O config access (for standard <= 255 byte registers) */
+	/* Fallback: legacy CF8/CFC I/O config access via stage-safe coreboot ops */
 	if (reg >= 256)
 		return EFI_UNSUPPORTED;
 
-	uint32_t io_addr = (1U << 31) |
-		(((uint32_t)bus) << 16) |
-		(((uint32_t)dev) << 11) |
-		(((uint32_t)func) << 8) |
-		(reg & 0xfc);
-
-	outl(io_addr, 0xcf8);
+	const pci_devfn_t pdev = PCI_DEV(bus, dev, func);
 
 	switch (width) {
 	case EfiPeiPciCfgWidthUint8:
-		*(UINT8 *)buffer = inb(0xcfc + (reg & 3));
+		*(UINT8 *)buffer = pci_s_read_config8(pdev, reg);
 		break;
 	case EfiPeiPciCfgWidthUint16:
-		*(UINT16 *)buffer = inw(0xcfc + (reg & 2));
+		*(UINT16 *)buffer = pci_s_read_config16(pdev, reg);
 		break;
 	case EfiPeiPciCfgWidthUint32:
-		*(UINT32 *)buffer = inl(0xcfc);
+		*(UINT32 *)buffer = pci_s_read_config32(pdev, reg);
 		break;
 	default:
 		return EFI_INVALID_PARAMETER;
@@ -481,17 +478,15 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_write(
 			(((uintptr_t)func) << 12) +
 			reg;
 
-		volatile uint8_t *p8 = (volatile uint8_t *)mmio_addr;
-
 		switch (width) {
 		case EfiPeiPciCfgWidthUint8:
-			*p8 = *(UINT8 *)buffer;
+			write8((void *)mmio_addr, *(UINT8 *)buffer);
 			break;
 		case EfiPeiPciCfgWidthUint16:
-			*(volatile uint16_t *)p8 = *(UINT16 *)buffer;
+			write16((void *)mmio_addr, *(UINT16 *)buffer);
 			break;
 		case EfiPeiPciCfgWidthUint32:
-			*(volatile uint32_t *)p8 = *(UINT32 *)buffer;
+			write32((void *)mmio_addr, *(UINT32 *)buffer);
 			break;
 		default:
 			return EFI_INVALID_PARAMETER;
@@ -502,23 +497,17 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_write(
 	if (reg >= 256)
 		return EFI_UNSUPPORTED;
 
-	uint32_t io_addr = (1U << 31) |
-		(((uint32_t)bus) << 16) |
-		(((uint32_t)dev) << 11) |
-		(((uint32_t)func) << 8) |
-		(reg & 0xfc);
-
-	outl(io_addr, 0xcf8);
+	const pci_devfn_t pdev = PCI_DEV(bus, dev, func);
 
 	switch (width) {
 	case EfiPeiPciCfgWidthUint8:
-		outb(*(UINT8 *)buffer, 0xcfc + (reg & 3));
+		pci_s_write_config8(pdev, reg, *(UINT8 *)buffer);
 		break;
 	case EfiPeiPciCfgWidthUint16:
-		outw(*(UINT16 *)buffer, 0xcfc + (reg & 2));
+		pci_s_write_config16(pdev, reg, *(UINT16 *)buffer);
 		break;
 	case EfiPeiPciCfgWidthUint32:
-		outl(*(UINT32 *)buffer, 0xcfc);
+		pci_s_write_config32(pdev, reg, *(UINT32 *)buffer);
 		break;
 	default:
 		return EFI_INVALID_PARAMETER;
