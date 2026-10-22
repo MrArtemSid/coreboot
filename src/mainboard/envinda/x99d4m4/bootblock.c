@@ -17,8 +17,8 @@ void mainboard_config_superio(void)
 	id |= pnp_read_config(uart, 0x21);
 	nuvoton_pnp_exit_conf_state(uart);
 
-	/* Nuvoton NCT6779D Chip ID is 0xc562 */
-	if (id != 0xc562) {
+	/* NCT5532D / NCT5539D chip ID is 0xd121; NCT6779D is 0xc562 */
+	if (id != 0xd121 && id != 0xc562) {
 		post_code(0xe1);
 		halt();
 	}
