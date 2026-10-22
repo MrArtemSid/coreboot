@@ -889,6 +889,98 @@ static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	  &g_platform_info_guid, (void *)0 },
 };
 
+static const EFI_PEI_SERVICES g_pei_services_template = {
+	.Hdr = {
+		.Signature  = PEI_SERVICES_SIGNATURE,
+		.Revision   = PEI_SERVICES_REVISION,
+		.HeaderSize = sizeof(EFI_TABLE_HEADER),
+	},
+	.InstallPpi         = (EFI_PEI_INSTALL_PPI)grantley_install_ppi,
+	.ReInstallPpi       = (EFI_PEI_REINSTALL_PPI)grantley_reinstall_ppi,
+	.LocatePpi          = (EFI_PEI_LOCATE_PPI)grantley_locate_ppi,
+	.NotifyPpi          = (EFI_PEI_NOTIFY_PPI)grantley_notify_ppi,
+	.GetBootMode        = (EFI_PEI_GET_BOOT_MODE)grantley_get_boot_mode,
+	.SetBootMode        = (EFI_PEI_SET_BOOT_MODE)grantley_set_boot_mode,
+	.GetHobList         = (EFI_PEI_GET_HOB_LIST)grantley_get_hob_list,
+	.CreateHob          = (EFI_PEI_CREATE_HOB)grantley_create_hob,
+	.FfsFindNextVolume  = (EFI_PEI_FFS_FIND_NEXT_VOLUME2)grantley_ffs_stub,
+	.FfsFindNextFile    = (EFI_PEI_FFS_FIND_NEXT_FILE2)grantley_ffs_stub,
+	.FfsFindSectionData = (EFI_PEI_FFS_FIND_SECTION_DATA2)grantley_ffs_stub,
+	.InstallPeiMemory   = (EFI_PEI_INSTALL_PEI_MEMORY)grantley_install_pei_memory,
+	.AllocatePages      = (EFI_PEI_ALLOCATE_PAGES)grantley_allocate_pages,
+	.AllocatePool       = (EFI_PEI_ALLOCATE_POOL)grantley_allocate_pool,
+	.CopyMem            = (EFI_PEI_COPY_MEM)grantley_copy_mem,
+	.SetMem             = (EFI_PEI_SET_MEM)grantley_set_mem,
+	.ReportStatusCode   = (EFI_PEI_REPORT_STATUS_CODE)grantley_report_status_code,
+	.ResetSystem        = (EFI_PEI_RESET_SYSTEM)grantley_reset_system,
+};
+
+static void grantley_init_hob_list(struct grantley_uncore_state *state, void *hob_buf)
+{
+	EFI_HOB_HANDOFF_INFO_TABLE *hit = (EFI_HOB_HANDOFF_INFO_TABLE *)hob_buf;
+	*hit = (EFI_HOB_HANDOFF_INFO_TABLE){
+		.Header = {
+			.HobType   = EFI_HOB_TYPE_HANDOFF,
+			.HobLength = sizeof(EFI_HOB_HANDOFF_INFO_TABLE),
+		},
+		.Version = EFI_HOB_HANDOFF_TABLE_VERSION,
+		.BootMode = state->boot_mode,
+		.EfiEndOfHobList = (EFI_PHYSICAL_ADDRESS)(uintptr_t)hob_buf +
+				   sizeof(EFI_HOB_HANDOFF_INFO_TABLE),
+	};
+	state->hob_allocated = sizeof(EFI_HOB_HANDOFF_INFO_TABLE);
+
+	EFI_HOB_GENERIC_HEADER *end_hob =
+		(EFI_HOB_GENERIC_HEADER *)((UINT8 *)hob_buf + state->hob_allocated);
+	*end_hob = (EFI_HOB_GENERIC_HEADER){
+		.HobType   = EFI_HOB_TYPE_END_OF_HOB_LIST,
+		.HobLength = sizeof(EFI_HOB_GENERIC_HEADER),
+	};
+}
+
+/*
+ * Uncore blob requires EFI_PLATFORM_INFO GUID HOB in addition
+ * to PLATFORM_INFO_PPI. Uncore blob routines (at 0x31254,
+ * 0xb363c, 0xb364e, 0xb52aa, 0xb5dc0) call GetFirstGuidHob()
+ * and dereference the result without checking for NULL.
+ */
+static void grantley_init_platform_info_hob(struct grantley_uncore_state *state)
+{
+	void *hob = (void *)0;
+	const UINT16 hob_data_len = 256;
+	const UINT16 hob_total_len = sizeof(EFI_HOB_GUID_TYPE) + hob_data_len;
+	const struct _EFI_PEI_SERVICES **s_ptr =
+		(const struct _EFI_PEI_SERVICES **)&state->services_ptr;
+
+	if (grantley_create_hob(s_ptr, EFI_HOB_TYPE_GUID_EXTENSION,
+				hob_total_len, &hob) != EFI_SUCCESS || !hob)
+		return;
+
+	EFI_HOB_GUID_TYPE *guid_hob = (EFI_HOB_GUID_TYPE *)hob;
+	guid_hob->Name = g_platform_info_guid;
+	uint8_t *data = (uint8_t *)(guid_hob + 1);
+	memset(data, 0, hob_data_len);
+
+	/* Signature "$PIT" (0x54495024) at offset 0x10 */
+	*(uint32_t *)(data + 0x10) = 0x54495024;
+	/* Table size at offset 0x14 */
+	*(uint32_t *)(data + 0x14) = hob_data_len;
+	/* Table revision 1 at offset 0x18 */
+	*(uint16_t *)(data + 0x18) = 1;
+	/* Platform Type 0 (Default / CRB) at offset 0x1a */
+	*(uint16_t *)(data + 0x1a) = 0;
+	/* ExtendedInfoValid = 1 at offset 0x2c */
+	data[0x2c] = 1;
+	/* BoardId = 0 (Default CRB) at offset 0x46 */
+	data[0x46] = 0;
+	/* MemTsegSize at offset 0x85 */
+#if CONFIG(SMM_TSEG)
+	*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
+#endif
+	/* SysData.SysSioExist = 1 at offset 0x9e */
+	data[0x9e] = 1;
+}
+
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *pool_buf, UINTN pool_size,
 				    void *hob_buf, UINTN hob_size)
@@ -902,111 +994,20 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	memset(state, 0, sizeof(*state));
 	g_state = state;
 
+	state->services = g_pei_services_template;
 	state->services_ptr = &state->services;
-	state->boot_mode = BOOT_WITH_FULL_CONFIGURATION;
+	state->services.CpuIo = (EFI_PEI_CPU_IO_PPI *)&g_cpu_io;
+	state->services.PciCfg = (EFI_PEI_PCI_CFG2_PPI *)&g_pci_cfg;
 
+	state->boot_mode = BOOT_WITH_FULL_CONFIGURATION;
 	state->pool_base = (UINT8 *)pool_buf;
 	state->pool_size = pool_size;
-	state->pool_allocated = 0;
-
 	state->hob_list = hob_buf;
 	state->hob_size = hob_size;
 
-	/* Setup initial Handoff Information Table (HIT) at the head of HOB list */
-	EFI_HOB_HANDOFF_INFO_TABLE *hit = (EFI_HOB_HANDOFF_INFO_TABLE *)hob_buf;
-
-	hit->Header.HobType = EFI_HOB_TYPE_HANDOFF;
-	hit->Header.HobLength = sizeof(EFI_HOB_HANDOFF_INFO_TABLE);
-	hit->Header.Reserved = 0;
-	hit->Version = EFI_HOB_HANDOFF_TABLE_VERSION;
-	hit->BootMode = state->boot_mode;
-	hit->EfiMemoryTop = 0;
-	hit->EfiMemoryBottom = 0;
-	hit->EfiFreeMemoryTop = 0;
-	hit->EfiFreeMemoryBottom = 0;
-	hit->EfiEndOfHobList =
-		(EFI_PHYSICAL_ADDRESS)(uintptr_t)hob_buf + sizeof(EFI_HOB_HANDOFF_INFO_TABLE);
-
-	state->hob_allocated = sizeof(EFI_HOB_HANDOFF_INFO_TABLE);
-
-	/* Place the terminating END_OF_HOB_LIST */
-	EFI_HOB_GENERIC_HEADER *end_hob =
-		(EFI_HOB_GENERIC_HEADER *)((UINT8 *)hob_buf + state->hob_allocated);
-	end_hob->HobType = EFI_HOB_TYPE_END_OF_HOB_LIST;
-	end_hob->HobLength = sizeof(EFI_HOB_GENERIC_HEADER);
-	end_hob->Reserved = 0;
-
-	/* Initialize PEI services table header */
-	state->services.Hdr.Signature = PEI_SERVICES_SIGNATURE;
-	state->services.Hdr.Revision = PEI_SERVICES_REVISION;
-	state->services.Hdr.HeaderSize = sizeof(EFI_TABLE_HEADER);
-	state->services.Hdr.CRC32 = 0;
-	state->services.Hdr.Reserved = 0;
-
-	/* Install function pointers */
-	state->services.InstallPpi = (EFI_PEI_INSTALL_PPI)grantley_install_ppi;
-	state->services.ReInstallPpi = (EFI_PEI_REINSTALL_PPI)grantley_reinstall_ppi;
-	state->services.LocatePpi = (EFI_PEI_LOCATE_PPI)grantley_locate_ppi;
-	state->services.NotifyPpi = (EFI_PEI_NOTIFY_PPI)grantley_notify_ppi;
-	state->services.GetBootMode = (EFI_PEI_GET_BOOT_MODE)grantley_get_boot_mode;
-	state->services.SetBootMode = (EFI_PEI_SET_BOOT_MODE)grantley_set_boot_mode;
-	state->services.GetHobList = (EFI_PEI_GET_HOB_LIST)grantley_get_hob_list;
-	state->services.CreateHob = (EFI_PEI_CREATE_HOB)grantley_create_hob;
-	state->services.FfsFindNextVolume = (EFI_PEI_FFS_FIND_NEXT_VOLUME2)grantley_ffs_stub;
-	state->services.FfsFindNextFile = (EFI_PEI_FFS_FIND_NEXT_FILE2)grantley_ffs_stub;
-	state->services.FfsFindSectionData = (EFI_PEI_FFS_FIND_SECTION_DATA2)grantley_ffs_stub;
-	state->services.InstallPeiMemory = (EFI_PEI_INSTALL_PEI_MEMORY)grantley_install_pei_memory;
-	state->services.AllocatePages = (EFI_PEI_ALLOCATE_PAGES)grantley_allocate_pages;
-	state->services.AllocatePool = (EFI_PEI_ALLOCATE_POOL)grantley_allocate_pool;
-	state->services.CopyMem = (EFI_PEI_COPY_MEM)grantley_copy_mem;
-	state->services.SetMem = (EFI_PEI_SET_MEM)grantley_set_mem;
-	state->services.ReportStatusCode = (EFI_PEI_REPORT_STATUS_CODE)grantley_report_status_code;
-	state->services.ResetSystem = (EFI_PEI_RESET_SYSTEM)grantley_reset_system;
-
-	/* Install core PPIs into services */
-	state->services.CpuIo = (EFI_PEI_CPU_IO_PPI *)&g_cpu_io;
-	state->services.PciCfg = (EFI_PEI_PCI_CFG2_PPI *)&g_pci_cfg;
+	grantley_init_hob_list(state, hob_buf);
 	grantley_install_ppi(&state->services_ptr, g_initial_ppis);
-
-	/*
-	 * Uncore blob requires EFI_PLATFORM_INFO GUID HOB in addition
-	 * to PLATFORM_INFO_PPI. Uncore blob routines (at 0x31254,
-	 * 0xb363c, 0xb364e, 0xb52aa, 0xb5dc0) call GetFirstGuidHob()
-	 * and dereference the result without checking for NULL.
-	 */
-	void *hob = (void *)0;
-	const UINT16 hob_data_len = 256;
-	const UINT16 hob_total_len =
-		sizeof(EFI_HOB_GUID_TYPE) + hob_data_len;
-	const struct _EFI_PEI_SERVICES **s_ptr =
-		(const struct _EFI_PEI_SERVICES **)&state->services_ptr;
-	if (grantley_create_hob(s_ptr, EFI_HOB_TYPE_GUID_EXTENSION,
-				hob_total_len, &hob) == EFI_SUCCESS &&
-	    hob) {
-		EFI_HOB_GUID_TYPE *guid_hob = (EFI_HOB_GUID_TYPE *)hob;
-		guid_hob->Name = g_platform_info_guid;
-		uint8_t *data = (uint8_t *)(guid_hob + 1);
-		memset(data, 0, hob_data_len);
-
-		/* Signature "$PIT" (0x54495024) at offset 0x10 */
-		*(uint32_t *)(data + 0x10) = 0x54495024;
-		/* Table size at offset 0x14 */
-		*(uint32_t *)(data + 0x14) = hob_data_len;
-		/* Table revision 1 at offset 0x18 */
-		*(uint16_t *)(data + 0x18) = 1;
-		/* Platform Type 0 (Default / CRB) at offset 0x1a */
-		*(uint16_t *)(data + 0x1a) = 0;
-		/* ExtendedInfoValid = 1 at offset 0x2c */
-		data[0x2c] = 1;
-		/* BoardId = 0 (Default CRB) at offset 0x46 */
-		data[0x46] = 0;
-		/* MemTsegSize at offset 0x85 */
-#if CONFIG(SMM_TSEG)
-		*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
-#endif
-		/* SysData.SysSioExist = 1 at offset 0x9e */
-		data[0x9e] = 1;
-	}
+	grantley_init_platform_info_hob(state);
 
 	return EFI_SUCCESS;
 }
