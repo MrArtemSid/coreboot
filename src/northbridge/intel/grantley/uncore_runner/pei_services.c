@@ -310,7 +310,18 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 		outl(cf8_dev5 | 0x90, 0xcf8);
 		outl((uint32_t)mmcfg_base | 1, 0xcfc);
 
-		/* Set CPUBUSNO at offset 0x108 through MMCFG */
+		/*
+		 * Set MMCFG Limit at 0x88 (IVT) and 0x98 (HSX/BDX).
+		 * Uncore blob checks: if (mmcfg_base > mmcfg_limit) -> abort!
+		 * Limit must cover 256 buses (64MB) above mmcfg_base.
+		 */
+		outl(cf8_dev5 | 0x88, 0xcf8);
+		outl((uint32_t)mmcfg_base + 0x03ffffff, 0xcfc);
+
+		outl(cf8_dev5 | 0x98, 0xcf8);
+		outl((uint32_t)mmcfg_base + 0x03ffffff, 0xcfc);
+
+		/* Set CPUBUSNO at offset 0x108 through MMCFG with valid bit 16 */
 		volatile uint32_t *cpubusno = (volatile uint32_t *)(mmcfg_base + (5U << 15) + 0x108);
 		*cpubusno = 0x0001ff00;
 	}
