@@ -1040,6 +1040,47 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->platform_info_desc.Guid = &state->platform_info_guid;
 	state->platform_info_desc.Ppi = (void *)0;
 
+	/*
+	 * Uncore blob requires EFI_PLATFORM_INFO GUID HOB in addition
+	 * to PLATFORM_INFO_PPI. Uncore blob routines (at 0x31254,
+	 * 0xb363c, 0xb364e, 0xb52aa, 0xb5dc0) call GetFirstGuidHob()
+	 * and dereference the result without checking for NULL.
+	 */
+	void *hob = (void *)0;
+	const UINT16 hob_data_len = 256;
+	const UINT16 hob_total_len =
+		sizeof(EFI_HOB_GUID_TYPE) + hob_data_len;
+	const struct _EFI_PEI_SERVICES **s_ptr =
+		(const struct _EFI_PEI_SERVICES **)
+		&state->services_ptr;
+	if (grantley_create_hob(s_ptr, EFI_HOB_TYPE_GUID_EXTENSION,
+				hob_total_len, &hob) == EFI_SUCCESS &&
+	    hob) {
+		EFI_HOB_GUID_TYPE *guid_hob = (EFI_HOB_GUID_TYPE *)hob;
+		guid_hob->Name = platform_info_guid;
+		uint8_t *data = (uint8_t *)(guid_hob + 1);
+		memset(data, 0, hob_data_len);
+
+		/* Signature "$PIT" (0x54495024) at offset 0x10 */
+		*(uint32_t *)(data + 0x10) = 0x54495024;
+		/* Table size at offset 0x14 */
+		*(uint32_t *)(data + 0x14) = hob_data_len;
+		/* Table revision 1 at offset 0x18 */
+		*(uint16_t *)(data + 0x18) = 1;
+		/* Platform Type 0 (Default / CRB) at offset 0x1a */
+		*(uint16_t *)(data + 0x1a) = 0;
+		/* ExtendedInfoValid = 1 at offset 0x2c */
+		data[0x2c] = 1;
+		/* BoardId = 0 (Default CRB) at offset 0x46 */
+		data[0x46] = 0;
+		/* MemTsegSize at offset 0x85 */
+#if CONFIG(SMM_TSEG)
+		*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
+#endif
+		/* SysData.SysSioExist = 1 at offset 0x9e */
+		data[0x9e] = 1;
+	}
+
 	/* Install core PPIs into services */
 	grantley_install_ppi(&state->services_ptr, &state->pci_cfg_desc);
 	grantley_install_ppi(&state->services_ptr, &state->cpu_io_desc);
