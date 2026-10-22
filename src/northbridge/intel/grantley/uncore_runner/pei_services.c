@@ -321,9 +321,56 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 		outl(cf8_dev5 | 0x98, 0xcf8);
 		outl((uint32_t)mmcfg_base + 0x03ffffff, 0xcfc);
 
-		/* Set CPUBUSNO at offset 0x108 through MMCFG with valid bit 16 */
-		volatile uint32_t *cpubusno = (volatile uint32_t *)(mmcfg_base + (5U << 15) + 0x108);
+		/*
+		 * Set CPUBUSNO at offset 0x108 through MMCFG with
+		 * valid bit 16.
+		 */
+		volatile uint32_t *cpubusno =
+			(volatile uint32_t *)(mmcfg_base +
+					      (5U << 15) + 0x108);
 		*cpubusno = 0x0001ff00;
+
+		/*
+		 * Uncore blob decompilation shows requirement for
+		 * internal bus routing registers in UBOX (1:16.7:0xd0)
+		 * and Cbo (1:15.5:0xc0):
+		 * 1. UBOX CPUBUSNO (0xd0): routes Uncore devices
+		 *    to Bus 0xff with valid bit 31 (0x8000ff00).
+		 * 2. Cbo MMCFG Rule (0xc0): enables ring MMCFG decode.
+		 * 3. UBOX MMCFG Rule (0xdc): enables UBOX decode.
+		 */
+		const uint32_t cf8_ubox =
+			(1U << 31) | (1U << 16) |
+			(16U << 11) | (7U << 8) | 0xd0;
+		outl(cf8_ubox, 0xcf8);
+		outl(0x8000ff00, 0xcfc);
+
+		const uint32_t cf8_cbo =
+			(1U << 31) | (1U << 16) |
+			(15U << 11) | (5U << 8) | 0xc0;
+		outl(cf8_cbo, 0xcf8);
+		outl((uint32_t)mmcfg_base | 1, 0xcfc);
+
+		const uint32_t cf8_ubox_rule =
+			(1U << 31) | (1U << 16) |
+			(16U << 11) | (7U << 8) | 0xdc;
+		outl(cf8_ubox_rule, 0xcf8);
+		uint32_t ubox_rule = inl(0xcfc);
+		outl(cf8_ubox_rule, 0xcf8);
+		outl((ubox_rule & ~7U) | 1U, 0xcfc);
+
+		/*
+		 * Set PCU CPU_BUS_NUMBER on Bus 0xff, Dev 30,
+		 * Func 2, 0x40. Uncore blob checks MSR 0x300 (which
+		 * shadows this register) and halts if bit 31
+		 * (valid) is not set.
+		 */
+		volatile uint32_t *pcu_busno =
+			(volatile uint32_t *)(mmcfg_base +
+					      (0xffU << 20) +
+					      (30U << 15) +
+					      (2U << 12) + 0x40);
+		*pcu_busno = 0x8000ff00;
 	}
 #endif
 }
