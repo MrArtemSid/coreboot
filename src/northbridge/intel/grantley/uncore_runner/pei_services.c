@@ -10,6 +10,7 @@
 /* Forward declaration of I/O and PCI operations */
 #if !defined(__TESTS__)
 #include <arch/io.h>
+#include <cpu/cpu.h>
 #include <device/pci_ops.h>
 #else
 /* Test stubs or mock declarations for unit testing */
@@ -299,27 +300,67 @@ void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg
 
 #if !ENV_TEST
 	if (mmcfg_base) {
+		const pci_devfn_t ubox_misc = PCI_DEV(1, 16, 7);
+		const pci_devfn_t cbo_sad = PCI_DEV(1, 15, 5);
 		const pci_devfn_t iio_dev5 = PCI_DEV(0, 5, 0);
 
-		/* MMCFG Base at 0x84 (Haswell-EP) and 0x90 (Broadwell-EP) */
-		pci_s_write_config32(iio_dev5, 0x84, (uint32_t)mmcfg_base | 1);
-		pci_s_write_config32(iio_dev5, 0x90, (uint32_t)mmcfg_base | 1);
+		/*
+		 * Uncore bus and MMCFG configuration sequence:
+		 *
+		 * 1. Initialize UBOX CPUBUSNO via legacy CF8/CFC.
+		 *    UBOX on Bus 1 is responsive on Cold Boot by hardware default.
+		 *    Routes: Valid=1, UncoreBus=0xff, IIOBus=0x00.
+		 */
+		pci_s_write_config32(ubox_misc, 0xd0, 0x8000ff00);
 
-		/* MMCFG Limit at 0x88 (IVT) and 0x98 (HSX/BDX) covering 256 buses */
-		pci_s_write_config32(iio_dev5, 0x88, (uint32_t)mmcfg_base + 0x03ffffff);
-		pci_s_write_config32(iio_dev5, 0x98, (uint32_t)mmcfg_base + 0x03ffffff);
+		/*
+		 * 2. Configure Cbo SAD MMCFG target rule and UBOX MMCFG rule.
+		 */
+		pci_s_write_config32(cbo_sad, 0xc0, (uint32_t)mmcfg_base | 1);
+		pci_update_config32(ubox_misc, 0xdc, ~7U, 1U);
 
-		/* CPUBUSNO at offset 0x108 through MMCFG: routes Uncore to Bus 0xff */
+		/*
+		 * 3. Validate UBOX presence on Bus 1 now that internal routing is active.
+		 */
+		uint16_t ubox_vid = pci_s_read_config16(ubox_misc, 0);
+		if (ubox_vid != 0x8086)
+			post_code(0xee);
+
+		/*
+		 * 4. Enable MMCFG Base and Limit in IIO (00:05.0):
+		 *    Legacy Haswell-EP A0 stepping (CPUID 0x306f0) uses registers 0x84 / 0x88.
+		 *    Production Haswell-EP (B0+) and all Broadwell-EP use registers 0x90 / 0x98.
+		 */
+		uint32_t cpuid_sig = cpuid_eax(1);
+		uint16_t mmcfg_base_reg = 0x90;
+		uint16_t mmcfg_limit_reg = 0x98;
+
+		if ((cpuid_sig & 0x000fffffU) == 0x000306f0U) {
+			mmcfg_base_reg = 0x84;
+			mmcfg_limit_reg = 0x88;
+		}
+
+		pci_s_write_config32(iio_dev5, mmcfg_base_reg, (uint32_t)mmcfg_base | 1);
+		pci_s_write_config32(iio_dev5, mmcfg_limit_reg, (uint32_t)mmcfg_base + 0x03ffffff);
+
+		/*
+		 * 5. Program IIO CPUBUSNO at offset 0x108 through MMCFG (Valid=1, Uncore=0xff).
+		 */
 		write32((void *)(mmcfg_base + (5U << 15) + 0x108), 0x0001ff00);
 
-		/* Internal bus routing: UBOX (1:16.7:0xd0) and Cbo (1:15.5:0xc0) */
-		pci_s_write_config32(PCI_DEV(1, 16, 7), 0xd0, 0x8000ff00);
-		pci_s_write_config32(PCI_DEV(1, 15, 5), 0xc0, (uint32_t)mmcfg_base | 1);
-		pci_update_config32(PCI_DEV(1, 16, 7), 0xdc, ~7U, 1U);
-
-		/* PCU CPU_BUS_NUMBER on Bus 0xff, Dev 30, Func 2, offset 0x40 */
+		/*
+		 * 6. Set Valid bit in PCU CPU_BUS_NUMBER on Bus 0xff, Dev 30, Func 2, offset 0x40.
+		 */
 		write32((void *)(mmcfg_base + (0xffU << 20) + (30U << 15) +
 				 (2U << 12) + 0x40), 0x8000ff00);
+
+		/*
+		 * 7. Validate that PCU device on Bus 0xff is reachable via MMCFG.
+		 */
+		uint16_t pcu_vid = read16((void *)(mmcfg_base + (0xffU << 20) +
+						   (30U << 15) + (2U << 12) + 0));
+		if (pcu_vid != 0x8086)
+			post_code(0xee);
 	}
 #endif
 }
