@@ -2904,6 +2904,9 @@
 #define PCI_DID_INTEL_LPT_HM97				0x8cc3
 #define PCI_DID_INTEL_LPT_Z97				0x8cc4
 #define PCI_DID_INTEL_LPT_H97				0x8cc6
+/* Wellsburg production LPC IDs below were recovered from the stock
+ * firmware's LPC dispatch.  0x8d4a/0x8d50 are vendor-dump IDs not seen
+ * there; keep them for boards that report them. */
 #define PCI_DID_INTEL_WBG_LPC_C612			0x8d44
 #define PCI_DID_INTEL_WBG_LPC_X99			0x8d4a
 #define PCI_DID_INTEL_WBG_LPC_X99_ALT			0x8d50
