@@ -26,7 +26,7 @@ class GrantleyCarTest(unittest.TestCase):
     def test_car_mmio_decode_follows_target_lists(self):
         source = CAR.read_text()
         routing = source[source.index("\tmovl\t$0x80018550"):
-                         source.index("#if CONFIG(MICROCODE_UPDATE_PRE_RAM)")]
+                         source.index("\t/* Entry16/32 POSTs")]
         fixture = r"""
 .section .text
 .code32
@@ -269,6 +269,28 @@ visits: .long 0
 """
         self.assertEqual(self.run_assembly(fixture), 0,
                          "Stackless microcode loader must return without losing BIST/TSC")
+
+    def test_early_posts_suppressed_but_car_failure_posts_restored(self):
+        # Exercise the same header guard used by entry16/32, then the CAR
+        # translation unit that restores POST only after legacy routing.
+        fixture = ('#include <cpu/x86/post_code.h>\n'
+                   'early_post_marker:\npost_code(0xe1)\n'
+                   f'#include "{CAR}"\n')
+        result = subprocess.check_output([
+            'cc', '-m32', '-E', '-P', '-x', 'assembler-with-cpp',
+            '-DCONFIG(x)=CONFIG_##x', '-DCONFIG_POST_IO=1',
+            '-DCONFIG_POST_IO_PORT=0x80', '-DCONFIG_NO_EARLY_BOOTBLOCK_POSTCODES=1',
+            '-DCONFIG_ROM_SIZE=0x1000000', '-DCONFIG_DCACHE_RAM_BASE=0xfe100000',
+            '-DCONFIG_DCACHE_RAM_SIZE=0x100000',
+            '-DCONFIG_MICROCODE_UPDATE_PRE_RAM=1', '-DENV_BOOTBLOCK=1',
+            '-DENV_X86_64=0', '-DENV_SEPARATE_DATA_AND_BSS=1',
+            '-I', str(ROOT / 'src/include'),
+            '-I', str(ROOT / 'src/commonlib/include'), '-I', str(ROOT / 'src'),
+            '-'], input=fixture, text=True)
+        self.assertNotIn('outb', result[:result.index('cache_as_ram:')])
+        failure = result[result.index('.Lcar_failure:'):result.index('.Lcar_verified:')]
+        self.assertIn('outb %al, $0x80', failure)
+        self.assertNotIn('outb', result[result.index('cache_as_ram:'):result.index('$0xff00007f')])
 
     def test_optional_preram_microcode_hook(self):
         with tempfile.TemporaryDirectory(prefix="grantley-car-hook-",
