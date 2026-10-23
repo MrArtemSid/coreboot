@@ -196,6 +196,7 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 
 	EFI_HOB_HANDOFF_INFO_TABLE *hit = state->hob_list;
 	hit->EfiEndOfHobList = (EFI_PHYSICAL_ADDRESS)(uintptr_t)end_hob;
+	hit->EfiFreeMemoryBottom = hit->EfiEndOfHobList + sizeof(*end_hob);
 	*hob = new_hob;
 	return EFI_SUCCESS;
 }
@@ -349,6 +350,36 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	const pci_devfn_t pcu = PCI_DEV(0xff, 30, 2);
 	uint16_t base_reg = (route_cpuid() & 0xfffff) == 0x306f0 ? 0x84 : 0x90;
 	uint16_t limit_reg = base_reg == 0x84 ? 0x88 : 0x98;
+
+	/* Early assembly may already have moved UBOX off its reset bus.  Adopt
+	 * the live route without touching CPU identity, master or scratch state.
+	 * A conflicting live route is not a safe cold-reset fallback.
+	 */
+	if ((route_read32(ubox, 0, 0) & 0xffff) == 0x8086) {
+		if ((route_read32(ubox, 0xd0, 0) & 0x8000ffff) != 0x8000ff00 ||
+		    (route_read32(sad, 0, 0) & 0xffff) != 0x8086 ||
+		    (route_read32(iio, 0, 0) & 0xffff) != 0x8086 ||
+		    (route_read32(sad, 0xe4, 0) & 0x00ffffff) != 0 ||
+		    (route_read32(sad, 0xc0, 0) & 0xfc000007) != (base | 1) ||
+		    (route_read32(ubox, 0xdc, 0) & 7) != 1 ||
+		    (route_read32(iio, base_reg, 0) & 0xfc000000) != base ||
+		    (route_read32(iio, limit_reg, 0) & 0xfc000000) !=
+			((base + 0xfffffff) & 0xfc000000))
+			return EFI_DEVICE_ERROR;
+		/* Production IIO exposes 64-bit base/limit pairs; A0 is 32-bit. */
+		if (base_reg != 0x84 && (route_read32(iio, base_reg + 4, 0) != 0 ||
+				       route_read32(iio, limit_reg + 4, 0) != 0))
+			return EFI_DEVICE_ERROR;
+		if ((route_read32(pcu, 0, base) & 0xffff) != 0x8086 ||
+		    (route_read32(pcu, 0x40, base) & 0x8000ffff) != 0x8000ff00 ||
+		    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
+			return EFI_DEVICE_ERROR;
+		state->mmcfg_base = base;
+		state->mmcfg_enabled = TRUE;
+		return EFI_SUCCESS;
+	}
+	if ((route_read32(reset_ubox, 0, 0) & 0xffff) != 0x8086)
+		return EFI_DEVICE_ERROR;
 
 	/* CPUBUSNO changes the UBOX and SAD addresses immediately. */
 	route_write32(reset_ubox, 0xd0, 0, 0x8000ff00);
@@ -699,6 +730,19 @@ void grantley_pei_set_var_store(struct grantley_uncore_state *state,
 	state->var_store_rdev = rdev;
 }
 
+EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
+	uint8_t board_id, uint32_t policy_revision)
+{
+	if (!state || !state->platform_info_ppi.Ppi)
+		return EFI_INVALID_PARAMETER;
+
+	uint8_t *data = state->platform_info_ppi.Ppi;
+	data[0x46] = board_id;
+	/* TypeRevisionId is an unaligned DWORD in the PlatformInfo payload. */
+	memcpy(data + 0x1e, &policy_revision, sizeof(policy_revision));
+	return EFI_SUCCESS;
+}
+
 void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
 				 uint16_t max_dram_speed_mts,
 				 uint8_t tcl, uint8_t trcd, uint8_t trp,
@@ -717,16 +761,16 @@ void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
 }
 
 static EFI_STATUS EFIAPI grantley_get_variable(
-	const struct _EFI_PEI_SERVICES **services,
-	const void *variable_name,
-	const void *vendor_guid,
+	const EFI_PEI_READ_ONLY_VARIABLE2_PPI *this,
+	const CHAR16 *variable_name,
+	const EFI_GUID *vendor_guid,
 	UINT32 *attributes,
 	UINTN *data_size,
 	void *data)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
-	if (!state || !variable_name || !vendor_guid || !data_size)
+	if (!state || !this || !variable_name || !vendor_guid || !data_size)
 		return EFI_INVALID_PARAMETER;
 
 	/* Convert CHAR16 UTF-16LE variable name to ASCII for coreboot efi_fv_get_option */
@@ -804,10 +848,10 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 }
 
 static EFI_STATUS EFIAPI grantley_get_next_variable_name(
-	const struct _EFI_PEI_SERVICES **services,
+	const EFI_PEI_READ_ONLY_VARIABLE2_PPI *this,
 	UINTN *variable_name_size,
-	void *variable_name,
-	void *vendor_guid)
+	CHAR16 *variable_name,
+	EFI_GUID *vendor_guid)
 {
 	return EFI_NOT_FOUND;
 }
@@ -931,10 +975,7 @@ static EFI_GUID g_pci_cfg_guid = {
 	0x57a449a, 0x1fdc, 0x4c06,
 	{ 0xbf, 0xc9, 0xf5, 0x3f, 0x6a, 0x99, 0xbb, 0x92 }
 };
-static EFI_GUID g_cpu_io_guid = {
-	0xe682ac4, 0x6bc, 0x4bb3,
-	{ 0xa9, 0xa1, 0xdb, 0x4e, 0x70, 0xda, 0x9f, 0x30 }
-};
+static EFI_GUID g_cpu_io_guid = EFI_PEI_CPU_IO_PPI_INSTALLED_GUID;
 static EFI_GUID g_read_only_var_guid = {
 	0x2ab86ef5, 0xecb5, 0x4134,
 	{ 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 }
@@ -975,9 +1016,8 @@ static const EFI_PEI_CPU_IO_PPI g_cpu_io = {
 };
 
 static const EFI_PEI_READ_ONLY_VARIABLE2_PPI g_read_only_var = {
-	.GetVariable      = (EFI_PEI_GET_VARIABLE2)grantley_get_variable,
-	.NextVariableName =
-		(EFI_PEI_GET_NEXT_VARIABLE_NAME2)grantley_get_next_variable_name,
+	.GetVariable      = grantley_get_variable,
+	.NextVariableName = grantley_get_next_variable_name,
 };
 
 /* The PEIM requests a permanent PEI workspace size, not installed RAM size. */
@@ -1042,7 +1082,7 @@ static const struct {
 
 static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_pci_cfg_guid, (void *)&g_pci_cfg },
-	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_cpu_io_guid, (void *)&g_cpu_io },
+	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_cpu_io_guid, (void *)0 },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_read_only_var_guid,
 	  (void *)&g_read_only_var },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_test_guid,
@@ -1055,7 +1095,7 @@ static const EFI_PEI_SERVICES g_pei_services_template = {
 	.Hdr = {
 		.Signature  = PEI_SERVICES_SIGNATURE,
 		.Revision   = PEI_SERVICES_REVISION,
-		.HeaderSize = sizeof(EFI_TABLE_HEADER),
+		.HeaderSize = sizeof(EFI_PEI_SERVICES),
 	},
 	.InstallPpi         = (EFI_PEI_INSTALL_PPI)grantley_install_ppi,
 	.ReInstallPpi       = (EFI_PEI_REINSTALL_PPI)grantley_reinstall_ppi,
@@ -1087,6 +1127,12 @@ static void grantley_init_hob_list(struct grantley_uncore_state *state, void *ho
 		},
 		.Version = EFI_HOB_HANDOFF_TABLE_VERSION,
 		.BootMode = state->boot_mode,
+		/* Only this arena is available for HOB growth, not the PEIM stack. */
+		.EfiMemoryBottom = (uintptr_t)hob_buf,
+		.EfiMemoryTop = (uintptr_t)hob_buf + state->hob_size,
+		.EfiFreeMemoryTop = (uintptr_t)hob_buf + state->hob_size,
+		.EfiFreeMemoryBottom = (uintptr_t)hob_buf +
+			 sizeof(*hit) + sizeof(EFI_HOB_GENERIC_HEADER),
 		.EfiEndOfHobList = (EFI_PHYSICAL_ADDRESS)(uintptr_t)hob_buf +
 				   sizeof(EFI_HOB_HANDOFF_INFO_TABLE),
 	};
@@ -1134,12 +1180,16 @@ static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *
 	*(uint16_t *)(data + 0x1a) = 0;
 	/* ExtendedInfoValid = 1 at offset 0x2c */
 	data[0x2c] = 1;
-	/* BoardId = 0 (Default CRB) at offset 0x46 */
+	/* Default BoardId policy; a mainboard may override it before PEIM entry. */
 	data[0x46] = 0;
 	/* MemTsegSize at offset 0x85 */
 #if CONFIG(SMM_TSEG)
 	*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
 #endif
+	/* MemIedSize at 0x89 stays zero: no debug-memory carveout is requested.
+	 * The PEIM produces MemTolm/MaxTolm and MemMir0/1 during initialization;
+	 * do not fabricate trained memory addresses in this input HOB.
+	 */
 	/* SysData.SysSioExist = 1 at offset 0x9e */
 	data[0x9e] = 1;
 
@@ -1333,6 +1383,20 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *hob_buf, UINTN hob_size)
 {
 	if (!state || !pool_buf || !hob_buf)
+		return EFI_INVALID_PARAMETER;
+	uintptr_t pool_start = (uintptr_t)pool_buf;
+	uintptr_t hob_start = (uintptr_t)hob_buf;
+	uintptr_t state_start = (uintptr_t)state;
+	if ((pool_start & 7) || (hob_start & 7) ||
+	    pool_size > UINTPTR_MAX - pool_start || hob_size > UINTPTR_MAX - hob_start ||
+	    sizeof(*state) > UINTPTR_MAX - state_start)
+		return EFI_INVALID_PARAMETER;
+	uintptr_t pool_end = pool_start + pool_size;
+	uintptr_t hob_end = hob_start + hob_size;
+	uintptr_t state_end = state_start + sizeof(*state);
+	if ((pool_start < hob_end && hob_start < pool_end) ||
+	    (pool_start < state_end && state_start < pool_end) ||
+	    (hob_start < state_end && state_start < hob_end))
 		return EFI_INVALID_PARAMETER;
 
 	if (hob_size < sizeof(EFI_HOB_HANDOFF_INFO_TABLE) + sizeof(EFI_HOB_GUID_TYPE) +

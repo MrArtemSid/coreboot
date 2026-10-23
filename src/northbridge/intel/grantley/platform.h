@@ -16,6 +16,14 @@ struct grantley_memory_params {
 	bool ecc_en;                 /* Force ECC enable */
 };
 
+struct grantley_board_identity {
+	uint8_t board_id;
+	uint32_t policy_revision;
+};
+
+/* Return false to preserve the default PlatformInfo policy. */
+bool mainboard_get_board_identity(struct grantley_board_identity *identity);
+
 /* Optional memory policy supplied to UncoreInitPeim. */
 void mainboard_memory_init_params(struct grantley_memory_params *params);
 

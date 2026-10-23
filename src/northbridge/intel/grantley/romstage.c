@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <arch/romstage.h>
+#include <arch/symbols.h>
 #include <cbmem.h>
 #include <cbfs.h>
 #include <console/console.h>
@@ -21,6 +22,11 @@
 void __weak mainboard_memory_init_params(struct grantley_memory_params *params)
 {
 	/* Default implementation: leave all parameters as 0 for safe auto detection */
+}
+
+bool __weak mainboard_get_board_identity(struct grantley_board_identity *identity)
+{
+	return false;
 }
 
 /* Static CAR storage for PEI runner services and HOB list */
@@ -56,6 +62,15 @@ void __noreturn romstage_main(void)
 
 	/* Check for Intel Grantley Uncore reference blob (UncoreInitPeim) */
 	if (CONFIG(HAVE_INTEL_UNCORE_BIN)) {
+		/* Keep all CAR statics, including the PEI arenas and private IDT,
+		 * below a dedicated 768 KiB descending stack.  The selected entry
+		 * frame alone is 0x6db38 bytes; maximum nested usage is not proven.
+		 */
+		const uintptr_t stack_top =
+			CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64;
+		if (CONFIG_DCACHE_RAM_SIZE <= 768 * 1024 + 64 ||
+		    (uintptr_t)_car_unallocated_start > stack_top - 768 * 1024)
+			die("Grantley: CAR static storage overlaps the PEIM stack\n");
 		size_t uncore_size = 0;
 		const void *uncore_bin = cbfs_ro_map("uncore.bin", &uncore_size);
 
@@ -86,6 +101,14 @@ void __noreturn romstage_main(void)
 		if (status != EFI_SUCCESS) {
 			post_code(0xee);
 			die("Grantley: uncore configuration routing failed\n");
+		}
+
+		struct grantley_board_identity identity = { 0 };
+		if (mainboard_get_board_identity(&identity)) {
+			status = grantley_pei_set_board_identity(&uncore_state,
+				identity.board_id, identity.policy_revision);
+			if (status != EFI_SUCCESS)
+				die("Grantley: PlatformInfo board identity failure\n");
 		}
 
 		/* Query mainboard for optional memory parameter overrides */

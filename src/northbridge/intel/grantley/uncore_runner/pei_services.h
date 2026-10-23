@@ -77,6 +77,10 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 void grantley_pei_set_var_store(struct grantley_uncore_state *state,
 				const struct region_device *rdev);
 
+/* Update the existing PlatformInfo HOB payload before invoking the PEIM. */
+EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
+	uint8_t board_id, uint32_t policy_revision);
+
 /* Configure memory override parameters (or clear to 0 for automatic SPD detection) */
 void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
 				 uint16_t max_dram_speed_mts,
@@ -91,7 +95,10 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 /* Execute UncoreInitPeim module */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_state *state);
 
-/* Initialize PEI services table and internal storage */
+/* Initialize PEI services table and internal storage.
+ * State and both 8-byte-aligned, non-overlapping arenas must remain live until
+ * the PEIM returns. Firmware callers keep them in static CAR below its stack.
+ */
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *pool_buf, UINTN pool_size,
 				    void *hob_buf, UINTN hob_size);
