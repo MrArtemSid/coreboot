@@ -1180,8 +1180,10 @@ static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *
 	*(uint16_t *)(data + 0x1a) = 0;
 	/* ExtendedInfoValid = 1 at offset 0x2c */
 	data[0x2c] = 1;
-	/* Default BoardId policy; a mainboard may override it before PEIM entry. */
-	data[0x46] = 0;
+	/* Temporary HEDT profile, policy revision zero from the cleared payload.
+	 * A mainboard can override both fields before PEIM entry.
+	 */
+	data[0x46] = 0x13;
 	/* MemTsegSize at offset 0x85 */
 #if CONFIG(SMM_TSEG)
 	*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
