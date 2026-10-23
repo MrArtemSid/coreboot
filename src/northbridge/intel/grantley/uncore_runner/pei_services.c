@@ -399,7 +399,7 @@ static inline void pci_cfg_decode(UINT64 address, pci_devfn_t *pdev,
 	*dev = (address >> 16) & 0x1f;
 	*func = (address >> 8) & 0x07;
 	*reg = (address >> 32) != 0 ? (UINT32)(address >> 32) :
-				       (UINT32)(address & 0xfff);
+				       (UINT32)(address & 0xff);
 	*pdev = PCI_DEV(*bus, *dev, *func);
 }
 
@@ -812,6 +812,26 @@ static EFI_STATUS EFIAPI grantley_get_next_variable_name(
 	return EFI_NOT_FOUND;
 }
 
+/* IA-32 implicit PEI services pointer: the dword before IDTR.base is PeiServices **. */
+#if !ENV_TEST
+struct grantley_peim_idtr {
+	uint16_t limit;
+	uint32_t base;
+} __packed;
+
+/* Static CAR storage must outlive the call and remain outside the PEIM stack. */
+static struct {
+	uint32_t reserved;
+	const struct _EFI_PEI_SERVICES **services;
+	uint64_t gates[256];
+} peim_idt __aligned(8);
+
+_Static_assert(sizeof(struct grantley_peim_idtr) == 6, "IA-32 IDTR size");
+_Static_assert(offsetof(__typeof__(peim_idt), gates) -
+	       offsetof(__typeof__(peim_idt), services) == 4,
+	       "PEI services double pointer immediately precedes IDT");
+#endif
+
 typedef EFI_STATUS (*grantley_peim_entry_t)(
 	void *file_handle,
 	const struct _EFI_PEI_SERVICES **services);
@@ -864,6 +884,23 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 	(void)entry_point;
 	status = EFI_UNSUPPORTED;
 #else
+	struct grantley_peim_idtr saved_idtr;
+	struct grantley_peim_idtr peim_idtr = {
+		.limit = sizeof(peim_idt.gates) - 1,
+		.base = (uintptr_t)peim_idt.gates,
+	};
+
+	__asm__ __volatile__("sidt %0" : "=m"(saved_idtr) : : "memory");
+	memset(peim_idt.gates, 0, sizeof(peim_idt.gates));
+	/* Copy, never modify, coreboot's gates (when an IDT was installed). */
+	if (saved_idtr.base) {
+		if (saved_idtr.limit < peim_idtr.limit)
+			peim_idtr.limit = saved_idtr.limit;
+		memcpy(peim_idt.gates, (const void *)(uintptr_t)saved_idtr.base,
+		       (size_t)peim_idtr.limit + 1);
+	}
+	peim_idt.services = &state->services_ptr;
+	__asm__ __volatile__("lidt %0" : : "m"(peim_idtr) : "memory");
 	__asm__ __volatile__(
 		"movl %%esp, %[saved_esp]\n	"
 		"movl %[stack], %%esp\n	"
@@ -878,6 +915,8 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 		  [entry] "r"(entry_point)
 		: "ecx", "edx", "memory", "cc"
 	);
+	/* Restore even when the PEIM returns an EFI error. */
+	__asm__ __volatile__("lidt %0" : : "m"(saved_idtr) : "memory");
 #endif
 
 	return status;
