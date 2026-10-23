@@ -20,6 +20,7 @@ struct route_register {
 static struct route_register route_registers[32];
 static size_t route_count;
 static bool route_present;
+static bool route_at_reset;
 static uint32_t route_signature = 0x306f2;
 
 uint32_t grantley_test_route_read32(uint32_t dev, uint16_t reg, uintptr_t base);
@@ -30,6 +31,8 @@ uint32_t grantley_test_route_read32(uint32_t dev, uint16_t reg, uintptr_t base)
 {
 	if (!route_present)
 		return 0xffffffff;
+	if (route_at_reset && (dev >> 20) == 0xff)
+		return 0xffffffff;
 	for (size_t n = route_count; n > 0; n--)
 		if (route_registers[n - 1].dev == dev && route_registers[n - 1].reg == reg)
 			return route_registers[n - 1].value;
@@ -39,6 +42,8 @@ uint32_t grantley_test_route_read32(uint32_t dev, uint16_t reg, uintptr_t base)
 void grantley_test_route_write32(uint32_t dev, uint16_t reg, uintptr_t base, uint32_t value)
 {
 	assert_true(route_count < ARRAY_SIZE(route_registers));
+	if (dev == PCI_DEV(1, 16, 7) && reg == 0xd0)
+		route_at_reset = false;
 	route_registers[route_count++] = (struct route_register) { dev, reg, value };
 }
 
@@ -63,6 +68,7 @@ static const EFI_GUID dummy_guid = {
 static int setup(void **s)
 {
 	route_present = false;
+	route_at_reset = true;
 	route_count = 0;
 	memset(pool, 0, sizeof(pool));
 	memset(hob_buffer, 0, sizeof(hob_buffer));
@@ -80,7 +86,7 @@ static void test_pei_services_init(void **s)
 
 	assert_int_equal((*services)->Hdr.Signature, PEI_SERVICES_SIGNATURE);
 	assert_int_equal((*services)->Hdr.Revision, PEI_SERVICES_REVISION);
-	assert_int_equal((*services)->Hdr.HeaderSize, sizeof(EFI_TABLE_HEADER));
+	assert_int_equal((*services)->Hdr.HeaderSize, sizeof(EFI_PEI_SERVICES));
 
 	EFI_BOOT_MODE boot_mode = 0xff;
 	assert_int_equal((*services)->GetBootMode(services, &boot_mode), EFI_SUCCESS);
@@ -93,6 +99,11 @@ static void test_pei_services_init(void **s)
 	EFI_HOB_HANDOFF_INFO_TABLE *hit = (EFI_HOB_HANDOFF_INFO_TABLE *)hob_list;
 	assert_int_equal(hit->Header.HobType, EFI_HOB_TYPE_HANDOFF);
 	assert_int_equal(hit->Header.HobLength, sizeof(EFI_HOB_HANDOFF_INFO_TABLE));
+	assert_int_equal(hit->EfiMemoryBottom, (uintptr_t)hob_buffer);
+	assert_int_equal(hit->EfiMemoryTop, (uintptr_t)hob_buffer + sizeof(hob_buffer));
+	assert_int_equal(hit->EfiFreeMemoryTop, hit->EfiMemoryTop);
+	assert_int_equal(hit->EfiFreeMemoryBottom,
+			 hit->EfiEndOfHobList + sizeof(EFI_HOB_GENERIC_HEADER));
 }
 
 static void test_ppi_install_locate_reinstall(void **s)
@@ -193,6 +204,8 @@ static void test_create_hob(void **s)
 	assert_int_equal(next_hdr->HobType, EFI_HOB_TYPE_END_OF_HOB_LIST);
 	EFI_HOB_HANDOFF_INFO_TABLE *hit = (void *)hob_buffer;
 	assert_int_equal(hit->EfiEndOfHobList, (uintptr_t)next_hdr);
+	assert_int_equal(hit->EfiFreeMemoryBottom,
+			 (uintptr_t)next_hdr + sizeof(*next_hdr));
 }
 
 static void test_install_pei_memory(void **s)
@@ -236,10 +249,8 @@ static void test_pci_cfg_and_cpu_io_ppi(void **s)
 	assert_int_equal(status, EFI_SUCCESS);
 	assert_non_null(pci_cfg);
 
-	/* Check that CpuIo is located properly */
-	static const EFI_GUID cpu_io_guid = {
-		0xe682ac4, 0x6bc, 0x4bb3, { 0xa9, 0xa1, 0xdb, 0x4e, 0x70, 0xda, 0x9f, 0x30 }
-	};
+	/* CPU I/O is in the services table; the PI GUID is an installed marker. */
+	static const EFI_GUID cpu_io_guid = EFI_PEI_CPU_IO_PPI_INSTALLED_GUID;
 	EFI_PEI_CPU_IO_PPI *cpu_io = NULL;
 
 	status = (*services)->LocatePpi(
@@ -249,7 +260,9 @@ static void test_pci_cfg_and_cpu_io_ppi(void **s)
 		NULL,
 		(void **)&cpu_io);
 	assert_int_equal(status, EFI_SUCCESS);
-	assert_non_null(cpu_io);
+	assert_null(cpu_io);
+	assert_non_null((*services)->CpuIo);
+	assert_non_null((*services)->CpuIo->IoRead8);
 
 	/* Test MMCFG read/write through PciCfg2 */
 	uint8_t mock_ecam[4096];
@@ -321,6 +334,8 @@ static void test_read_only_variable2_ppi(void **s)
 	UINT8 buf[64];
 	UINTN buf_size = sizeof(buf);
 
+	assert_int_equal(ro_var->GetVariable(NULL, var_name, &setup_guid, NULL,
+					   &buf_size, buf), EFI_INVALID_PARAMETER);
 	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
 	assert_int_equal(status, EFI_NOT_FOUND);
 
@@ -332,6 +347,8 @@ static void test_read_only_variable2_ppi(void **s)
 	grantley_pei_set_var_store(&state, &rdev);
 
 	/* Formatted empty store still returns EFI_NOT_FOUND cleanly */
+	assert_int_equal(ro_var->GetVariable(NULL, var_name, &setup_guid, NULL,
+					   &buf_size, buf), EFI_INVALID_PARAMETER);
 	status = ro_var->GetVariable(ro_var, var_name, &setup_guid, NULL, &buf_size, buf);
 	assert_int_equal(status, EFI_NOT_FOUND);
 
@@ -491,6 +508,18 @@ static void test_platform_hob_storage_required(void **s)
 		 EFI_BUFFER_TOO_SMALL);
 }
 
+static void test_storage_layout_rejected(void **s)
+{
+	assert_int_equal(grantley_pei_services_init(&state, pool + 1, sizeof(pool) - 1,
+		 hob_buffer, sizeof(hob_buffer)), EFI_INVALID_PARAMETER);
+	assert_int_equal(grantley_pei_services_init(&state, pool, sizeof(pool),
+		 pool, sizeof(pool)), EFI_INVALID_PARAMETER);
+	assert_int_equal(grantley_pei_services_init(&state, &state, sizeof(state),
+		 hob_buffer, sizeof(hob_buffer)), EFI_INVALID_PARAMETER);
+	assert_int_equal(grantley_pei_services_init(&state, pool, sizeof(pool),
+		 (void *)((uintptr_t)-1 & ~(uintptr_t)7), 4096), EFI_INVALID_PARAMETER);
+}
+
 static void test_hob_length_overflow(void **s)
 {
 	const EFI_PEI_SERVICES **services = &state.services_ptr;
@@ -547,6 +576,70 @@ static void test_mmcfg_routing_failure(void **s)
 {
 	grantley_pei_set_mmcfg(&state, 0x80000000UL);
 	assert_false(state.mmcfg_enabled);
+}
+
+static void test_mmcfg_adopts_live_route_without_writes(void **s)
+{
+	route_present = true;
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL), EFI_SUCCESS);
+	/* Model live routing with identity/master fields outside the bus fields. */
+	grantley_test_route_write32(PCI_DEV(0xff, 16, 7), 0xd0, 0, 0xc000ff00);
+	grantley_test_route_write32(PCI_DEV(0xff, 30, 2), 0x40, 0, 0xc800ff00);
+	/* Upper SAD bits are not target fields and assembly does not test them. */
+	grantley_test_route_write32(PCI_DEV(0xff, 15, 5), 0xe4, 0, 0x80000000);
+	size_t writes = route_count;
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL), EFI_SUCCESS);
+	assert_int_equal(route_count, writes);
+	assert_int_equal(grantley_test_route_read32(PCI_DEV(0xff, 16, 7), 0xd0, 0),
+			 0xc000ff00);
+	assert_int_equal(grantley_test_route_read32(PCI_DEV(0xff, 30, 2), 0x40, 0),
+			 0xc800ff00);
+	/* Conflicting live routing fails closed, without destructive repair. */
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x90000000UL), EFI_DEVICE_ERROR);
+	assert_int_equal(route_count, writes);
+	assert_false(state.mmcfg_enabled);
+}
+
+static void test_platform_info_board_identity(void **s)
+{
+	uint8_t before[256];
+	uint8_t *data = state.platform_info_ppi.Ppi;
+	void *original = data;
+	memcpy(before, data, sizeof(before));
+	assert_int_equal(grantley_pei_set_board_identity(&state, 0x13, 0x12345678),
+			 EFI_SUCCESS);
+	assert_ptr_equal(state.platform_info_ppi.Ppi, original);
+	before[0x46] = 0x13;
+	uint32_t revision = 0x12345678;
+	memcpy(before + 0x1e, &revision, sizeof(revision));
+	assert_memory_equal(data, before, sizeof(before));
+	assert_int_equal(grantley_pei_set_board_identity(&state, 0x13, 0), EFI_SUCCESS);
+	memset(before + 0x1e, 0, sizeof(revision));
+	assert_memory_equal(data, before, sizeof(before));
+	EFI_HOB_GUID_TYPE *hob = (void *)(hob_buffer + sizeof(EFI_HOB_HANDOFF_INFO_TABLE));
+	assert_ptr_equal(data, hob + 1);
+	assert_int_equal(grantley_pei_set_board_identity(NULL, 0, 0), EFI_INVALID_PARAMETER);
+	state.platform_info_ppi.Ppi = NULL;
+	assert_int_equal(grantley_pei_set_board_identity(&state, 0, 0), EFI_INVALID_PARAMETER);
+}
+
+static void test_mmcfg_rejects_high_aperture(void **s)
+{
+	route_present = true;
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL), EFI_SUCCESS);
+	/* The fixture tracks BDFs separately; model the remapped UBOX register. */
+	grantley_test_route_write32(PCI_DEV(0xff, 16, 7), 0xd0, 0, 0x8000ff00);
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL), EFI_SUCCESS);
+	for (uint16_t reg = 0x94; reg <= 0x9c; reg += 8) {
+		grantley_test_route_write32(PCI_DEV(0, 5, 0), reg, 0, 1);
+		size_t writes = route_count;
+		assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL),
+				 EFI_DEVICE_ERROR);
+		assert_false(state.mmcfg_enabled);
+		assert_int_equal(route_count, writes);
+		grantley_test_route_write32(PCI_DEV(0, 5, 0), reg, 0, 0);
+	}
+	assert_int_equal(grantley_pei_set_mmcfg(&state, 0x80000000UL), EFI_SUCCESS);
 }
 
 static void test_platform_info_ppi(void **s)
@@ -618,9 +711,13 @@ int main(void)
 		cmocka_unit_test_setup(test_post_peim_memory_map, setup),
 		cmocka_unit_test_setup(test_platform_hob_storage_required, setup),
 		cmocka_unit_test_setup(test_hob_length_overflow, setup),
+		cmocka_unit_test_setup(test_storage_layout_rejected, setup),
 		cmocka_unit_test_setup(test_page_allocation_alignment, setup),
 		cmocka_unit_test_setup(test_mmcfg_routing_sequence, setup),
 		cmocka_unit_test_setup(test_mmcfg_routing_failure, setup),
+		cmocka_unit_test_setup(test_mmcfg_adopts_live_route_without_writes, setup),
+		cmocka_unit_test_setup(test_mmcfg_rejects_high_aperture, setup),
+		cmocka_unit_test_setup(test_platform_info_board_identity, setup),
 		cmocka_unit_test_setup(test_platform_info_ppi, setup),
 		cmocka_unit_test_setup(test_memory_test_ppi, setup),
 		cmocka_unit_test_setup(test_memory_size_ppi, setup),
