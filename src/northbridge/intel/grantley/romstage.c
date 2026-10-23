@@ -49,6 +49,11 @@ void __noreturn romstage_main(void)
 	       grantley_cpu_model(signature) == GRANTLEY_HASWELL_EP ?
 	       "Haswell-EP" : "Broadwell-EP (not hardware-validated)");
 
+	if (!grantley_pch_is_supported(pch & 0xffff, pch >> 16))
+		printk(BIOS_WARNING, "Grantley: unrecognized PCH %04x:%04x, "
+		       "continuing with unvalidated early setup\n",
+		       pch & 0xffff, pch >> 16);
+
 	/* Probe SMBus SPD on standard DIMM addresses (0x50..0x57) */
 	enable_smbus();
 	for (uint8_t addr = 0x50; addr <= 0x57; addr++) {
