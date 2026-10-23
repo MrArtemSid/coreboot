@@ -20,8 +20,6 @@ bootblock_pre_c_entry:
 	jmp	check_mtrr /* Check if CPU properly reset */
 
 cache_as_ram:
-	post_code(POSTCODE_BOOTBLOCK_CAR)
-
 	/* Program the early SAD I/O and MMIO target lists via CF8/CFC. */
 	/* Set LOCKCONTROL.LockDisable (1:16.5:0x50 bit 0). */
 	movl	$0x80018550, %eax
@@ -78,6 +76,21 @@ cache_as_ram:
 	movl	$0xff00007f, %eax
 	outl	%eax, %dx
 
+	/* Entry16/32 POSTs stay suppressed until legacy routing is installed.
+	 * Restore assembly POSTs here, including the CAR/VCU failure paths.
+	 */
+#undef post_code
+#if CONFIG(POST_IO)
+#define post_code(value) movb $value, %al; outb %al, $CONFIG_POST_IO_PORT
+#else
+#define post_code(value)
+#endif
+	post_code(POSTCODE_BOOTBLOCK_CAR)
+
+#define GRANTLEY_PRE_NEM
+#include "early_startup.inc"
+#undef GRANTLEY_PRE_NEM
+
 #if CONFIG(MICROCODE_UPDATE_PRE_RAM)
 	/* Apply the matching update before enabling caches or entering NEM. */
 	/* The assembly microcode loader returns through the address in ESP. */
@@ -85,6 +98,10 @@ cache_as_ram:
 	jmp	update_bsp_microcode
 end_microcode_update:
 #endif
+
+#define GRANTLEY_CACHE_PREP
+#include "early_startup.inc"
+#undef GRANTLEY_CACHE_PREP
 
 	post_code(POSTCODE_SOC_SET_DEF_MTRR_TYPE)
 	/* Clean-up MTRR_DEF_TYPE_MSR. */
@@ -245,6 +262,10 @@ addrsize_set_high:
 	rep	stosb
 
 	/* Set up the C stack, including padding for the three arguments. */
+#define GRANTLEY_POST_NEM
+#include "early_startup.inc"
+#undef GRANTLEY_POST_NEM
+
 	movl	$_ecar_stack, %esp
 	andl	$0xfffffff0, %esp
 	subl	$4, %esp
