@@ -18,23 +18,26 @@ static void exercise(u16 vendor, u16 device, bool failed, u8 index, u32 gcs)
 	rtc_index = index;
 	rtc[RTC_REG_A] = 0x0b;
 	rtc[RTC_REG_B] = 0x16;
-	const bool server = CONFIG_NORTHBRIDGE_INTEL_GRANTLEY && ENV_ROMSTAGE &&
-		vendor == PCI_VID_INTEL && (device == PCI_DID_INTEL_WBG_LPC_C612 ||
-		device == PCI_DID_INTEL_WBG_LPC_C610 || device == PCI_DID_INTEL_WBG_LPC_X99 ||
-		device == PCI_DID_INTEL_WBG_LPC_X99_ALT);
-	const bool recover = server && failed;
+	/* The recovery scope mirrors early_pch_grantley.c: every PCH family
+	 * that can sit under Grantley, not only Wellsburg SKUs. */
+	const bool recovery_pch = CONFIG_NORTHBRIDGE_INTEL_GRANTLEY && ENV_ROMSTAGE &&
+		vendor == PCI_VID_INTEL &&
+		((device >= 0x8c40 && device <= 0x8c5f) ||
+		 (device >= 0x8cc0 && device <= 0x8ccf) ||
+		 (device >= 0x8d40 && device <= 0x8d5f));
+	const bool recover = recovery_pch && failed;
 	expected_rtc_a = recover ? 0x2b : 0x0b;
 	expected_rtc_b = 0x16;
 	RCBA32(GCS) = gcs;
 	RCBA32(PRSTS) = 0xffffffff;
-	expected_prsts = server ? 0xffffffef : 0xffffffff;
+	expected_prsts = recovery_pch ? 0xffffffef : 0xffffffff;
 	u8 saved_pci[256];
 	memcpy(saved_pci, pci, sizeof(pci));
 	early_pch_init();
 	assert(at_smbus);
 	assert(rtc_write_count == (recover ? 4 : 0));
 	assert(io_count == (recover ? 14 : 0));
-	assert(mmio_writes == (server ? (recover ? 3 : 1) : 0));
+	assert(mmio_writes == (recovery_pch ? (recover ? 3 : 1) : 0));
 	if (recover) {
 		assert(rtc_registers[0] == RTC_REG_A && rtc_writes[0] == 0x6b);
 		assert(rtc_registers[1] == RTC_REG_B && rtc_writes[1] == 0x96);
@@ -55,7 +58,10 @@ int main(void)
 {
 	const u16 devices[] = { PCI_DID_INTEL_WBG_LPC_C612, PCI_DID_INTEL_WBG_LPC_C610,
 		PCI_DID_INTEL_WBG_LPC_X99, PCI_DID_INTEL_WBG_LPC_X99_ALT,
-		0x8c50, 0x9c41, 0xffff };
+		0x8d41, 0x8d47, /* Wellsburg production / HEDT -X */
+		0x8c4e, 0x8c50, 0x8c5c, /* Q87, B85, H81 (recycled client PCHs) */
+		0x8cc4, /* Z97 (Wildcat Point-H) */
+		0x9c41, 0x8c60, 0xffff }; /* LPT-LP and out-of-family negatives */
 	for (unsigned int d = 0; d < sizeof(devices) / sizeof(devices[0]); d++)
 		for (unsigned int failure = 0; failure < 2; failure++)
 			for (unsigned int nmi = 0; nmi < 2; nmi++)

@@ -19,15 +19,20 @@ void early_pch_init_grantley(void)
 	if ((id & 0xffff) != PCI_VID_INTEL)
 		return;
 
-	switch (id >> 16) {
-	case PCI_DID_INTEL_WBG_LPC_C610:
-	case PCI_DID_INTEL_WBG_LPC_C612:
-	case PCI_DID_INTEL_WBG_LPC_X99:
-	case PCI_DID_INTEL_WBG_LPC_X99_ALT:
-		break;
-	default:
+	/* The recovery applies to every PCH family that can sit under
+	 * Grantley, not only Wellsburg: HEDT boards ship recycled client
+	 * Lynx Point (X99-QD4 carries a Q87, X99-BD4 a B85), and the stock
+	 * firmware runs the same BWG 19.3 sequence for them in PchInitPeim
+	 * before Uncore.  DID families recovered from the stock firmware's LPC dispatch:
+	 * Lynx Point-H 0x8c40-0x8c5f, Wildcat Point-H 0x8cc0-0x8ccf,
+	 * Wellsburg 0x8d40-0x8d5f.  Lynx Point-LP is excluded; it never
+	 * pairs with LGA2011-3.
+	 */
+	const u16 device = id >> 16;
+	if (!(device >= 0x8c40 && device <= 0x8c5f) &&
+	    !(device >= 0x8cc0 && device <= 0x8ccf) &&
+	    !(device >= 0x8d40 && device <= 0x8d5f))
 		return;
-	}
 
 	if (pci_read_config8(PCH_LPC_DEV, GEN_PMCON_3) & RTC_BATTERY_DEAD) {
 		void *gcs = (void *)(uintptr_t)(CONFIG_FIXED_RCBA_MMIO_BASE + GCS);
