@@ -37,8 +37,11 @@ compatibility guarantee. Available hardware captures show Haswell-EP `306f2`.
 There is no Broadwell-EP hardware validation.
 
 The default microcode inputs are production `306f2` and `406f1` updates from the
-pinned Intel microcode submodule. Engineering-sample updates are not copied from
-the stock image. In this pinned package `06-4f-01` is under
+pinned Intel microcode submodule. Engineering-sample updates for `306f1` and
+`406f0` (not published by Intel) are carried in
+`3rdparty/blobs/mainboard/huananzhi/x99-series/microcode/`, extracted from the
+stock QD4V10 image, and are picked up per mainboard through `cpu_microcode_bins`.
+In this pinned package `06-4f-01` is under
 `intel-ucode-with-caveats`: Intel documents additional requirements for OS
 late-loading. This path uses the existing pre-RAM loader, not OS late-loading.
 The microcode update itself has not been exercised on these boards.

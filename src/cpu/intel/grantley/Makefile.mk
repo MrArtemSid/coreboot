@@ -22,3 +22,8 @@ cpu_microcode_bins += $(wildcard 3rdparty/intel-microcode/intel-ucode/06-4f-01)
 # This pinned Intel package keeps BDX updates here because OS late-loading
 # requires special handling. Firmware applies the matching update before OS boot.
 cpu_microcode_bins += $(wildcard 3rdparty/intel-microcode/intel-ucode-with-caveats/06-4f-01)
+
+# Engineering-sample steppings never shipped in the pinned Intel package.
+# Boards carrying ES CPUs supply the vendor updates (extracted from their
+# stock BIOS) through the board directory in the blobs submodule.
+cpu_microcode_bins += $(sort $(wildcard 3rdparty/blobs/mainboard/$(MAINBOARDDIR)/microcode/*))
