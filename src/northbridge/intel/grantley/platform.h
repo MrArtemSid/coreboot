@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <device/pci_ids.h>
 
 struct grantley_memory_params {
 	uint16_t max_dram_speed_mts; /* 0 = Auto/SPD, 1600, 1866, 2133, 2400 */
@@ -27,26 +28,27 @@ bool mainboard_get_board_identity(struct grantley_board_identity *identity);
 /* Optional memory policy supplied to UncoreInitPeim. */
 void mainboard_memory_init_params(struct grantley_memory_params *params);
 
-/* Supported PCH device IDs on Grantley hybrid / native platforms. */
+/* Supported PCH device IDs on Grantley hybrid / native platforms,
+ * aliased to the shared pci_ids.h definitions. */
 enum grantley_pch_device {
-	GRANTLEY_PCH_Z87         = 0x8c44,
-	GRANTLEY_PCH_H87         = 0x8c4a,
-	GRANTLEY_PCH_Q85         = 0x8c4c,
-	GRANTLEY_PCH_Q87         = 0x8c4e,
-	GRANTLEY_PCH_B85         = 0x8c50,
-	GRANTLEY_PCH_C222        = 0x8c52,
-	GRANTLEY_PCH_C224        = 0x8c54,
-	GRANTLEY_PCH_C226        = 0x8c56,
-	GRANTLEY_PCH_H81         = 0x8c5c,
-	GRANTLEY_PCH_Z97         = 0x8cc4,
-	GRANTLEY_PCH_H97         = 0x8cc6,
+	GRANTLEY_PCH_Z87         = PCI_DID_INTEL_LPT_Z87,
+	GRANTLEY_PCH_H87         = PCI_DID_INTEL_LPT_H87,
+	GRANTLEY_PCH_Q85         = PCI_DID_INTEL_LPT_Q85,
+	GRANTLEY_PCH_Q87         = PCI_DID_INTEL_LPT_Q87,
+	GRANTLEY_PCH_B85         = PCI_DID_INTEL_LPT_B85,
+	GRANTLEY_PCH_C222        = PCI_DID_INTEL_LPT_C222,
+	GRANTLEY_PCH_C224        = PCI_DID_INTEL_LPT_C224,
+	GRANTLEY_PCH_C226        = PCI_DID_INTEL_LPT_C226,
+	GRANTLEY_PCH_H81         = PCI_DID_INTEL_LPT_H81,
+	GRANTLEY_PCH_Z97         = PCI_DID_INTEL_LPT_Z97,
+	GRANTLEY_PCH_H97         = PCI_DID_INTEL_LPT_H97,
 	GRANTLEY_PCH_WBG_MIN     = 0x8d40,
 	GRANTLEY_PCH_WBG_MAX     = 0x8d5f,
-	GRANTLEY_PCH_C610        = 0x8d40,
-	GRANTLEY_PCH_C612        = 0x8d44,
-	GRANTLEY_PCH_X99_HEDT    = 0x8d47,
-	GRANTLEY_PCH_X99         = 0x8d4a,
-	GRANTLEY_PCH_X99_ALT     = 0x8d50,
+	GRANTLEY_PCH_C610        = PCI_DID_INTEL_WBG_LPC_C610,
+	GRANTLEY_PCH_C612        = PCI_DID_INTEL_WBG_LPC_C612,
+	GRANTLEY_PCH_X99_HEDT    = PCI_DID_INTEL_WBG_LPC_HEDT,
+	GRANTLEY_PCH_X99         = PCI_DID_INTEL_WBG_LPC_X99,
+	GRANTLEY_PCH_X99_ALT     = PCI_DID_INTEL_WBG_LPC_X99_ALT,
 };
 
 /* PCH compatibility check for Grantley platform (Lynx Point, Wildcat Point, Wellsburg). */
