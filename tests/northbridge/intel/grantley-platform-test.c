@@ -52,8 +52,14 @@ static void test_supported_wildcat_and_wellsburg_pch(void **state)
 	assert_true(grantley_pch_is_supported(0x8086, 0x8cc4));
 	assert_true(grantley_pch_is_supported(0x8086, 0x8cc6));
 
-	/* Wellsburg C610/C612 / X99 */
+	/* Wellsburg C610/C612 / X99 plus the production SKUs recovered from
+	 * the stock firmware (all-production, base, HEDT -X, premium -A) */
+	assert_true(grantley_pch_is_supported(0x8086, 0x8d40));
+	assert_true(grantley_pch_is_supported(0x8086, 0x8d41));
 	assert_true(grantley_pch_is_supported(0x8086, 0x8d44));
+	assert_true(grantley_pch_is_supported(0x8086, 0x8d46));
+	assert_true(grantley_pch_is_supported(0x8086, 0x8d47));
+	assert_true(grantley_pch_is_supported(0x8086, 0x8d48));
 	assert_true(grantley_pch_is_supported(0x8086, 0x8d50));
 }
 
