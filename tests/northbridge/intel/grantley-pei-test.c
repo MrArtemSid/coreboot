@@ -605,6 +605,11 @@ static void test_platform_info_board_identity(void **s)
 	uint8_t before[256];
 	uint8_t *data = state.platform_info_ppi.Ppi;
 	void *original = data;
+	/* The temporary common profile is HEDT revision zero. */
+	assert_int_equal(data[0x46], 0x13);
+	uint32_t initial_revision;
+	memcpy(&initial_revision, data + 0x1e, sizeof(initial_revision));
+	assert_int_equal(initial_revision, 0);
 	memcpy(before, data, sizeof(before));
 	assert_int_equal(grantley_pei_set_board_identity(&state, 0x13, 0x12345678),
 			 EFI_SUCCESS);

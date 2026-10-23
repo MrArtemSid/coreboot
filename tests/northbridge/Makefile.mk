@@ -30,7 +30,7 @@ grantley-romstage-test-srcs += src/northbridge/intel/grantley/uncore_runner/pei_
 grantley-romstage-test-srcs += src/drivers/efi/efivars.c
 grantley-romstage-test-srcs += src/commonlib/region.c
 grantley-romstage-test-srcs += tests/stubs/console.c
-grantley-romstage-test-cflags += -DTEST_BOARD_ID=0
+grantley-romstage-test-cflags += -DTEST_BOARD_ID=0x13 -DTEST_BOARD_REVISION=0
 grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/
 grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/Ia32/
 grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/Pi/
@@ -38,8 +38,8 @@ grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdeModuleP
 grantley-romstage-test-cflags += -Wno-attributes
 grantley-romstage-test-cflags += -Wno-unused-variable -Wno-unused-function -Wno-unused-value
 
-tests-y += grantley-d4m4-romstage-test
-grantley-d4m4-romstage-test-srcs := $(grantley-romstage-test-srcs)
-grantley-d4m4-romstage-test-srcs += src/mainboard/envinda/x99d4m4/romstage.c
-grantley-d4m4-romstage-test-cflags := $(filter-out -DTEST_BOARD_ID=0,$(grantley-romstage-test-cflags))
-grantley-d4m4-romstage-test-cflags += -DTEST_BOARD_ID=0x13
+tests-y += grantley-board-override-romstage-test
+grantley-board-override-romstage-test-srcs := $(grantley-romstage-test-srcs)
+grantley-board-override-romstage-test-srcs += tests/northbridge/intel/grantley-board-override.c
+grantley-board-override-romstage-test-cflags := $(filter-out -DTEST_BOARD_ID=0x13 -DTEST_BOARD_REVISION=0,$(grantley-romstage-test-cflags))
+grantley-board-override-romstage-test-cflags += -DTEST_BOARD_ID=0x14 -DTEST_BOARD_REVISION=1

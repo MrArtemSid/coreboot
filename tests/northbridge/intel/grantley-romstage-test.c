@@ -52,7 +52,7 @@ static EFI_STATUS test_run(struct grantley_uncore_state *state)
 	assert_int_equal(data[0x46], TEST_BOARD_ID);
 	uint32_t revision;
 	memcpy(&revision, data + 0x1e, sizeof(revision));
-	assert_int_equal(revision, 0);
+	assert_int_equal(revision, TEST_BOARD_REVISION);
 	peim_calls++;
 	return peim_status;
 }
