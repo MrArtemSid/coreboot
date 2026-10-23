@@ -29,15 +29,20 @@ int do_smbus_send_byte(uintptr_t base, uint8_t device, uint8_t value)
 	return 0;
 }
 
-int do_smbus_read_byte(uintptr_t base, uint8_t device, uint8_t address)
+int do_i2c_eeprom_read(uintptr_t base, uint8_t device, uint8_t offset,
+		       size_t bytes, uint8_t *buf)
 {
 	assert_int_equal(base, 0x400);
 	assert_int_equal(device, 0x50);
+	assert_int_equal(offset, 0);
+	assert_int_equal(bytes, 256);
 	read_count++;
-	unsigned int offset = page * 256 + address;
-	if ((int)offset == fail_read)
+	unsigned int start = page * 256;
+	if (fail_read >= 0 && (unsigned int)fail_read >= start &&
+	    (unsigned int)fail_read < start + bytes)
 		return -1;
-	return eeprom[offset];
+	memcpy(buf, eeprom + start, bytes);
+	return 0;
 }
 
 static void update_crc(void)
@@ -78,7 +83,7 @@ static void test_read_and_decode_ddr4(void **state)
 	assert_int_equal(dimm.ranks, 1);
 	assert_int_equal(dimm.dimm_type, SPD_DDR4_DIMM_TYPE_UDIMM);
 	assert_string_equal(dimm.part_number, "SYNTHETIC-DDR4-TEST ");
-	assert_int_equal(read_count, 512);
+	assert_int_equal(read_count, 2);
 	assert_int_equal(selection_count, 3);
 	assert_int_equal(selections[0], 0);
 	assert_int_equal(selections[1], 1);
@@ -104,14 +109,14 @@ static void test_smbus_io_failure_and_page_restore(void **state)
 	fail_selection = 1;
 	assert_int_equal(grantley_read_spd(0x400, 0x50, &dimm), GRANTLEY_SPD_IO_ERROR);
 
-	/* Failure during byte read on page 0 triggers restore to page 0 */
+	/* Failure during the page-0 block read triggers restore to page 0 */
 	setup(state);
 	fail_read = 50;
 	assert_int_equal(grantley_read_spd(0x400, 0x50, &dimm), GRANTLEY_SPD_IO_ERROR);
 	assert_int_equal(page, 0);
 	assert_int_equal(selection_count, 2); /* initial page 0, then restore page 0 */
 
-	/* Failure during byte read on page 1 triggers restore to page 0 */
+	/* Failure during the page-1 block read triggers restore to page 0 */
 	setup(state);
 	fail_read = 300;
 	assert_int_equal(grantley_read_spd(0x400, 0x50, &dimm), GRANTLEY_SPD_IO_ERROR);

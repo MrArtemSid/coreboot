@@ -23,12 +23,9 @@ enum grantley_spd_status grantley_read_spd(uintptr_t base, uint8_t address,
 	for (unsigned int page = 0; page < 2; page++) {
 		if (page && do_smbus_send_byte(base, SPD_PAGE_1, 0) < 0)
 			goto restore_page;
-		for (unsigned int offset = 0; offset < 256; offset++) {
-			int value = do_smbus_read_byte(base, address, offset);
-			if (value < 0)
-				goto restore_page;
-			raw[page * 256 + offset] = value;
-		}
+		if (do_i2c_eeprom_read(base, address, 0, sizeof(raw) / 2,
+				       &raw[page * sizeof(raw) / 2]) < 0)
+			goto restore_page;
 	}
 	complete = true;
 
