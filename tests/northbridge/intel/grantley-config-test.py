@@ -11,6 +11,14 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class GrantleyConfigTest(unittest.TestCase):
+    def test_cpu_selects_pre_ram_microcode_update(self):
+        text = (ROOT / "src/cpu/intel/grantley/Kconfig").read_text()
+        self.assertRegex(
+            text,
+            re.compile(r"^\s*select\s+MICROCODE_UPDATE_PRE_RAM\s*$", re.MULTILINE),
+            "Grantley must apply the matching microcode before initializing CAR",
+        )
+
     def test_cold_boot_boards_do_not_advertise_s3_resume(self):
         boards = (
             "angxun/x99-xd4",
