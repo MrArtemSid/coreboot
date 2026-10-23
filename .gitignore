@@ -49,3 +49,4 @@ tarballs/
 *~
 *.kate-swp
 *.kdev4
+/bios/
