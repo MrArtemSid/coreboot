@@ -94,6 +94,10 @@ void early_pch_init(void)
 {
 	pch_enable_bars();
 
+#if ENV_SEPARATE_ROMSTAGE && CONFIG(NORTHBRIDGE_INTEL_GRANTLEY)
+	early_pch_init_grantley();
+#endif
+
 #if CONFIG(INTEL_LYNXPOINT_LP)
 	setup_pch_lp_gpios(mainboard_lp_gpio_map);
 #else
