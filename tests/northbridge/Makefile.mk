@@ -3,6 +3,7 @@
 tests-y += grantley-platform-test
 grantley-platform-test-srcs += tests/northbridge/intel/grantley-platform-test.c
 grantley-platform-test-srcs += src/northbridge/intel/grantley/platform.c
+grantley-platform-test-srcs += src/cpu/intel/grantley/platform.c
 
 tests-y += grantley-spd-test
 grantley-spd-test-srcs += tests/northbridge/intel/grantley-spd-test.c
@@ -22,3 +23,12 @@ grantley-pei-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/
 grantley-pei-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/Pi/
 grantley-pei-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdeModulePkg/Include/
 grantley-pei-test-cflags += -Wno-attributes
+
+tests-y += grantley-romstage-test
+grantley-romstage-test-srcs += tests/northbridge/intel/grantley-romstage-test.c
+grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/
+grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/Ia32/
+grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdePkg/Include/Pi/
+grantley-romstage-test-cflags += -I src/vendorcode/intel/edk2/UDK2017/MdeModulePkg/Include/
+grantley-romstage-test-cflags += -Wno-attributes
+grantley-romstage-test-cflags += -Wno-unused-variable -Wno-unused-function -Wno-unused-value

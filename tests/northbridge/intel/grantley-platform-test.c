@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <cpu/intel/grantley/grantley.h>
 #include <northbridge/intel/grantley/platform.h>
 #include <tests/test.h>
 
