@@ -7,6 +7,7 @@
 #include <console/console.h>
 #include <cpu/cpu.h>
 #include <cpu/intel/grantley/grantley.h>
+#include <cpu/intel/grantley/grantley_routing.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
@@ -102,7 +103,7 @@ void __noreturn romstage_main(void)
 		}
 
 		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
-		status = grantley_pei_set_mmcfg(&uncore_state, 0x80000000UL);
+		status = grantley_pei_set_mmcfg(&uncore_state, GRANTLEY_ECAM_BASE);
 		if (status != EFI_SUCCESS) {
 			post_code(0xee);
 			die("Grantley: uncore configuration routing failed\n");

@@ -5,7 +5,7 @@
  */
 #ifndef GRANTLEY_STARTUP_MACROS
 #define GRANTLEY_STARTUP_MACROS
-#define GRANTLEY_ECAM 0x80000000
+#include <cpu/intel/grantley/grantley_routing.h>
 #define GRANTLEY_UBOX 0x8ff87000
 #define GRANTLEY_PCU 0x8fff2000
 
@@ -67,11 +67,11 @@
 	movl	$0x800187d0, %eax
 	movw	$0xcf8, %dx
 	outl	%eax, %dx
-	movl	$0x8000ff00, %eax
+	movl	$GRANTLEY_CPUBUSNO, %eax
 	movw	$0xcfc, %dx
 	outl	%eax, %dx
 	startup_pci_read 0x80ff87d0
-	cmpl	$0x8000ff00, %eax
+	cmpl	$GRANTLEY_CPUBUSNO, %eax
 	jne	.Lstartup_failure
 	startup_pci_read 0x80ff8700
 	cmpw	$0x8086, %ax
@@ -86,7 +86,7 @@
 	/* Each 32-bus target field is zero; length 00 encodes 256 buses. */
 	xorl	%ebx, %ebx
 	startup_pci_write 0x80ff7de4, 0xffffff
-	movl	$(GRANTLEY_ECAM | 1), %ebx
+	movl	$(GRANTLEY_ECAM_BASE | 1), %ebx
 	startup_pci_write 0x80ff7dc0, 0xfc000007
 	startup_pci_read 0x80ff87dc
 	andl	$~7, %eax
@@ -103,15 +103,15 @@
 	xorl	%ebx, %ebx
 	startup_pci_write 0x80002894
 	startup_pci_write 0x8000289c
-	movl	$GRANTLEY_ECAM, %ebx
+	movl	$GRANTLEY_ECAM_BASE, %ebx
 	startup_pci_write 0x80002890, 0xfc000000
-	movl	$0x8c000000, %ebx
+	movl	$GRANTLEY_ECAM_LIMIT, %ebx
 	startup_pci_write 0x80002898, 0xfc000000
 	jmp	.Lstartup_iio_ready
 .Lstartup_iio_a0:
-	movl	$GRANTLEY_ECAM, %ebx
+	movl	$GRANTLEY_ECAM_BASE, %ebx
 	startup_pci_write 0x80002884, 0xfc000000
-	movl	$0x8c000000, %ebx
+	movl	$GRANTLEY_ECAM_LIMIT, %ebx
 	startup_pci_write 0x80002888, 0xfc000000
 .Lstartup_iio_ready:
 	movl	0x8ff85040, %eax
@@ -131,14 +131,14 @@
 	startup_mmio_verify GRANTLEY_PCU, 0x8086, 0xffff
 	movl	(GRANTLEY_PCU + 0x40), %eax
 	andl	$0xffff0000, %eax
-	orl	$0x8000ff00, %eax
+	orl	$GRANTLEY_CPUBUSNO, %eax
 	movl	%eax, (GRANTLEY_PCU + 0x40)
-	startup_mmio_verify (GRANTLEY_PCU + 0x40), 0x8000ff00, 0x8000ffff
+	startup_mmio_verify (GRANTLEY_PCU + 0x40), GRANTLEY_CPUBUSNO, 0x8000ffff
 	movl	0x80028108, %eax
 	andl	$0xfffe0000, %eax
-	orl	$0x1ff00, %eax
+	orl	$GRANTLEY_IIO_BUS_RULE, %eax
 	movl	%eax, 0x80028108
-	startup_mmio_verify 0x80028108, 0x1ff00, 0x1ffff
+	startup_mmio_verify 0x80028108, GRANTLEY_IIO_BUS_RULE, 0x1ffff
 
 	jmp	.Lstartup_route_ready
 .Lstartup_failure:

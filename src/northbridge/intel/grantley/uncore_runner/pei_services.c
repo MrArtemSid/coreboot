@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <cf9_reset.h>
+#include <cpu/intel/grantley/grantley_routing.h>
 #include <device/mmio.h>
 #include <drivers/efi/efivars.h>
 #include <post.h>
@@ -356,7 +357,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	 * A conflicting live route is not a safe cold-reset fallback.
 	 */
 	if ((route_read32(ubox, 0, 0) & 0xffff) == 0x8086) {
-		if ((route_read32(ubox, 0xd0, 0) & 0x8000ffff) != 0x8000ff00 ||
+		if ((route_read32(ubox, 0xd0, 0) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
 		    (route_read32(sad, 0, 0) & 0xffff) != 0x8086 ||
 		    (route_read32(iio, 0, 0) & 0xffff) != 0x8086 ||
 		    (route_read32(sad, 0xe4, 0) & 0x00ffffff) != 0 ||
@@ -371,7 +372,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 				       route_read32(iio, limit_reg + 4, 0) != 0))
 			return EFI_DEVICE_ERROR;
 		if ((route_read32(pcu, 0, base) & 0xffff) != 0x8086 ||
-		    (route_read32(pcu, 0x40, base) & 0x8000ffff) != 0x8000ff00 ||
+		    (route_read32(pcu, 0x40, base) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
 		    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
 			return EFI_DEVICE_ERROR;
 		state->mmcfg_base = base;
@@ -382,7 +383,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 		return EFI_DEVICE_ERROR;
 
 	/* CPUBUSNO changes the UBOX and SAD addresses immediately. */
-	route_write32(reset_ubox, 0xd0, 0, 0x8000ff00);
+	route_write32(reset_ubox, 0xd0, 0, GRANTLEY_CPUBUSNO);
 	if ((route_read32(ubox, 0, 0) & 0xffff) != 0x8086 ||
 	    (route_read32(sad, 0, 0) & 0xffff) != 0x8086 ||
 	    (route_read32(iio, 0, 0) & 0xffff) != 0x8086)
@@ -413,7 +414,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	route_write32(iio, 0x108, base, (buses & 0xfffe0000) | 0x1ff00);
 	buses = route_read32(pcu, 0x40, base);
 	route_write32(pcu, 0x40, base, buses | 0x80000000);
-	if ((route_read32(pcu, 0x40, base) & 0x8000ffff) != 0x8000ff00 ||
+	if ((route_read32(pcu, 0x40, base) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
 	    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
 		return EFI_DEVICE_ERROR;
 
