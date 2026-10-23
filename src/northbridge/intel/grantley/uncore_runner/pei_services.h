@@ -20,6 +20,7 @@ struct grantley_uncore_state {
 	/* PPI Registry */
 	const EFI_PEI_PPI_DESCRIPTOR * ppi_descriptors[MAX_GRANTLEY_PPI_DESCRIPTORS];
 	UINTN ppi_count;
+	EFI_PEI_PPI_DESCRIPTOR platform_info_ppi;
 
 	/* Pointer to backing region device for EFI variable store */
 	const struct region_device *var_store_rdev;
@@ -56,6 +57,7 @@ struct grantley_uncore_state {
 	EFI_PHYSICAL_ADDRESS dram_base;
 	UINT64 dram_size;
 	BOOLEAN dram_initialized;
+	BOOLEAN memory_test_failed;
 };
 
 /* Global or context accessor for PEI services */
@@ -69,7 +71,7 @@ static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
 #endif
 
 /* Initialise MMCFG base address for MMIO-based PCI config access */
-void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
+EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
 
 /* Attach backing EFI variable store region device */
 void grantley_pei_set_var_store(struct grantley_uncore_state *state,
@@ -80,6 +82,11 @@ void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
 				 uint16_t max_dram_speed_mts,
 				 uint8_t tcl, uint8_t trcd, uint8_t trp,
 				 uint8_t tras, uint8_t command_rate, bool ecc_en);
+
+struct grantley_memory_map;
+EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
+	uint32_t tolm, uint32_t tohm_lo, uint32_t tohm_hi,
+	struct grantley_memory_map *map);
 
 /* Execute UncoreInitPeim module */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_state *state);

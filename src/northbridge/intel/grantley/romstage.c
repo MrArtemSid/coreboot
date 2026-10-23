@@ -5,6 +5,7 @@
 #include <cbfs.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
+#include <cpu/intel/grantley/grantley.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
@@ -15,6 +16,7 @@
 #include <romstage_handoff.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include "platform.h"
+#include "memmap.h"
 
 void __weak mainboard_memory_init_params(struct grantley_memory_params *params)
 {
@@ -80,7 +82,11 @@ void __noreturn romstage_main(void)
 		}
 
 		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
-		grantley_pei_set_mmcfg(&uncore_state, 0x80000000UL);
+		status = grantley_pei_set_mmcfg(&uncore_state, 0x80000000UL);
+		if (status != EFI_SUCCESS) {
+			post_code(0xee);
+			die("Grantley: uncore configuration routing failed\n");
+		}
 
 		/* Query mainboard for optional memory parameter overrides */
 		struct grantley_memory_params mem_params = { 0 };
@@ -105,31 +111,28 @@ void __noreturn romstage_main(void)
 			die("Grantley: uncore memory initialization failed!\n");
 		}
 
-		/* Read memory bounds populated by uncore blob */
+		/* Verify the PEIM's HOBs against current hardware before touching CBMEM. */
 		const pci_devfn_t dev = PCI_DEV(0, 5, 0);
-		uint32_t tolm =
-			pci_s_read_config32(dev, 0xd0) & 0xfc000000;
-		uint32_t tohm_lo =
-			pci_s_read_config32(dev, 0xd4) & 0xfc000000;
+		uint32_t tolm = pci_s_read_config32(dev, 0xd0);
+		uint32_t tohm_lo = pci_s_read_config32(dev, 0xd4);
 		uint32_t tohm_hi = pci_s_read_config32(dev, 0xd8);
-		uint64_t tohm = ((uint64_t)tohm_hi << 32) | tohm_lo;
+		struct grantley_memory_map memory_map;
+		status = grantley_pei_memory_map(&uncore_state, tolm, tohm_lo, tohm_hi,
+						&memory_map);
+		if (status != EFI_SUCCESS || !grantley_memmap_install(&memory_map)) {
+			post_code(0xe5);
+			die("Grantley: invalid post-PEIM memory map\n");
+		}
 
-		uint64_t total_ram = tolm;
-		if (tohm > 0x100000000ULL)
-			total_ram += (tohm - 0x100000000ULL);
-
-		uncore_state.dram_base = 0;
-		uncore_state.dram_size = total_ram;
-		uncore_state.dram_initialized = TRUE;
-
-		const unsigned long long dram_mb = total_ram >> 20;
 		post_code(0x36);
-		printk(BIOS_INFO,
-		       "Grantley: RAM: %llu MB (TOLM %x, TOHM %llx)\n",
-		       dram_mb, tolm, (unsigned long long)tohm);
+		printk(BIOS_INFO, "Grantley: validated %llu memory ranges, SMRAM %llx+%llx\n",
+		       (unsigned long long)memory_map.count,
+		       (unsigned long long)memory_map.smram_base,
+		       (unsigned long long)memory_map.smram_size);
 
-		/* Memory is online: initialise CBMEM and hand off to postcar */
+		/* Persist the validated physical reservations before leaving CAR. */
 		cbmem_initialize_empty();
+		grantley_memmap_save();
 		romstage_handoff_init(false);
 
 		post_code(0x37);

@@ -6,12 +6,14 @@
 #include <device/pci.h>
 #include <device/pci_ops.h>
 #include <cpu/cpu.h>
+#include <cpu/intel/grantley/grantley.h>
 #include <cpu/intel/microcode.h>
 #include <cpu/x86/msr.h>
 #include <cpu/x86/smm.h>
 #include <drivers/intel/oc_mailbox/oc_mailbox.h>
 #include <types.h>
 #include "platform.h"
+#include "memmap.h"
 
 #define OC_MBOX_PLANE_CORE		0
 #define OC_MBOX_PLANE_CACHE		2
@@ -70,51 +72,37 @@ int soc_skip_ucode_update(u32 current_patch_id, u32 new_patch_id)
 	return 0;
 }
 
-#define GRANTLEY_DEFAULT_TOLUM  0x80000000UL
-
 static void grantley_domain_read_resources(struct device *dev)
 {
+	const struct grantley_memory_map *map = grantley_get_memory_map();
 	int idx = 10;
-	uint64_t low_ram_end;
 
 	pci_domain_read_resources(dev);
-
-	/* 0..0xa0000 DOS low RAM */
-	ram_range(dev, idx++, 0, 0xa0000);
-	/* 0xa0000..0xc0000 Video buffer / MMIO */
 	mmio_from_to(dev, idx++, 0xa0000, 0xc0000);
-	/* 0xc0000..0x100000 Option ROM / Upper memory */
-	ram_from_to(dev, idx++, 0xc0000, 1 * MiB);
 
-	uintptr_t tseg_base;
-	size_t tseg_size;
-	smm_region(&tseg_base, &tseg_size);
+	for (unsigned int i = 0; i < map->count; i++) {
+		const struct grantley_memory_range *range = &map->ranges[i];
+		uint64_t end = range->base + range->size;
+		uint64_t base = range->base;
+		bool reserved = range->type == GRANTLEY_MEMORY_RESERVED_RAM;
 
-	/* Read hardware memory registers populated by uncore blob */
-	const pci_devfn_t iio_dev = PCI_DEV(0, 5, 0);
-	uint32_t tolm =
-		pci_s_read_config32(iio_dev, 0xd0) & 0xfc000000;
-	uint32_t tohm_lo =
-		pci_s_read_config32(iio_dev, 0xd4) & 0xfc000000;
-	uint32_t tohm_hi = pci_s_read_config32(iio_dev, 0xd8);
-	uint64_t tohm = ((uint64_t)tohm_hi << 32) | tohm_lo;
-
-	if (tolm >= 0x40000000 && tolm <= 0xd0000000)
-		low_ram_end = tolm;
-	else
-		low_ram_end = GRANTLEY_DEFAULT_TOLUM;
-
-	if (tseg_size > 0 && tseg_base < low_ram_end) {
-		ram_from_to(dev, idx++, 1 * MiB, tseg_base);
-		mmio_range(dev, idx++, tseg_base, tseg_size);
-	} else {
-		ram_from_to(dev, idx++, 1 * MiB, low_ram_end);
-	}
-
-	/* High DRAM above 4 GiB */
-	if (tohm > 0x100000000ULL) {
-		uint64_t high_ram_size = tohm - 0x100000000ULL;
-		ram_range(dev, idx++, 0x100000000ULL, high_ram_size);
+		/* Do not turn the VGA aperture or option-ROM area into allocatable RAM. */
+		if (base < 0xa0000) {
+			if (reserved)
+				reserved_ram_from_to(dev, idx++, base, MIN(end, 0xa0000));
+			else
+				ram_from_to(dev, idx++, base, MIN(end, 0xa0000));
+		}
+		if (base < MiB && end > 0xc0000)
+			reserved_ram_from_to(dev, idx++, MAX(base, 0xc0000), MIN(end, MiB));
+		base = MAX(base, MiB);
+		if (base >= end)
+			continue;
+		/* Reserved DRAM, including SMRAM, remains WB for x86_setup_mtrrs(). */
+		if (reserved)
+			reserved_ram_from_to(dev, idx++, base, end);
+		else
+			ram_from_to(dev, idx++, base, end);
 	}
 }
 
@@ -128,23 +116,6 @@ struct device_operations grantley_pci_domain_ops = {
 	.set_resources    = grantley_domain_set_resources,
 	.scan_bus         = pci_host_bridge_scan_bus,
 	.ops_pci          = &pci_dev_ops_pci,
-};
-
-void mp_init_cpus(DEVTREE_CONST struct bus *cpu_bus)
-{
-	struct grantley_cpu_params cpu_params;
-
-	printk(BIOS_INFO, "Haswell-EP MP init: BSP bring-up\n");
-
-	mainboard_cpu_init_params(&cpu_params);
-	grantley_apply_cpu_overrides(&cpu_params);
-	program_oc_mailbox();
-}
-
-struct device_operations grantley_cpu_bus_ops = {
-	.read_resources   = noop_read_resources,
-	.set_resources    = noop_set_resources,
-	.init             = mp_cpu_bus_init,
 };
 
 struct chip_operations northbridge_intel_grantley_ops = {

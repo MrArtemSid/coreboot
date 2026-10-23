@@ -23,6 +23,7 @@ static inline void outl(uint32_t val, uint16_t port) { }
 #endif
 #undef NULL
 #include "pei_services.h"
+#include "../memmap.h"
 
 static struct grantley_uncore_state *g_state;
 
@@ -165,11 +166,13 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
-	if (!state || !hob || length < sizeof(EFI_HOB_GENERIC_HEADER))
+	if (!state || !hob || length < sizeof(EFI_HOB_GENERIC_HEADER) || length > 65528)
 		return EFI_INVALID_PARAMETER;
 
-	/* Align length to 8 bytes */
+	/* Align length to 8 bytes without wrapping the 16-bit HOB length. */
 	UINT16 aligned_length = (length + 7) & ~7;
+	if (state->hob_allocated > state->hob_size)
+		return EFI_OUT_OF_RESOURCES;
 	UINTN remaining = state->hob_size - state->hob_allocated;
 
 	if (remaining < (UINTN)(aligned_length + sizeof(EFI_HOB_GENERIC_HEADER)))
@@ -191,6 +194,8 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 	end_hob->HobLength = sizeof(EFI_HOB_GENERIC_HEADER);
 	end_hob->Reserved = 0;
 
+	EFI_HOB_HANDOFF_INFO_TABLE *hit = state->hob_list;
+	hit->EfiEndOfHobList = (EFI_PHYSICAL_ADDRESS)(uintptr_t)end_hob;
 	*hob = new_hob;
 	return EFI_SUCCESS;
 }
@@ -223,13 +228,19 @@ static EFI_STATUS EFIAPI grantley_allocate_pages(
 	if (!state || !addr)
 		return EFI_INVALID_PARAMETER;
 
+	if (!pages)
+		return EFI_INVALID_PARAMETER;
+	if (state->pool_allocated > state->pool_size || pages > (UINTN)-1 / 4096)
+		return EFI_OUT_OF_RESOURCES;
+	uintptr_t current = (uintptr_t)state->pool_base + state->pool_allocated;
+	UINTN padding = -current & 4095;
+	UINTN remaining = state->pool_size - state->pool_allocated;
 	UINTN bytes = pages * 4096;
-
-	if (state->pool_allocated + bytes > state->pool_size)
+	if (padding > remaining || bytes > remaining - padding)
 		return EFI_OUT_OF_RESOURCES;
 
-	*addr = (EFI_PHYSICAL_ADDRESS)(uintptr_t)(state->pool_base + state->pool_allocated);
-	state->pool_allocated += bytes;
+	*addr = current + padding;
+	state->pool_allocated += padding + bytes;
 	return EFI_SUCCESS;
 }
 
@@ -243,9 +254,11 @@ static EFI_STATUS EFIAPI grantley_allocate_pool(
 	if (!state || !buffer)
 		return EFI_INVALID_PARAMETER;
 
+	if (size > (UINTN)-1 - 7 || state->pool_allocated > state->pool_size)
+		return EFI_OUT_OF_RESOURCES;
 	UINTN aligned_size = (size + 7) & ~7;
 
-	if (state->pool_allocated + aligned_size > state->pool_size)
+	if (aligned_size > state->pool_size - state->pool_allocated)
 		return EFI_OUT_OF_RESOURCES;
 
 	*buffer = state->pool_base + state->pool_allocated;
@@ -290,79 +303,92 @@ static EFI_STATUS EFIAPI grantley_reset_system(
 	return EFI_SUCCESS;
 }
 
-void grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base)
+#if ENV_TEST
+uint32_t grantley_test_route_read32(uint32_t dev, uint16_t reg, uintptr_t base);
+void grantley_test_route_write32(uint32_t dev, uint16_t reg, uintptr_t base, uint32_t value);
+uint32_t grantley_test_route_cpuid(void);
+#define route_read32 grantley_test_route_read32
+#define route_write32 grantley_test_route_write32
+#define route_cpuid grantley_test_route_cpuid
+#else
+static uint32_t route_read32(pci_devfn_t dev, uint16_t reg, uintptr_t base)
+{
+	if (base)
+		return read32((void *)(base + dev + reg));
+	return pci_s_read_config32(dev, reg);
+}
+
+static void route_write32(pci_devfn_t dev, uint16_t reg, uintptr_t base, uint32_t value)
+{
+	if (base)
+		write32((void *)(base + dev + reg), value);
+	else
+		pci_s_write_config32(dev, reg, value);
+}
+
+static uint32_t route_cpuid(void)
+{
+	return cpuid_eax(1);
+}
+#endif
+
+EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t base)
 {
 	if (!state)
-		return;
+		return EFI_INVALID_PARAMETER;
+	state->mmcfg_enabled = FALSE;
+	state->mmcfg_base = 0;
+	/* One complete 256-bus ECAM segment, below the IA-32 address ceiling. */
+	if (!base || (base & 0xfffffff) || base > 0xf0000000ULL)
+		return EFI_INVALID_PARAMETER;
 
-	state->mmcfg_base = mmcfg_base;
-	state->mmcfg_enabled = (mmcfg_base != 0);
+	const pci_devfn_t reset_ubox = PCI_DEV(1, 16, 7);
+	const pci_devfn_t ubox = PCI_DEV(0xff, 16, 7);
+	const pci_devfn_t sad = PCI_DEV(0xff, 15, 5);
+	const pci_devfn_t iio = PCI_DEV(0, 5, 0);
+	const pci_devfn_t pcu = PCI_DEV(0xff, 30, 2);
+	uint16_t base_reg = (route_cpuid() & 0xfffff) == 0x306f0 ? 0x84 : 0x90;
+	uint16_t limit_reg = base_reg == 0x84 ? 0x88 : 0x98;
 
-#if !ENV_TEST
-	if (mmcfg_base) {
-		const pci_devfn_t ubox_misc = PCI_DEV(1, 16, 7);
-		const pci_devfn_t cbo_sad = PCI_DEV(1, 15, 5);
-		const pci_devfn_t iio_dev5 = PCI_DEV(0, 5, 0);
+	/* CPUBUSNO changes the UBOX and SAD addresses immediately. */
+	route_write32(reset_ubox, 0xd0, 0, 0x8000ff00);
+	if ((route_read32(ubox, 0, 0) & 0xffff) != 0x8086 ||
+	    (route_read32(sad, 0, 0) & 0xffff) != 0x8086 ||
+	    (route_read32(iio, 0, 0) & 0xffff) != 0x8086)
+		return EFI_DEVICE_ERROR;
 
-		/*
-		 * Uncore bus and MMCFG configuration sequence:
-		 *
-		 * 1. Initialize UBOX CPUBUSNO via legacy CF8/CFC.
-		 *    UBOX on Bus 1 is responsive on Cold Boot by hardware default.
-		 *    Routes: Valid=1, UncoreBus=0xff, IIOBus=0x00.
-		 */
-		pci_s_write_config32(ubox_misc, 0xd0, 0x8000ff00);
+	/* Single-socket target list: every ECAM bus targets socket zero. */
+	route_write32(sad, 0xe4, 0, 0);
+	route_write32(sad, 0xc0, 0, base | 1);
+	uint32_t rule = route_read32(ubox, 0xdc, 0);
+	route_write32(ubox, 0xdc, 0, (rule & ~7U) | 1U);
+	if ((route_read32(sad, 0xc0, 0) & 0xfc000007) != (base | 1) ||
+	    (route_read32(ubox, 0xdc, 0) & 7) != 1)
+		return EFI_DEVICE_ERROR;
 
-		/*
-		 * 2. Configure Cbo SAD MMCFG target rule and UBOX MMCFG rule.
-		 */
-		pci_s_write_config32(cbo_sad, 0xc0, (uint32_t)mmcfg_base | 1);
-		pci_update_config32(ubox_misc, 0xdc, ~7U, 1U);
+	/* Limit stores address bits 31:26, not a byte count or an enable flag. */
+	route_write32(iio, base_reg, 0, base);
+	route_write32(iio, limit_reg, 0, (base + 0xfffffff) & 0xfc000000);
+	if ((route_read32(iio, base_reg, 0) & 0xfc000000) != base ||
+	    (route_read32(iio, limit_reg, 0) & 0xfc000000) !=
+	    ((base + 0xfffffff) & 0xfc000000))
+		return EFI_DEVICE_ERROR;
 
-		/*
-		 * 3. Validate UBOX presence on Bus 1 now that internal routing is active.
-		 */
-		uint16_t ubox_vid = pci_s_read_config16(ubox_misc, 0);
-		if (ubox_vid != 0x8086)
-			post_code(0xee);
+	if ((route_read32(pcu, 0, base) & 0xffff) != 0x8086)
+		return EFI_DEVICE_ERROR;
+	uint32_t buses = route_read32(pcu, 0x40, base);
+	route_write32(pcu, 0x40, base, (buses & 0xffff0000) | 0xff00);
+	buses = route_read32(iio, 0x108, base);
+	route_write32(iio, 0x108, base, (buses & 0xfffe0000) | 0x1ff00);
+	buses = route_read32(pcu, 0x40, base);
+	route_write32(pcu, 0x40, base, buses | 0x80000000);
+	if ((route_read32(pcu, 0x40, base) & 0x8000ffff) != 0x8000ff00 ||
+	    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
+		return EFI_DEVICE_ERROR;
 
-		/*
-		 * 4. Enable MMCFG Base and Limit in IIO (00:05.0):
-		 *    Legacy Haswell-EP A0 stepping (CPUID 0x306f0) uses registers 0x84 / 0x88.
-		 *    Production Haswell-EP (B0+) and all Broadwell-EP use registers 0x90 / 0x98.
-		 */
-		uint32_t cpuid_sig = cpuid_eax(1);
-		uint16_t mmcfg_base_reg = 0x90;
-		uint16_t mmcfg_limit_reg = 0x98;
-
-		if ((cpuid_sig & 0x000fffffU) == 0x000306f0U) {
-			mmcfg_base_reg = 0x84;
-			mmcfg_limit_reg = 0x88;
-		}
-
-		pci_s_write_config32(iio_dev5, mmcfg_base_reg, (uint32_t)mmcfg_base | 1);
-		pci_s_write_config32(iio_dev5, mmcfg_limit_reg, (uint32_t)mmcfg_base + 0x03ffffff);
-
-		/*
-		 * 5. Program IIO CPUBUSNO at offset 0x108 through MMCFG (Valid=1, Uncore=0xff).
-		 */
-		write32((void *)(mmcfg_base + (5U << 15) + 0x108), 0x0001ff00);
-
-		/*
-		 * 6. Set Valid bit in PCU CPU_BUS_NUMBER on Bus 0xff, Dev 30, Func 2, offset 0x40.
-		 */
-		write32((void *)(mmcfg_base + (0xffU << 20) + (30U << 15) +
-				 (2U << 12) + 0x40), 0x8000ff00);
-
-		/*
-		 * 7. Validate that PCU device on Bus 0xff is reachable via MMCFG.
-		 */
-		uint16_t pcu_vid = read16((void *)(mmcfg_base + (0xffU << 20) +
-						   (30U << 15) + (2U << 12) + 0));
-		if (pcu_vid != 0x8086)
-			post_code(0xee);
-	}
-#endif
+	state->mmcfg_base = base;
+	state->mmcfg_enabled = TRUE;
+	return EFI_SUCCESS;
 }
 
 static inline void pci_cfg_decode(UINT64 address, pci_devfn_t *pdev,
@@ -831,6 +857,13 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 	EFI_STATUS status;
 	const void *services_arg = &state->services_ptr;
 
+#if ENV_TEST
+	/* Host tests cannot execute an IA-32 PEIM or switch to firmware CAR. */
+	(void)car_stack_top;
+	(void)services_arg;
+	(void)entry_point;
+	status = EFI_UNSUPPORTED;
+#else
 	__asm__ __volatile__(
 		"movl %%esp, %[saved_esp]\n	"
 		"movl %[stack], %%esp\n	"
@@ -845,6 +878,7 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, struct grantley_uncore_
 		  [entry] "r"(entry_point)
 		: "ecx", "edx", "memory", "cc"
 	);
+#endif
 
 	return status;
 }
@@ -865,10 +899,6 @@ static EFI_GUID g_cpu_io_guid = {
 static EFI_GUID g_read_only_var_guid = {
 	0x2ab86ef5, 0xecb5, 0x4134,
 	{ 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 }
-};
-static EFI_GUID g_read_only_var1_guid = {
-	0xbae29d7b, 0x89bb, 0x4223,
-	{ 0xaf, 0x76, 0x96, 0xd0, 0xb3, 0x24, 0x9b, 0x36 }
 };
 static EFI_GUID g_mem_test_guid = {
 	0xb6ec423c, 0x21d2, 0x490d,
@@ -911,23 +941,75 @@ static const EFI_PEI_READ_ONLY_VARIABLE2_PPI g_read_only_var = {
 		(EFI_PEI_GET_NEXT_VARIABLE_NAME2)grantley_get_next_variable_name,
 };
 
-static void *const g_dummy_mem_ops[1] = {
-	(void *)grantley_report_status_code,
-};
+/* The PEIM requests a permanent PEI workspace size, not installed RAM size. */
+static EFI_STATUS EFIAPI grantley_platform_memory_size(
+	const EFI_PEI_SERVICES **services, void *this, UINT64 *size)
+{
+	if (!size)
+		return EFI_INVALID_PARAMETER;
+	*size = 64ULL * 1024 * 1024;
+	return EFI_SUCCESS;
+}
+
+static const struct {
+	EFI_STATUS (EFIAPI *get)(const EFI_PEI_SERVICES **, void *, UINT64 *);
+} g_memory_size = { grantley_platform_memory_size };
+
+static EFI_STATUS grantley_memory_test_failure(EFI_STATUS status)
+{
+	struct grantley_uncore_state *state = grantley_get_uncore_state();
+	if (state)
+		state->memory_test_failed = TRUE;
+	return status;
+}
+
+/* Operation values in the memory-test PPI: Ignore, Quick, Sparse, Extensive. */
+static EFI_STATUS EFIAPI grantley_base_memory_test(
+	const EFI_PEI_SERVICES **services, void *this, EFI_PHYSICAL_ADDRESS begin,
+	UINT64 length, UINT32 operation, EFI_PHYSICAL_ADDRESS *error)
+{
+	if (!error || operation > 3 || begin > UINT64_MAX - length)
+		return grantley_memory_test_failure(EFI_INVALID_PARAMETER);
+	*error = 0;
+	if (!operation || !length)
+		return EFI_SUCCESS;
+	/* No high-memory mapping exists while the IA-32 PEIM runs in CAR. */
+	if (begin >= 0x100000000ULL || length > 0x100000000ULL - begin)
+		return grantley_memory_test_failure(EFI_UNSUPPORTED);
+	if ((begin & 3) || (length & 3))
+		return grantley_memory_test_failure(EFI_INVALID_PARAMETER);
+
+	UINT64 stride = operation == 3 ? sizeof(UINT32) : 4096;
+	for (UINT64 offset = 0; offset < length; offset += stride) {
+		void *address = (void *)(uintptr_t)(begin + offset);
+		UINT32 saved = read32(address);
+		write32(address, 0x55aa55aa);
+		bool good = read32(address) == 0x55aa55aa;
+		write32(address, 0xaa55aa55);
+		good &= read32(address) == 0xaa55aa55;
+		write32(address, saved);
+		if (!good) {
+			*error = begin + offset;
+			return grantley_memory_test_failure(EFI_DEVICE_ERROR);
+		}
+	}
+	return EFI_SUCCESS;
+}
+
+static const struct {
+	EFI_STATUS (EFIAPI *test)(const EFI_PEI_SERVICES **, void *,
+		EFI_PHYSICAL_ADDRESS, UINT64, UINT32, EFI_PHYSICAL_ADDRESS *);
+} g_memory_test = { grantley_base_memory_test };
 
 static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_pci_cfg_guid, (void *)&g_pci_cfg },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_cpu_io_guid, (void *)&g_cpu_io },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_read_only_var_guid,
 	  (void *)&g_read_only_var },
-	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_read_only_var1_guid,
-	  (void *)&g_read_only_var },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_test_guid,
-	  (void *)g_dummy_mem_ops },
-	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_size_guid,
-	  (void *)g_dummy_mem_ops },
+	  (void *)&g_memory_test },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
-	  &g_platform_info_guid, (void *)0 },
+	  &g_mem_size_guid, (void *)&g_memory_size },
 };
 
 static const EFI_PEI_SERVICES g_pei_services_template = {
@@ -985,7 +1067,7 @@ static void grantley_init_hob_list(struct grantley_uncore_state *state, void *ho
  * 0xb363c, 0xb364e, 0xb52aa, 0xb5dc0) call GetFirstGuidHob()
  * and dereference the result without checking for NULL.
  */
-static void grantley_init_platform_info_hob(struct grantley_uncore_state *state)
+static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *state)
 {
 	void *hob = (void *)0;
 	const UINT16 hob_data_len = 256;
@@ -993,9 +1075,10 @@ static void grantley_init_platform_info_hob(struct grantley_uncore_state *state)
 	const struct _EFI_PEI_SERVICES **s_ptr =
 		(const struct _EFI_PEI_SERVICES **)&state->services_ptr;
 
-	if (grantley_create_hob(s_ptr, EFI_HOB_TYPE_GUID_EXTENSION,
-				hob_total_len, &hob) != EFI_SUCCESS || !hob)
-		return;
+	EFI_STATUS status = grantley_create_hob(s_ptr, EFI_HOB_TYPE_GUID_EXTENSION,
+					      hob_total_len, &hob);
+	if (status != EFI_SUCCESS)
+		return status;
 
 	EFI_HOB_GUID_TYPE *guid_hob = (EFI_HOB_GUID_TYPE *)hob;
 	guid_hob->Name = g_platform_info_guid;
@@ -1020,6 +1103,190 @@ static void grantley_init_platform_info_hob(struct grantley_uncore_state *state)
 #endif
 	/* SysData.SysSioExist = 1 at offset 0x9e */
 	data[0x9e] = 1;
+
+	/* Readiness PPI: data lives in the GUID HOB; it has no callable methods. */
+	state->platform_info_ppi = (EFI_PEI_PPI_DESCRIPTOR) {
+		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
+		&g_platform_info_guid, data,
+	};
+	return grantley_install_ppi(s_ptr, &state->platform_info_ppi);
+}
+
+/* SMRAM GUID payload has an eight-byte header followed by 32-byte descriptors. */
+struct grantley_smram_descriptor {
+	UINT64 physical;
+	UINT64 cpu;
+	UINT64 size;
+	UINT64 flags;
+};
+
+EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
+	uint32_t tolm_raw, uint32_t tohm_lo, uint32_t tohm_hi,
+	struct grantley_memory_map *map)
+{
+	if (!state || !map || !state->hob_list ||
+	    state->hob_allocated > state->hob_size ||
+	    state->hob_size - state->hob_allocated < sizeof(EFI_HOB_GENERIC_HEADER))
+		return EFI_INVALID_PARAMETER;
+	if (!state->dram_initialized || state->memory_test_failed)
+		return EFI_DEVICE_ERROR;
+	uint64_t tolm = tolm_raw & 0xfc000000;
+	uint64_t tohm = ((uint64_t)tohm_hi << 32) | (tohm_lo & 0xfc000000);
+	if (tolm_raw == UINT32_MAX || tohm_lo == UINT32_MAX || tohm_hi == UINT32_MAX ||
+	    tolm < 0x4000000 || tolm > 0x80000000 ||
+	    (tohm && tohm < 0x100000000ULL) || tohm > (1ULL << 46))
+		return EFI_DEVICE_ERROR;
+
+	struct grantley_memory_range input[GRANTLEY_MAX_MEMORY_RANGES];
+	uint64_t bounds[2 * GRANTLEY_MAX_MEMORY_RANGES];
+	size_t count = 0;
+	struct grantley_memory_map result = { 0 };
+	static const EFI_GUID smram_guid = {
+		0x6dadf1d1, 0xd4cc, 0x4910,
+		{ 0xbb, 0x6e, 0x82, 0xb1, 0xfd, 0x80, 0xff, 0x3d }
+	};
+	const uint8_t *list = state->hob_list;
+	const EFI_HOB_HANDOFF_INFO_TABLE *hit = state->hob_list;
+	if (state->hob_allocated < sizeof(*hit) ||
+	    hit->Header.HobType != EFI_HOB_TYPE_HANDOFF ||
+	    hit->Header.HobLength != sizeof(*hit) ||
+	    hit->EfiEndOfHobList != (uintptr_t)(list + state->hob_allocated))
+		return EFI_VOLUME_CORRUPTED;
+
+	for (size_t off = 0; off <= state->hob_allocated;) {
+		const EFI_HOB_GENERIC_HEADER *hob = (const void *)(list + off);
+		if (hob->HobLength < sizeof(*hob) || (hob->HobLength & 7) || hob->Reserved)
+			return EFI_VOLUME_CORRUPTED;
+		if (off == state->hob_allocated) {
+			if (hob->HobType != EFI_HOB_TYPE_END_OF_HOB_LIST ||
+			    hob->HobLength != sizeof(*hob))
+				return EFI_VOLUME_CORRUPTED;
+			break;
+		}
+		if (hob->HobType == EFI_HOB_TYPE_END_OF_HOB_LIST ||
+		    hob->HobLength > state->hob_allocated - off)
+			return EFI_VOLUME_CORRUPTED;
+
+		if (hob->HobType == EFI_HOB_TYPE_RESOURCE_DESCRIPTOR) {
+			if (hob->HobLength < sizeof(EFI_HOB_RESOURCE_DESCRIPTOR))
+				return EFI_VOLUME_CORRUPTED;
+			const EFI_HOB_RESOURCE_DESCRIPTOR *r = (const void *)hob;
+			if (r->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY ||
+			    r->ResourceType == EFI_RESOURCE_MEMORY_RESERVED) {
+				uint64_t base = r->PhysicalStart, size = r->ResourceLength;
+				if (!size || base > UINT64_MAX - size ||
+				    !((base < tolm && size <= tolm - base) ||
+				      (base >= 0x100000000ULL && base < tohm && size <= tohm - base)))
+					return EFI_DEVICE_ERROR;
+				if (count == GRANTLEY_MAX_MEMORY_RANGES)
+					return EFI_OUT_OF_RESOURCES;
+				input[count] = (struct grantley_memory_range) {
+					base, size, r->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY ?
+					GRANTLEY_MEMORY_RAM : GRANTLEY_MEMORY_RESERVED_RAM
+				};
+				bounds[2 * count] = base;
+				bounds[2 * count + 1] = base + size;
+				count++;
+			}
+		} else if (hob->HobType == EFI_HOB_TYPE_MEMORY_ALLOCATION) {
+			if (hob->HobLength < sizeof(EFI_HOB_MEMORY_ALLOCATION))
+				return EFI_VOLUME_CORRUPTED;
+			const EFI_HOB_MEMORY_ALLOCATION *allocation = (const void *)hob;
+			const EFI_HOB_MEMORY_ALLOCATION_HEADER *a = &allocation->AllocDescriptor;
+			uint64_t base = a->MemoryBaseAddress, size = a->MemoryLength;
+			if (!size || base > UINT64_MAX - size ||
+			    !((base < tolm && size <= tolm - base) ||
+			      (base >= 0x100000000ULL && base < tohm && size <= tohm - base)))
+				return EFI_DEVICE_ERROR;
+			if (a->MemoryType != EfiConventionalMemory) {
+				if (count == GRANTLEY_MAX_MEMORY_RANGES)
+					return EFI_OUT_OF_RESOURCES;
+				input[count] = (struct grantley_memory_range) {
+					base, size, GRANTLEY_MEMORY_RESERVED_RAM
+				};
+				bounds[2 * count] = base;
+				bounds[2 * count + 1] = base + size;
+				count++;
+			}
+		} else if (hob->HobType == EFI_HOB_TYPE_GUID_EXTENSION) {
+			if (hob->HobLength < sizeof(EFI_HOB_GUID_TYPE))
+				return EFI_VOLUME_CORRUPTED;
+			const EFI_HOB_GUID_TYPE *guid = (const void *)hob;
+			if (!memcmp(&guid->Name, &smram_guid, sizeof(smram_guid))) {
+				const uint8_t *data = (const void *)(guid + 1);
+				size_t bytes = hob->HobLength - sizeof(*guid);
+				if (bytes < 8 || result.smram_size)
+					return EFI_VOLUME_CORRUPTED;
+				uint32_t regions;
+				memcpy(&regions, data, sizeof(regions));
+				if (!regions || regions > (bytes - 8) / sizeof(struct grantley_smram_descriptor))
+					return EFI_VOLUME_CORRUPTED;
+				for (size_t i = 0; i < regions; i++) {
+					struct grantley_smram_descriptor d;
+					memcpy(&d, data + 8 + i * sizeof(d), sizeof(d));
+					if (!d.size || d.physical != d.cpu || d.physical > UINT64_MAX - d.size)
+						return EFI_DEVICE_ERROR;
+					/* HSEG is not the relocatable TSEG used by coreboot. */
+					if (d.physical < 0x100000)
+						continue;
+					if (result.smram_size || d.physical >= tolm || d.size > tolm - d.physical)
+						return EFI_DEVICE_ERROR;
+					result.smram_base = d.physical;
+					result.smram_size = d.size;
+				}
+			}
+		}
+		off += hob->HobLength;
+	}
+	if (!count || !result.smram_size)
+		return EFI_NOT_FOUND;
+
+	/* Sweep all resource endpoints; reserved RAM overrides broad RAM descriptors. */
+	for (size_t i = 1; i < 2 * count; i++) {
+		uint64_t value = bounds[i];
+		size_t j = i;
+		while (j && bounds[j - 1] > value) {
+			bounds[j] = bounds[j - 1];
+			j--;
+		}
+		bounds[j] = value;
+	}
+	for (size_t i = 0; i + 1 < 2 * count; i++) {
+		uint64_t base = bounds[i], end = bounds[i + 1], type = 0;
+		if (base == end)
+			continue;
+		for (size_t j = 0; j < count; j++)
+			if (input[j].base <= base && input[j].base + input[j].size >= end &&
+			    input[j].type > type)
+				type = input[j].type;
+		if (!type)
+			continue;
+		struct grantley_memory_range *last =
+			result.count ? &result.ranges[result.count - 1] : (void *)0;
+		if (last && last->type == type && last->base + last->size == base) {
+			last->size += end - base;
+			continue;
+		}
+		if (result.count == GRANTLEY_MAX_MEMORY_RANGES)
+			return EFI_OUT_OF_RESOURCES;
+		result.ranges[result.count++] = (struct grantley_memory_range) { base, end - base, type };
+	}
+	bool covered = false, have_ram = false, pei_covered = false;
+	for (size_t i = 0; i < result.count; i++) {
+		const struct grantley_memory_range *r = &result.ranges[i];
+		have_ram |= r->type == GRANTLEY_MEMORY_RAM && r->base < tolm;
+		if (r->type == GRANTLEY_MEMORY_RAM && state->dram_size &&
+		    state->dram_base >= r->base && state->dram_base < r->base + r->size &&
+		    state->dram_size <= r->base + r->size - state->dram_base)
+			pei_covered = true;
+		if (r->type == GRANTLEY_MEMORY_RESERVED_RAM && r->base <= result.smram_base &&
+		    r->base + r->size >= result.smram_base + result.smram_size)
+			covered = true;
+	}
+	if (!covered || !have_ram || !pei_covered)
+		return EFI_DEVICE_ERROR;
+	*map = result;
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
@@ -1029,7 +1296,8 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	if (!state || !pool_buf || !hob_buf)
 		return EFI_INVALID_PARAMETER;
 
-	if (hob_size < sizeof(EFI_HOB_HANDOFF_INFO_TABLE) + sizeof(EFI_HOB_GENERIC_HEADER))
+	if (hob_size < sizeof(EFI_HOB_HANDOFF_INFO_TABLE) + sizeof(EFI_HOB_GUID_TYPE) +
+	    256 + sizeof(EFI_HOB_GENERIC_HEADER))
 		return EFI_BUFFER_TOO_SMALL;
 
 	memset(state, 0, sizeof(*state));
@@ -1047,8 +1315,8 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->hob_size = hob_size;
 
 	grantley_init_hob_list(state, hob_buf);
-	grantley_install_ppi(&state->services_ptr, g_initial_ppis);
-	grantley_init_platform_info_hob(state);
-
-	return EFI_SUCCESS;
+	EFI_STATUS status = grantley_install_ppi(&state->services_ptr, g_initial_ppis);
+	if (status != EFI_SUCCESS)
+		return status;
+	return grantley_init_platform_info_hob(state);
 }
