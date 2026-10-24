@@ -31,7 +31,7 @@ Syntacore trees (sc/2026.04 branches).
 ## 0. Fetch the submodules and SC-DT
 
 ```bash
-git submodule update --init 3rdparty/opensbi 3rdparty/u-boot
+git submodule update --init --depth 1 3rdparty/opensbi 3rdparty/u-boot 3rdparty/linux
 source <sc-dt>/env.sh   # SCR-HAL + toolchains (SC_HAL_PATH)
 ```
 
