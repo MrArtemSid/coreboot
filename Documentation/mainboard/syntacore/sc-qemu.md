@@ -103,8 +103,12 @@ IPDEV VCU118 SCR9 L3 prototype) -> U-Boot 2025.10 shell.
 The 64 KiB OCRAM sits at the very top of the address space and the
 machine reset PC is its last page, so three pieces are loaded: the
 CBFS window at dram + 128 MiB (`0x08000000`), the bootblock (the first
-128 KiB of the ROM) at `OCRAM + 0x200` and a four-byte jump stub
-(`reset_stub.bin`, shipped in the board directory) at the reset PC.
+128 KiB of the ROM) at `OCRAM + 0x200` and a four-byte jump stub at
+the reset PC. The stub is assembled from
+`src/soc/syntacore/reset_stub.S` during the build into
+`build/scrhal/reset_stub.bin` (a `jal` back into the bootblock entry,
+always -0xFD00 - a memlayout constant); the boot ROM / FPGA preloader
+plays the role of that loader on real hardware.
 The bootblock image must not cross the end of the address space, so
 trim it to its 50 KiB program span when loading on rv32:
 
@@ -112,7 +116,7 @@ trim it to its 50 KiB program span when loading on rv32:
 qemu-system-riscv64 -M scr9_l2 -smp 1 -nographic \
     -device loader,file=build/coreboot.rom,addr=0x08000000 \
     -device loader,file=/tmp/bootblock.bin,addr=0xffffffffffff0200 \
-    -device loader,file=src/mainboard/syntacore/scr_l2_cluster/reset_stub.bin,addr=0xffffffffffffff00
+    -device loader,file=build/scrhal/reset_stub.bin,addr=0xffffffffffffff00
 ```
 
 (`bootblock.bin` = `cbfstool build/coreboot.rom read -r BOOTBLOCK`;

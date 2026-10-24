@@ -111,3 +111,24 @@ romstage-y += mtime.c
 ramstage-y += cbmem.c
 ramstage-y += rom_media.c
 ramstage-y += mtime.c
+
+# Reset stub for the L2-family machines (reset PC at the top of the
+# address space): assembled from source into a standalone 4-byte binary
+# that the boot ROM / SCR QEMU loader places at CONFIG_SCR_RESET_STUB_ADDR.
+# The jump distance is a memlayout constant: stub at 2^xlen - 0x100,
+# bootblock entry at OCRAM + 0x200 -> always -0xFD00.
+ifeq ($(CONFIG_SCR_RESET_AT_TOP),y)
+SCR_STUB_DELTA := $(shell printf "%d" $$(( $(call strip_quotes,$(CONFIG_SCR_RESET_STUB_ADDR)) - ( $(call strip_quotes,$(CONFIG_SCR_OCRAM_BASE)) + 0x200 ) )))
+
+$(obj)/scrhal/reset_stub.o: $(top)/src/soc/syntacore/reset_stub.S $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(CC_bootblock) -march=$(call strip_quotes,$(CONFIG_RISCV_ARCH)) \
+		-mabi=$(call strip_quotes,$(CONFIG_RISCV_ABI)) \
+		-x assembler-with-cpp -DSTUB_DELTA=$(SCR_STUB_DELTA) -c -o $@ $<
+
+$(obj)/scrhal/reset_stub.bin: $(obj)/scrhal/reset_stub.o
+	printf "    RESET-STUB $(subst $(obj)/,,$(@))\n"
+	$(OBJCOPY_bootblock) -O binary --only-section=.text $< $@
+
+coreboot: $(obj)/scrhal/reset_stub.bin
+endif # CONFIG_SCR_RESET_AT_TOP
