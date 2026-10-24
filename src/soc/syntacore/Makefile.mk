@@ -38,6 +38,7 @@ scr_hal_cflags := \
 	-mcmodel=$(call strip_quotes,$(CONFIG_RISCV_CODEMODEL)) \
 	-mstrict-align -Os -fno-common -fdata-sections -ffunction-sections \
 	-DPRINTF_LEVEL=2 \
+	-include $(obj)/config.h \
 	$(scr_hal_inc)
 
 # coreboot-side code (soc files, UART driver, memlayout) reaches the
@@ -89,7 +90,13 @@ $(SCR_HAL_ARCHIVE): $(scr_hal_objs)
 	printf "    AR         SCR-HAL\n"
 	$(AR_ramstage) rcs $@ $(scr_hal_objs)
 
+# With SEPARATE_ROMSTAGE = n the romstage (and its libs) is carried
+# inside the bootblock via the postinclude hook; adding the archive to
+# bootblock-libs as well would link it twice. With a separate romstage
+# the bootblock needs its own copy (it talks to the UART early).
+ifeq ($(CONFIG_SEPARATE_ROMSTAGE),y)
 bootblock-libs += $(SCR_HAL_ARCHIVE)
+endif
 romstage-libs += $(SCR_HAL_ARCHIVE)
 ramstage-libs += $(SCR_HAL_ARCHIVE)
 

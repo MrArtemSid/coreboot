@@ -16,9 +16,9 @@
 
 #include "drivers/console.h"
 #include "drivers/hwinfo/hwinfo.h"
-#include "plf.h"
+#include <soc/scr_hal.h>
 
-#define SCR_UART0_BASE	PLF_UART0_BASE
+#define SCR_UART0_BASE	scr_hal_uart_base()
 
 void uart_init(unsigned int idx)
 {

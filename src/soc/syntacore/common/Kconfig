@@ -3,9 +3,9 @@
 # Syntacore SCR SoC family (SCR5/SCR6/SCR7/SCR9 cores with MMU).
 #
 # Platform constants (memory map, UART base, clocks) are NOT duplicated
-# here: they come from the SCR-HAL platform headers in 3rdparty/scr-hal
-# via include/soc/addressmap.h. Updating SCR-HAL updates this port -
-# no second commit needed for platform changes.
+# here: they come from the SCR-HAL platform headers in the Syntacore
+# Development Toolkit via include/soc/addressmap.h. Updating SC-DT
+# updates this port - no second commit needed for platform changes.
 
 config SOC_SYNTACORE_COMMON
 	def_bool n
@@ -13,7 +13,6 @@ config SOC_SYNTACORE_COMMON
 	select ARCH_ROMSTAGE_RISCV
 	select ARCH_VERSTAGE_RISCV
 	select ARCH_RAMSTAGE_RISCV
-	select ARCH_RISCV_PMP
 	select ARCH_RISCV_S
 	select ARCH_RISCV_U
 	select DRIVERS_UART_SCR_HAL
@@ -56,39 +55,51 @@ config OPENSBI_PLATFORM
 
 # Fixed load address of the OpenSBI fw_dynamic payload. Must match the
 # OPENSBI region of the mainboard memlayout and the FW_TEXT_START the
-# blob was linked with.
+# blob was linked with: dram + 64 MiB on every platform.
 config OPENSBI_TEXT_START
 	hex
-	default 0x404000000 if SOC_SYNTACORE_SCR9_L3
-	default 0x00400000 if SOC_SYNTACORE_SCR9_L2
-	default 0x404000000 if SOC_SYNTACORE_SCR7_L3
-	default 0x00400000 if SOC_SYNTACORE_SCR7_L2
-	default 0x00400000 if SOC_SYNTACORE_SCR6
-	default 0x00400000 if SOC_SYNTACORE_SCR5_RV64
-	default 0x00400000 if SOC_SYNTACORE_SCR5_RV32
+	default 0x404000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x04000000
 
-
-# Memory layout anchors. Defaults mirror the SCR-HAL platform headers
-# (3rdparty/scr-hal/platform/<SCR_HAL_PLATFORM>/plf.h); a compile-time
-# check in include/soc/addressmap.h fails the build if they ever drift.
+# The Kconfig memory anchors below mirror the SCR-HAL platform headers
+# (SC-DT scr-hal, platform/<SCR_HAL_PLATFORM>/plf.h); a compile-time
+# check in include/soc/plf_check.h fails the build if they ever drift.
 config SCR_DDR_BASE
 	hex
 	default 0x400000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
-	default 0x00000000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
-	default 0x00000000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default 0x00000000
 
 config SCR_OCRAM_BASE
 	hex
-	default 0x02000000 if SOC_SYNTACORE_SCR9_L3
-	default 0x02000000 if SOC_SYNTACORE_SCR7_L3
-	default 0xffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
-	default 0xffff0000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default 0x02000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	# The L2-family OCRAM sits at the top of the address space
+	# (plf.h EXPAND32ADDR(0xffff0000)).
+	default 0xffffffffffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64
+	default 0x00000000ffff0000 if SOC_SYNTACORE_SCR5_RV32
 
 config SCR_OCRAM_SIZE
 	hex
 	default 0x200000 if SOC_SYNTACORE_SCR9_L3
-	default 0x10000 if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
-	default 0x10000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default 0x10000
+
+# Reset entry of the SCR machines: the L3-family machines start in the
+# middle of the OCRAM, the L2-family machines start at the very top of
+# the address space (the OCRAM ends there), where a small jump stub in
+# the bootblock hands over to _start.
+config SCR_RESET_AT_TOP
+	bool
+	default y if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+
+config SCR_RESET_STUB_ADDR
+	hex
+	default 0xffffff00 if ARCH_RISCV_RV32
+	default 0xffffffffffffff00
+
+# The 64 KiB-OCRAM platforms carry the romstage inside the bootblock
+# (single early stage; the LZMA decoder scratchpad does not fit there,
+# so those boards build with an uncompressed ramstage).
+config SEPARATE_ROMSTAGE
+	default n if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
 
 endif # SOC_SYNTACORE_COMMON
 
@@ -96,26 +107,31 @@ config SOC_SYNTACORE_SCR9_L3
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
+	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR9_L2
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
+	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR7_L3
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
+	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR7_L2
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
+	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR6
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
+	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR5_RV64
 	bool

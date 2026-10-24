@@ -2,7 +2,6 @@
 
 #include <cbmem.h>
 #include <soc/addressmap.h>
-#include <soc/plf_check.h>
 
 uintptr_t cbmem_top_chipset(void)
 {

@@ -12,12 +12,26 @@
 #include <stdint.h>
 #include <stddef.h>
 
+
 #include "drivers/rtc.h"
 #include "drivers/mtimer.h"
 #include "drivers/pmp.h"
 #include "drivers/pma.h"
 #include "drivers/mrt.h"
 #include "plf.h"
+
+/*
+ * Cross-check the coreboot Kconfig memory anchors against the SCR-HAL
+ * platform headers: a SC-DT platform update cannot silently drift from
+ * the coreboot view of the memory map.
+ */
+#define SCR_PLF_EQ(a, b) \
+	_Static_assert((uintptr_t)(a) == (uintptr_t)(b), \
+		       "Kconfig memory anchor drifted from SCR-HAL plf.h: " #a " != " #b)
+
+SCR_PLF_EQ(CONFIG_SCR_DDR_BASE, PLF_MEM_BASE);
+SCR_PLF_EQ(CONFIG_SCR_OCRAM_BASE, (uintptr_t)PLF_OCRAM_BASE);
+SCR_PLF_EQ(CONFIG_SCR_OCRAM_SIZE, PLF_OCRAM_SIZE);
 
 #define SCR_REG32(addr)		(*(volatile uint32_t *)(uintptr_t)(addr))
 
@@ -35,7 +49,14 @@ uintptr_t scr_hal_mtimer_time_addr(void)
 
 uintptr_t scr_hal_mtimer_cmp_addr(unsigned long hart)
 {
+#ifdef PLF_MTIMER_EXT
+	/* Per-hart compare words (L3-family clusters). */
 	return (uintptr_t)SCR_RTC_MTIMECMP_CORE(hart);
+#else
+	/* Single shared compare word (L2-family clusters). */
+	(void)hart;
+	return (uintptr_t)SCR_RTC_MTIMECMP;
+#endif
 }
 
 uint64_t scr_hal_mtimer_now(void)
@@ -107,9 +128,12 @@ void scr_hal_mrt_init(void)
  *   entry 15: DDR weakly-ordered/cacheable
  * On cores with PMA CSRs the equivalent scr-hal PMA regions are used
  * instead, exactly like miniboot's pmp_early_init/pmp_init pair.
+ * The SCR5 MPU platforms have no PMP at all - OpenSBI configures the
+ * MPU through the scr_mpu device tree node.
  */
 void scr_hal_pmp_platform_init(void)
 {
+#if defined(PLF_PMP_SUPPORT) && (PLF_PMP_SUPPORT == 1)
 	if (pma_is_available()) {
 		size_t pma_num = get_pma_regions();
 
@@ -129,4 +153,5 @@ void scr_hal_pmp_platform_init(void)
 	create_pmp_region(15, PLF_MEM_BASE, ~(PLF_MEM_SIZE - 1),
 			  PLF_MEM_ATTR);
 	ifence();
+#endif /* PLF_PMP_SUPPORT */
 }
