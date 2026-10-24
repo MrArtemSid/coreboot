@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <arch/barrier.h>
+#include <arch/smp/smp.h>
 #include <commonlib/device_tree.h>
 #include <console/console.h>
 #include <endian.h>
@@ -9,6 +10,9 @@
 
 /* Each loaded stage owns its initialization flag; no BSS reset is assumed. */
 static int iccm_ready __section(".data") = 0;
+#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
+#endif
 
 void scr_iccm_init(void)
 {
@@ -23,6 +27,10 @@ void scr_iccm_init(void)
 		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE))
 			;
 	}
+#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+	/* hls_init() has cleared this hart's native synchronization fields. */
+	__atomic_store_n(&hart_ready[read_csr(mhartid)], 1, __ATOMIC_RELEASE);
+#endif
 }
 
 /* Linux describes CSR ICCM slots separately from hardware hart IDs. */
@@ -84,3 +92,24 @@ void set_msip(int hartid, int val)
 		die("ICCM wakeup failed");
 	barrier();
 }
+
+#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+unsigned int smp_get_hart_count(void)
+{
+	unsigned int count = scr_hal_iccm_hart_count();
+
+	if (!count || count > CONFIG_MAX_CPUS)
+		die("ICCM hart count exceeds reserved stacks");
+	for (unsigned int i = 0; i < count; i++) {
+		if (i == CONFIG_RISCV_WORKING_HARTID)
+			continue;
+		while (!__atomic_load_n(&hart_ready[i], __ATOMIC_ACQUIRE))
+			;
+		/* Native smp_pause() publishes HART_SLEEPING (1) before WFI. */
+		while (__atomic_load_n(&OTHER_HLS(i)->entry.sync_a.counter,
+				       __ATOMIC_ACQUIRE) != 1)
+			;
+	}
+	return count;
+}
+#endif

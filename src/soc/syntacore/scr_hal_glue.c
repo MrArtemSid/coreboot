@@ -179,3 +179,10 @@ int scr_hal_iccm_send(unsigned int slot)
 	return iccm_send(slot, 1) != 0;
 #endif
 }
+
+#if CONFIG_SOC_SYNTACORE_SCR9_L3
+unsigned int scr_hal_iccm_hart_count(void)
+{
+	return iccm_l3_get_harts_num();
+}
+#endif

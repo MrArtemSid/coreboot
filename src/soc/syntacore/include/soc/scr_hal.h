@@ -23,5 +23,6 @@ void scr_hal_iccm_init(void);
 int scr_hal_iccm_clear(void);
 int scr_hal_iccm_send(unsigned int slot);
 void scr_iccm_init(void);
+unsigned int scr_hal_iccm_hart_count(void);
 
 #endif /* __SOC_SYNTACORE_SCR_HAL_H__ */
