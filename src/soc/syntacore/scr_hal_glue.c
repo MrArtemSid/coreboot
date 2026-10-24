@@ -18,6 +18,8 @@
 #include "drivers/pmp.h"
 #include "drivers/pma.h"
 #include "drivers/mrt.h"
+#include "drivers/iccm.h"
+#include "drivers/iccm_l3.h"
 #include "plf.h"
 
 /*
@@ -81,24 +83,6 @@ uintptr_t scr_hal_uart_base(void)
 	return (uintptr_t)PLF_UART0_BASE;
 }
 
-#ifdef PLF_IMSIC_BASE_M
-/*
- * IPI delivery through the AIA/IMSIC gateway, miniboot-style: write the
- * target hart's machine seteipnum_le word so the gateway raises an MSI.
- */
-int scr_hal_imsic_send_ipi(unsigned long hart)
-{
-	SCR_REG32(IMSIC_BASE_ADDR(IMSIC_M, hart) + IMSIC_SETEIPNUM_LE * 4) = 1;
-	return 1;
-}
-#else
-int scr_hal_imsic_send_ipi(unsigned long hart)
-{
-	(void)hart;
-	return 0; /* board has no AIA/IMSIC gateway */
-}
-#endif
-
 /*
  * MRT (cluster Memory Region Table) programming, miniboot-style: the
  * cluster config space (MRT table itself, ICCM mailboxes, cluster
@@ -154,4 +138,44 @@ void scr_hal_pmp_platform_init(void)
 			  PLF_MEM_ATTR);
 	ifence();
 #endif /* PLF_PMP_SUPPORT */
+}
+
+/* Both ICCM generations deliver a machine software interrupt, not an IMSIC MSI. */
+void scr_hal_iccm_init(void)
+{
+#if defined(PLF_ICCM_L3_SUPPORT) && PLF_ICCM_L3_SUPPORT
+	/* Same control setting as the Syntacore OpenSBI MMIO driver. */
+	iccm_l3_write_b_control(SCR_ICCM_ICCM_CONTROL_EWE_BIT);
+	fence();
+#endif
+}
+
+int scr_hal_iccm_clear(void)
+{
+	/* Bound draining so faulty hardware cannot hang local initialization. */
+	for (unsigned int i = 0; i < 64; i++) {
+#if defined(PLF_ICCM_L3_SUPPORT) && PLF_ICCM_L3_SUPPORT
+		if (!ipi_l3_msg_available())
+			return 1;
+		iccm_l3_read_msg();
+#else
+		if (iccm_get_data() < 0)
+			return 1;
+#endif
+	}
+	return 0;
+}
+
+int scr_hal_iccm_send(unsigned int slot)
+{
+#if defined(PLF_ICCM_L3_SUPPORT) && PLF_ICCM_L3_SUPPORT
+	if (slot >= 64 || slot >= iccm_l3_get_harts_num())
+		return 0;
+	if (iccm_l3_receiver_busy(iccm_l3_get_own_id(), slot))
+		return 0;
+	iccm_l3_write_msg(slot, 1);
+	return 1;
+#else
+	return iccm_send(slot, 1) != 0;
+#endif
 }

@@ -19,5 +19,9 @@ uintptr_t scr_hal_uart_base(void);
 void scr_hal_pmp_platform_init(void);
 void scr_hal_mrt_init(void);
 
+void scr_hal_iccm_init(void);
+int scr_hal_iccm_clear(void);
+int scr_hal_iccm_send(unsigned int slot);
+void scr_iccm_init(void);
+
 #endif /* __SOC_SYNTACORE_SCR_HAL_H__ */
-int scr_hal_imsic_send_ipi(unsigned long hart);

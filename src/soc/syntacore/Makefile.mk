@@ -1,5 +1,7 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+ifeq ($(CONFIG_SOC_SYNTACORE_COMMON),y)
+
 # Syntacore SCR SoC support.
 #
 # Platform services are consumed from SCR-HAL, which ships as part of
@@ -115,6 +117,8 @@ endif
 romstage-libs += $(SCR_HAL_ARCHIVE)
 ramstage-libs += $(SCR_HAL_ARCHIVE)
 
+all-y += iccm.c
+
 bootblock-y += cbmem.c
 bootblock-y += rom_media.c
 bootblock-y += mtime.c
@@ -140,3 +144,5 @@ $(obj)/scrhal/reset_stub.bin: $(objcbfs)/bootblock.elf
 
 coreboot: $(obj)/scrhal/reset_stub.bin
 endif # CONFIG_SCR_RESET_AT_TOP
+
+endif # CONFIG_SOC_SYNTACORE_COMMON

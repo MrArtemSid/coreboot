@@ -23,6 +23,10 @@ config SOC_SYNTACORE_COMMON
 
 if SOC_SYNTACORE_COMMON
 
+# Leave enough OCRAM for the ICCM/FDT helpers; avoid LZMA decoder BSS.
+config MB_COMPRESS_RAMSTAGE_LZ4
+	default y if SCR_OCRAM_SIZE = 0x10000
+
 config SCR_HAL_DIR
 	string
 	default "3rdparty/scr-hal"
@@ -96,7 +100,7 @@ config SCR_RESET_STUB_ADDR
 
 # The 64 KiB-OCRAM platforms carry the romstage inside the bootblock
 # (single early stage; the LZMA decoder scratchpad does not fit there,
-# so those boards build with an uncompressed ramstage).
+# so those boards use LZ4 ramstage compression).
 config SEPARATE_ROMSTAGE
 	default n if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
 

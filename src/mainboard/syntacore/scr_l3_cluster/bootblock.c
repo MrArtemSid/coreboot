@@ -58,8 +58,4 @@ void bootblock_mainboard_init(void)
 	printk(BIOS_DEBUG, "SCR: FDT @ %p (%zu bytes)\n", fdt, size);
 
 	scr_print_isa();
-
-	/* miniboot-style cluster unlock before any payload takes over */
-	scr_hal_mrt_init();
-	scr_hal_pmp_platform_init();
 }
