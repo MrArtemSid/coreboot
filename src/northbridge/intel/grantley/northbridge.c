@@ -7,6 +7,8 @@
 #include <device/pci_ops.h>
 #include <cpu/cpu.h>
 #include <cpu/intel/grantley/grantley.h>
+#include <cpu/intel/grantley/grantley_routing.h>
+#include <acpi/acpi.h>
 #include <cpu/intel/microcode.h>
 #include <cpu/x86/msr.h>
 #include <cpu/x86/smm.h>
@@ -110,6 +112,16 @@ static void grantley_domain_set_resources(struct device *dev)
 {
 	assign_resources(dev->downstream);
 }
+
+#if CONFIG(HAVE_ACPI_TABLES)
+/* The romstage routes the single 256-bus ECAM segment at a fixed base
+ * before the Uncore blob runs; report the same window to the OS. */
+unsigned long acpi_fill_mcfg(acpi_mcfg_t *mcfg, unsigned long current)
+{
+	return current + acpi_create_mcfg_mmconfig((void *)current,
+						   GRANTLEY_ECAM_BASE, 0, 0, 255);
+}
+#endif
 
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
