@@ -394,6 +394,15 @@ Building coreboot <starlabs/common/building.md>
 Flashing devices <starlabs/common/flashing.md>
 ```
 
+## Syntacore
+
+```{toctree}
+:maxdepth: 1
+
+Syntacore SCR SoCs <syntacore/index.md>
+SCR9 L3 on SCR QEMU <syntacore/sc-qemu.md>
+```
+
 ## Supermicro
 
 ```{toctree}
