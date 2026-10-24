@@ -54,3 +54,9 @@ ramstage-y += sifive.c
 endif
 
 endif
+
+ifeq ($(CONFIG_DRIVERS_UART_SCR_HAL),y)
+bootblock-$(CONFIG_BOOTBLOCK_CONSOLE) += scr_hal.c
+romstage-y += scr_hal.c
+ramstage-y += scr_hal.c
+endif

@@ -79,3 +79,14 @@ config DRIVERS_UART_SIFIVE
 	bool
 	select HAVE_UART_SPECIAL
 	select UART_OVERRIDE_INPUT_CLOCK_DIVIDER
+
+config DRIVERS_UART_SCR_HAL
+	bool
+	select HAVE_UART_SPECIAL
+	select UART_OVERRIDE_INPUT_CLOCK_DIVIDER
+	select UART_OVERRIDE_REFCLK
+	help
+	  UART driver backed by the Syntacore SCR-HAL console driver
+	  (3rdparty/scr-hal). The UART base address and clock come from
+	  SCR-HAL platform data and its hwinfo layer.
+
