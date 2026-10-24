@@ -1,0 +1,7 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_SYNTACORE
+
+source "src/mainboard/syntacore/scr_l3_cluster/Kconfig"
+
+endif # VENDOR_SYNTACORE

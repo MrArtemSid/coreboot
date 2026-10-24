@@ -1,0 +1,9 @@
+config VENDOR_SYNTACORE
+	bool "Syntacore"
+
+if VENDOR_SYNTACORE
+
+config BOARD_SYNTACORE_SCR_L3_CLUSTER
+	bool "SCR9 L3 cluster"
+
+endif # VENDOR_SYNTACORE
