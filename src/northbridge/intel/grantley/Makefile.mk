@@ -19,6 +19,7 @@ romstage-y += romstage.c
 romstage-y += memmap.c
 romstage-y += native_raminit/spd.c
 romstage-y += uncore_runner/pei_services.c
+romstage-y += uncore_runner/pei_hobs.c
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
