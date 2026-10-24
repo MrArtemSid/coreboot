@@ -18,6 +18,6 @@ static void scr_mainboard_init(struct device *dev)
 }
 
 struct chip_operations mainboard_ops = {
-	.name = "Syntacore SCR9 L3",
+	.name = "Syntacore " CONFIG_MAINBOARD_PART_NUMBER,
 	.enable_dev = scr_mainboard_init,
 };
