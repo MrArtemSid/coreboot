@@ -8,10 +8,14 @@ config CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 config CPU_INTEL_NUM_FIT_ENTRIES
 	int
 	default 16 if INTEL_TXT || INTEL_CBNT_SUPPORT
+	default 8 if NORTHBRIDGE_INTEL_GRANTLEY
 	default 4
 	depends on CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 	help
 	  This option selects the number of empty entries in the FIT table.
+	  Grantley mainboards carry several vendor engineering-sample
+	  microcode updates alongside the production pair, so reserve more
+	  entries than the four-entry default.
 
 config HAVE_PBP_BIN
 	bool "Add Intel platform boot policy file"
