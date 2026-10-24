@@ -20,6 +20,13 @@ bootblock_pre_c_entry:
 	jmp	check_mtrr /* Check if CPU properly reset */
 
 cache_as_ram:
+	/* Enable FXSAVE and unmasked SIMD exception support (CR4.OSFXSR |
+	 * OSXMMEXCPT).  The stock SEC enables these before any IO or C code;
+	 * the Uncore PEIM uses XMM registers and would fault without them. */
+	movl	%cr4, %eax
+	orl	$((1 << 9) | (1 << 10)), %eax
+	movl	%eax, %cr4
+
 	/* Program the early SAD I/O and MMIO target lists via CF8/CFC. */
 	/* Set LOCKCONTROL.LockDisable (1:16.5:0x50 bit 0). */
 	movl	$0x80018550, %eax
