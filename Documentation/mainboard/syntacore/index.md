@@ -1,7 +1,7 @@
 # Syntacore SCR SoCs
 
 This page describes coreboot support for Syntacore SCR RISC-V clusters
-(SCR5/SCR6/SCR7/SCR9 cores with an MMU).
+(SCR5/SCR7/SCR9 cores with an MMU).
 
 ## Overview
 
@@ -47,26 +47,26 @@ the SCR-HAL platform headers.
   `arch/riscv/boot/dts/syntacore/` board files) is stored in CBFS and
   installed as the hart FDT by the bootblock - SCR machines do not
   hand over an FDT at reset.
-- Before handing over to OpenSBI the SoC code performs the miniboot
-  cluster unlock: MRT regions from the platform `PLF_MEM_MAP`
-  (`scr_hal_mrt_init`) and miniboot's memory-typing PMP entries
-  (`scr_hal_pmp_platform_init`). OpenSBI receives a `fw_dynamic` blob
-  (`CONFIG_OPENSBI_BLOB`, built with `FW_DYNAMIC=y`) and then starts
-  the ELF payload in S-mode.
+- During hart-local storage setup, the SoC configures the hart's memory
+  attributes, initializes the cluster MRT in bootblock and prepares ICCM.
+  The native coreboot SMP backend uses `set_msip()` to access ICCM.
+  See [ICCM support](iccm.md) for scope and limitations.
+- OpenSBI receives the existing `fw_dynamic` handoff and starts the ELF
+  payload in S-mode. There is no Syntacore-specific OpenSBI trampoline.
 
 ## Supported boards
 
 - `syntacore/scr_l3_cluster` - SCR9 and SCR7 L3 clusters (QEMU
   machines `scr9_l3`, `scr7_l3`), named after the Syntacore U-Boot
   board `scr_l3_cluster`;
-- `syntacore/scr_l2_cluster` - SCR9/SCR7/SCR6/SCR5 RV64 L2 clusters
-  (QEMU machines `scr9_l2`, `scr7_l2`, `scr6`, `scr5`); the 64 KiB
+- `syntacore/scr_l2_cluster` - SCR9/SCR7/SCR5 RV64 L2 clusters
+  (QEMU machines `scr9_l2`, `scr7_l2`, `scr5`); the 64 KiB
   OCRAM at the top of the address space carries a single early stage
   (bootblock + inline romstage), with a four-byte reset stub at the
   machine reset PC;
 - `syntacore/scr_l2_cluster_32` - SCR5 RV32 L2 cluster (32-bit).
 
-All seven platforms build through the same SoC layer; the per-board
+All six platforms build through the same SoC layer; the per-board
 differences are the memory anchors (Kconfig), the board device tree
 (derived from the Linux `arch/riscv/boot/dts/syntacore/` board files)
 and the payload addresses.

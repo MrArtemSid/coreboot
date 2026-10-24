@@ -12,18 +12,12 @@ with the Syntacore Development Toolkit (SC-DT).
 | config.syntacore_scr7_l3 | scr7_l3 (riscv64) | L3, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
 | config.syntacore_scr9_l2 | scr9_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
 | config.syntacore_scr7_l2 | scr7_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | U-Boot shell |
-| config.syntacore_scr6 | scr6 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | coreboot payload handoff * |
 | config.syntacore_scr5_rv64 | scr5 (riscv64) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
 | config.syntacore_scr5_rv32 | scr5 (riscv32) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
 
-\* OpenSBI v1.7 (Syntacore generic platform) stays silent on the scr6
-SCR QEMU machine even in the reference miniboot flow (it reads a
-custom CSR the scr6 machine model does not implement); coreboot itself
-boots, loads both payloads and hands off correctly.
-
-All rv64 boards boot the SC-DT Linux 6.12 Image + rootfs; the boot
-command lines below use the addresses baked into the board device
-trees (`initrdmem=...`).
+The matrix records earlier single-hart payload validation. The ICCM
+change was rebuilt for all six boards; current smoke-test results and
+limitations are recorded in [ICCM support](iccm.md).
 
 Prerequisites: source SC-DT `env.sh`, have the `opensbi` and `u-boot`
 Syntacore trees (sc/2026.04 branches).
@@ -38,7 +32,7 @@ source <sc-dt>/env.sh   # SCR-HAL + toolchains (SC_HAL_PATH)
 ## 1. Build the payloads
 
 OpenSBI `fw_dynamic` must be linked at the fixed address coreboot will
-load it at (`CONFIG_OPENSBI_TEXT_START`, dram + 4 MiB on L3 platforms).
+load it at (`CONFIG_OPENSBI_TEXT_START`, dram + 64 MiB).
 Build it with clang + GNU bfd (the Syntacore sc-dt LLVM `ld.lld` needs
 `libxml2.so.2`; clang + the linux-gnu bfd linker supports PIE):
 
@@ -84,21 +78,19 @@ loaded by hand.
 
 ### L3 family (scr9_l3, scr7_l3)
 
-The machine reset PC is `OCRAM + 0x200` and the whole 16 MiB ROM fits
-into the scr9_l3 OCRAM, so the image is loaded twice - once at the
-reset vector (the bootblock lives in the first 128 KiB of the ROM) and
-once into the CBFS window at dram + 128 MiB (`0x408000000`):
+The machine reset PC is `OCRAM + 0x200`. Load only the extracted
+bootblock into OCRAM and load the whole ROM into the CBFS window:
 
 ```bash
 qemu-system-riscv64 -M scr9_l3 -smp 1 -nographic \
-    -device loader,file=build/coreboot.rom,addr=0x2000200 \
+    -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0x2000200 \
     -device loader,file=build/coreboot.rom,addr=0x408000000
 ```
 
 Expected console: coreboot banner -> OpenSBI v1.7 (Platform Name:
 IPDEV VCU118 SCR9 L3 prototype) -> U-Boot 2025.10 shell.
 
-### L2 family (scr9_l2, scr7_l2, scr6, scr5)
+### L2 family (scr9_l2, scr7_l2, scr5)
 
 The 64 KiB OCRAM sits at the very top of the address space and the
 machine reset PC is its last page. Like miniboot (`.reset_vector` in
@@ -137,7 +129,7 @@ node of the board FDT that coreboot passes down the chain:
 
 ```bash
 qemu-system-riscv64 -M scr9_l3 -smp 1 -nographic \
-    -device loader,file=build/coreboot.rom,addr=0x2000200 \
+    -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0x2000200 \
     -device loader,file=build/coreboot.rom,addr=0x408000000 \
     -device loader,file=$OS_PACK/linux/Image,addr=0x410000000 \
     -device loader,file=$OS_PACK/rootfs.cpio,addr=0x430000000
@@ -156,19 +148,17 @@ argument" - the kernel picks the rootfs up through the
 
 Login: `root` / `root`.
 
-## SMP
+## ICCM and SMP scope
 
-SCR QEMU machines have no MMIO software-interrupt block (OpenSBI
-reports "IPI Device: ---" on these boards), so the port parks every
-hart but the working one in `wfi` inside the bootblock
-(`smp_pause`, miniboot-style parking) and hands the chain over on
-hart 0. Verified with `-smp 4` and `-smp 8`: all harts enter the
-bootblock, the secondaries park, and the chain reaches the Linux
-login; Linux brings up a single CPU gracefully ("smp: Brought up
-1 node, 1 CPU" - the kernel asks OpenSBI to start the parked harts,
-which the platform cannot wake without an IPI device). The reference
-miniboot flow is less robust here: with `-smp 4` all harts jump into
-OpenSBI and it never prints its banner.
+Both CSR ICCM and MMIO ICCM L3 implement the native coreboot
+`set_msip()` hook. They deliver machine software interrupts and can wake
+the native `smp_pause()` wait. See [ICCM support](iccm.md).
+
+Reference configurations retain `MAX_CPUS=1`; use `-smp 1` for these
+images. Increasing the QEMU hart count alone is unsafe: the restored
+native startup indexes stacks by physical hart ID, and the board memory
+layouts do not reserve a complete multi-hart stack array. Multi-hart
+stage transitions and the OpenSBI handoff require separate validation.
 
 ## Memory map (SCR9 L3, dram base 0x400000000)
 
