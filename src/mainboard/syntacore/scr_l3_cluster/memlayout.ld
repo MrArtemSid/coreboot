@@ -5,17 +5,17 @@
 #include <soc/addressmap.h>
 
 /*
- * Boot flow mirrors miniboot: bootblock and romstage execute from
- * on-chip SRAM (SCR QEMU jumps to OCRAM base + 0x200 at reset), and
- * everything the early stages reference through PC-relative addressing
+ * L3-family boards (SCR9/SCR7 L3 cluster): the machines enter the
+ * firmware at OCRAM + 0x200. The SCR9 L3 cluster has a 2 MiB OCRAM and
+ * a separate romstage; the SCR7 L3 cluster has a 64 KiB OCRAM and
+ * carries the romstage inside the bootblock (SEPARATE_ROMSTAGE = n).
+ * Everything the early stages reach through PC-relative addressing
  * (stack, preram cbmem console, fmap cache, cbfs mcache) stays in the
- * same OCRAM window - OCRAM and DDR are 16 GiB apart on SCR clusters,
- * far beyond the medany code model's +/-2 GiB reach. DDR holds only
- * what is reached through runtime pointers: ramstage, OpenSBI, the
- * CBFS ROM window, cbmem.
- *
- * Region addresses must be monotonically increasing in this file.
+ * same OCRAM window: OCRAM and DDR are 16 GiB apart on L3 clusters,
+ * far beyond the medany code model's +/-2 GiB reach.
  */
+
+#if CONFIG_SCR_OCRAM_SIZE == 0x200000
 
 SECTIONS
 {
@@ -36,3 +36,21 @@ SECTIONS
 	 * preloaded coreboot.rom in SCR QEMU). */
 	REGION(flash, SCR_CBFS_WINDOW_BASE, CONFIG_ROM_SIZE, 0)
 }
+
+#else /* 64 KiB OCRAM: single early stage */
+
+SECTIONS
+{
+	BOOTBLOCK(SCR_RESET_VECTOR, 52K)
+	PRERAM_CBMEM_CONSOLE(SCR_OCRAM_BASE + 0xd200, 2K)
+	FMAP_CACHE(SCR_OCRAM_BASE + 0xda00, 2K)
+	CBFS_MCACHE(SCR_OCRAM_BASE + 0xe200, 1K)
+	STACK(SCR_OCRAM_BASE + 0xf000, 4K * CONFIG_MAX_CPUS)
+
+	DRAM_START(SCR_DDR_BASE)
+	RAMSTAGE(SCR_RAMSTAGE_BASE, SCR_RAMSTAGE_SIZE)
+	OPENSBI(SCR_OPENSBI_BASE, 1M)
+	REGION(flash, SCR_CBFS_WINDOW_BASE, CONFIG_ROM_SIZE, 0)
+}
+
+#endif

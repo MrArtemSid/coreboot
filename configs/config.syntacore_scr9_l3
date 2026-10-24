@@ -1,0 +1,15 @@
+# Reference configuration: Syntacore SCR9 L3 cluster (SCR QEMU machine
+# scr_l3_cluster). See Documentation/mainboard/syntacore/sc-qemu.md for the
+# full build and run flow.
+CONFIG_VENDOR_SYNTACORE=y
+CONFIG_BOARD_SYNTACORE_SCR9_L3=y
+CONFIG_ANY_TOOLCHAIN=y
+CONFIG_COMPILER_GCC=y
+# CONFIG_COMPILER_LLVM_CLANG is not set
+CONFIG_RISCV_OPENSBI=y
+CONFIG_OPENSBI_BLOB=y
+CONFIG_OPENSBI_BLOB_PATH="3rdparty/scr-blobs/fw_dynamic.elf"
+# CONFIG_PAYLOAD_NONE is not set
+CONFIG_PAYLOAD_ELF=y
+CONFIG_PAYLOAD_FILE="3rdparty/scr-blobs/u-boot"
+CONFIG_DEFAULT_CONSOLE_LOGLEVEL_7=y

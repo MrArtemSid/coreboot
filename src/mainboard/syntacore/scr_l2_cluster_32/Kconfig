@@ -1,0 +1,32 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if BOARD_SYNTACORE_SCR5_RV32
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select SOC_SYNTACORE_SCR5_RV32
+	select BOARD_ROMSIZE_KB_16384
+
+config MAINBOARD_DIR
+	default "syntacore/scr_l2_cluster_32"
+
+config MAINBOARD_PART_NUMBER
+	default "SCR5 RV32 L2 cluster"
+
+config RISCV_ARCH
+	string
+	default "rv32imafd"
+
+config RISCV_ABI
+	string
+	default "ilp32d"
+
+config RISCV_CODEMODEL
+	string
+	default "medany"
+
+config RISCV_DTS_FILE
+	string
+	default "src/mainboard/syntacore/scr_l2_cluster_32/devicetree-scr5_rv32.dts"
+
+endif # BOARD_SYNTACORE_SCR5_RV32

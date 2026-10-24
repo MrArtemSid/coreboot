@@ -1,20 +1,33 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+if BOARD_SYNTACORE_SCR9_L3
+
 config BOARD_SYNTACORE_SCR_L3_CLUSTER
-	def_bool n
+	def_bool y
+	select SOC_SYNTACORE_SCR9_L3
+
+endif # BOARD_SYNTACORE_SCR9_L3
+
+if BOARD_SYNTACORE_SCR7_L3
+
+config BOARD_SYNTACORE_SCR_L3_CLUSTER
+	def_bool y
+	select SOC_SYNTACORE_SCR7_L3
+
+endif # BOARD_SYNTACORE_SCR7_L3
 
 if BOARD_SYNTACORE_SCR_L3_CLUSTER
 
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
-	select SOC_SYNTACORE_SCR9_L3
 	select BOARD_ROMSIZE_KB_16384
 
 config MAINBOARD_DIR
 	default "syntacore/scr_l3_cluster"
 
 config MAINBOARD_PART_NUMBER
-	default "SCR L3 cluster"
+	default "SCR9 L3 cluster" if BOARD_SYNTACORE_SCR9_L3
+	default "SCR7 L3 cluster" if BOARD_SYNTACORE_SCR7_L3
 
 config RISCV_ARCH
 	string
@@ -30,6 +43,7 @@ config RISCV_CODEMODEL
 
 config RISCV_DTS_FILE
 	string
-	default "src/mainboard/syntacore/scr_l3_cluster/devicetree-scr_l3_cluster.dts"
+	default "src/mainboard/syntacore/scr_l3_cluster/devicetree-scr9_l3.dts" if BOARD_SYNTACORE_SCR9_L3
+	default "src/mainboard/syntacore/scr_l3_cluster/devicetree-scr7_l3.dts" if BOARD_SYNTACORE_SCR7_L3
 
 endif # BOARD_SYNTACORE_SCR_L3_CLUSTER
