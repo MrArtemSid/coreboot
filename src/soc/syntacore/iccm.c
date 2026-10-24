@@ -10,7 +10,7 @@
 
 /* Each loaded stage owns its initialization flag; no BSS reset is assumed. */
 static int iccm_ready __section(".data") = 0;
-#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+#if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
 #endif
 
@@ -27,7 +27,7 @@ void scr_iccm_init(void)
 		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE))
 			;
 	}
-#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+#if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 	/* hls_init() has cleared this hart's native synchronization fields. */
 	__atomic_store_n(&hart_ready[read_csr(mhartid)], 1, __ATOMIC_RELEASE);
 #endif
@@ -93,13 +93,27 @@ void set_msip(int hartid, int val)
 	barrier();
 }
 
-#if CONFIG(SOC_SYNTACORE_SCR9_L3)
+#if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 unsigned int smp_get_hart_count(void)
 {
-	unsigned int count = scr_hal_iccm_hart_count();
+	unsigned int count;
 
+	if (CONFIG(SOC_SYNTACORE_SCR9_L3)) {
+		count = scr_hal_iccm_hart_count();
+	} else {
+		/* CSR ICCM reports slot capacity, not the number of active harts. */
+		const void *fdt = HLS()->fdt;
+		u32 cpus[CONFIG_MAX_CPUS + 1];
+
+		if (!fdt || !fdt_is_valid(fdt))
+			die("SMP requires the Linux board FDT");
+		u32 node = fdt_find_node_by_path(fdt, "/cpus", NULL, NULL);
+
+		count = fdt_find_subnodes_by_prefix(fdt, node, "cpu@", NULL, NULL,
+						    cpus, ARRAY_SIZE(cpus));
+	}
 	if (!count || count > CONFIG_MAX_CPUS)
-		die("ICCM hart count exceeds reserved stacks");
+		die("Hart count exceeds reserved stacks");
 	for (unsigned int i = 0; i < count; i++) {
 		if (i == CONFIG_RISCV_WORKING_HARTID)
 			continue;
