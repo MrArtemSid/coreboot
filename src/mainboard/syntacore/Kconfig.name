@@ -15,9 +15,6 @@ config BOARD_SYNTACORE_SCR9_L2
 config BOARD_SYNTACORE_SCR7_L2
 	bool "SCR7 L2 cluster"
 
-config BOARD_SYNTACORE_SCR6
-	bool "SCR6 L2 cluster"
-
 config BOARD_SYNTACORE_SCR5_RV64
 	bool "SCR5 RV64 L2 cluster"
 

@@ -1,6 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-# Syntacore SCR SoC family (SCR5/SCR6/SCR7/SCR9 cores with MMU).
+# Syntacore SCR SoC family (SCR5/SCR7/SCR9 cores with MMU).
 #
 # Platform constants (memory map, UART base, clocks) are NOT duplicated
 # here: they come from the SCR-HAL platform headers in the Syntacore
@@ -37,7 +37,6 @@ config SCR_HAL_PLATFORM
 	default "scr9_l2" if SOC_SYNTACORE_SCR9_L2
 	default "scr7_l3" if SOC_SYNTACORE_SCR7_L3
 	default "scr7_l2" if SOC_SYNTACORE_SCR7_L2
-	default "scr6" if SOC_SYNTACORE_SCR6
 	default "scr5_rv64" if SOC_SYNTACORE_SCR5_RV64
 	default "scr5_rv32" if SOC_SYNTACORE_SCR5_RV32
 
@@ -74,7 +73,7 @@ config SCR_OCRAM_BASE
 	default 0x02000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
 	# The L2-family OCRAM sits at the top of the address space
 	# (plf.h EXPAND32ADDR(0xffff0000)).
-	default 0xffffffffffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64
+	default 0xffffffffffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64
 	default 0x00000000ffff0000 if SOC_SYNTACORE_SCR5_RV32
 
 config SCR_OCRAM_SIZE
@@ -88,7 +87,7 @@ config SCR_OCRAM_SIZE
 # the bootblock hands over to _start.
 config SCR_RESET_AT_TOP
 	bool
-	default y if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default y if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
 
 config SCR_RESET_STUB_ADDR
 	hex
@@ -99,7 +98,7 @@ config SCR_RESET_STUB_ADDR
 # (single early stage; the LZMA decoder scratchpad does not fit there,
 # so those boards build with an uncompressed ramstage).
 config SEPARATE_ROMSTAGE
-	default n if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default n if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
 
 endif # SOC_SYNTACORE_COMMON
 
@@ -122,12 +121,6 @@ config SOC_SYNTACORE_SCR7_L3
 	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR7_L2
-	bool
-	select SOC_SYNTACORE_COMMON
-	select ARCH_RISCV_RV64
-	select ARCH_RISCV_PMP
-
-config SOC_SYNTACORE_SCR6
 	bool
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64

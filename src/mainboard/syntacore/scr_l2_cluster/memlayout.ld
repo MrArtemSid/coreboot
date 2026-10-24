@@ -5,7 +5,7 @@
 #include <soc/addressmap.h>
 
 /*
- * L2-family boards (SCR9/SCR7/SCR6/SCR5 L2 cluster): DDR starts at
+ * L2-family boards (SCR9/SCR7/SCR5 L2 cluster): DDR starts at
  * address zero and the 64 KiB OCRAM sits at the very top of the
  * address space (plf.h EXPAND32ADDR(0xffff0000)); the machine reset PC
  * points at the last OCRAM page, where a four-byte jump stub (loaded
