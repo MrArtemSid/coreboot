@@ -37,4 +37,12 @@ SECTIONS
 	REGION(flash, SCR_CBFS_WINDOW_BASE, CONFIG_ROM_SIZE, 0)
 
 	BOOTBLOCK(SCR_OCRAM_BASE + 0x200, 50K)
+
+	/* miniboot-style reset vector at the top of the OCRAM: the machine
+	 * reset PC lands here; the linker resolves the jump into the
+	 * bootblock. Carried inside bootblock.bin (the FMAP BOOTBLOCK
+	 * region has room for the span). */
+	.reset_vector CONFIG_SCR_RESET_STUB_ADDR : {
+		KEEP(*(.reset_vector))
+	}
 }

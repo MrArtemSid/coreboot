@@ -101,27 +101,28 @@ IPDEV VCU118 SCR9 L3 prototype) -> U-Boot 2025.10 shell.
 ### L2 family (scr9_l2, scr7_l2, scr6, scr5)
 
 The 64 KiB OCRAM sits at the very top of the address space and the
-machine reset PC is its last page, so three pieces are loaded: the
-CBFS window at dram + 128 MiB (`0x08000000`), the bootblock (the first
-128 KiB of the ROM) at `OCRAM + 0x200` and a four-byte jump stub at
-the reset PC. The stub is assembled from
-`src/soc/syntacore/reset_stub.S` during the build into
-`build/scrhal/reset_stub.bin` (a `jal` back into the bootblock entry,
-always -0xFD00 - a memlayout constant); the boot ROM / FPGA preloader
-plays the role of that loader on real hardware.
-The bootblock image must not cross the end of the address space, so
-trim it to its 50 KiB program span when loading on rv32:
+machine reset PC is its last page. Like miniboot (`.reset_vector` in
+its ocram.ld), the bootblock carries a small `.reset_vector` section
+that the board memlayout places at the reset PC
+(`CONFIG_SCR_RESET_STUB_ADDR`) with a linker-resolved `j _start` into
+the bootblock entry - so two pieces are loaded: the CBFS window at
+dram + 128 MiB (`0x08000000`) and the bootblock (the first 128 KiB of
+the ROM) at `OCRAM + 0x200`. The whole span (~64 KiB incl. the reset
+vector) stays below the 128 KiB FMAP BOOTBLOCK region and is loaded as
+one file; on rv32 the load wraps past the end of the 32-bit space,
+which the SCR QEMU loader handles. A standalone 4-byte extraction of
+the reset vector (`build/scrhal/reset_stub.bin`) is also produced for
+flows that need the stub separately:
 
 ```bash
 qemu-system-riscv64 -M scr9_l2 -smp 1 -nographic \
     -device loader,file=build/coreboot.rom,addr=0x08000000 \
-    -device loader,file=/tmp/bootblock.bin,addr=0xffffffffffff0200 \
-    -device loader,file=build/scrhal/reset_stub.bin,addr=0xffffffffffffff00
+    -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0xffffffffffff0200
 ```
 
 (`bootblock.bin` = `cbfstool build/coreboot.rom read -r BOOTBLOCK`;
-for the rv32 board load `head -c 51200` of it at `0xffff0200` and run
-`qemu-system-riscv32 -M scr5` with the stub at `0xffffff00`.)
+for the rv32 board run `qemu-system-riscv32 -M scr5` with the same
+loaders at `0xffff0200`.)
 
 Expected console: coreboot banner (bootblock + inline romstage from
 the 64 KiB OCRAM, stack/preram data at the bottom of DDR) -> OpenSBI
@@ -154,6 +155,20 @@ argument" - the kernel picks the rootfs up through the
 `initrdmem=0x430000000,512M` command line baked into the board FDT.
 
 Login: `root` / `root`.
+
+## SMP
+
+SCR QEMU machines have no MMIO software-interrupt block (OpenSBI
+reports "IPI Device: ---" on these boards), so the port parks every
+hart but the working one in `wfi` inside the bootblock
+(`smp_pause`, miniboot-style parking) and hands the chain over on
+hart 0. Verified with `-smp 4` and `-smp 8`: all harts enter the
+bootblock, the secondaries park, and the chain reaches the Linux
+login; Linux brings up a single CPU gracefully ("smp: Brought up
+1 node, 1 CPU" - the kernel asks OpenSBI to start the parked harts,
+which the platform cannot wake without an IPI device). The reference
+miniboot flow is less robust here: with `-smp 4` all harts jump into
+OpenSBI and it never prints its banner.
 
 ## Memory map (SCR9 L3, dram base 0x400000000)
 

@@ -1,17 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 /*
- * Reset stub for the SCR L2-family machines, whose reset PC is the last
- * page of the address space (CONFIG_SCR_RESET_STUB_ADDR): the 64 KiB
- * OCRAM ends there, so the bootblock entry at OCRAM + 0x200 is 0xFD00
- * bytes below it - a constant of the memlayout, independent of the ISA
- * width. Assembled into a standalone 4-byte binary (see the Makefile.mk
- * rule) that the boot ROM / FPGA preloader / SCR QEMU loader places at
- * the reset PC; it simply jumps into the bootblock.
+ * Reset vector for the SCR L2-family machines, whose reset PC is the
+ * last page of the address space (the OCRAM ends there). Placed by the
+ * board memlayout at CONFIG_SCR_RESET_STUB_ADDR - the same scheme as
+ * miniboot's .reset_vector / ocram.ld - it simply jumps into the
+ * bootblock entry; the linker resolves the PC-relative offset.
  */
 
-.section .text, "ax", %progbits
+.section .reset_vector, "ax", %progbits
 
-.globl _scr_reset_stub
-_scr_reset_stub:
-	j	.-STUB_DELTA
+.globl _scr_reset_vector
+_scr_reset_vector:
+	j	_start
