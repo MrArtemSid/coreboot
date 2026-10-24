@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#ifndef __SOC_SYNTACORE_SCR_HAL_H__
+#define __SOC_SYNTACORE_SCR_HAL_H__
+
+#include <stdint.h>
+
+/*
+ * Functions exported by scr_hal_glue.c, the only place where SCR-HAL
+ * platform headers meet coreboot (through a plain function interface).
+ */
+
+void scr_hal_mtimer_enable(void);
+uintptr_t scr_hal_mtimer_time_addr(void);
+uintptr_t scr_hal_mtimer_cmp_addr(unsigned long hart);
+uint64_t scr_hal_mtimer_now(void);
+unsigned long scr_hal_timebase_hz(void);
+uintptr_t scr_hal_uart_base(void);
+void scr_hal_pmp_platform_init(void);
+void scr_hal_mrt_init(void);
+
+#endif /* __SOC_SYNTACORE_SCR_HAL_H__ */
+int scr_hal_imsic_send_ipi(unsigned long hart);

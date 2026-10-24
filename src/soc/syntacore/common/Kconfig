@@ -1,0 +1,128 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+# Syntacore SCR SoC family (SCR5/SCR6/SCR7/SCR9 cores with MMU).
+#
+# Platform constants (memory map, UART base, clocks) are NOT duplicated
+# here: they come from the SCR-HAL platform headers in 3rdparty/scr-hal
+# via include/soc/addressmap.h. Updating SCR-HAL updates this port -
+# no second commit needed for platform changes.
+
+config SOC_SYNTACORE_COMMON
+	def_bool n
+	select ARCH_BOOTBLOCK_RISCV
+	select ARCH_ROMSTAGE_RISCV
+	select ARCH_VERSTAGE_RISCV
+	select ARCH_RAMSTAGE_RISCV
+	select ARCH_RISCV_PMP
+	select ARCH_RISCV_S
+	select ARCH_RISCV_U
+	select DRIVERS_UART_SCR_HAL
+	select RISCV_HAS_OPENSBI
+	select MISSING_BOARD_RESET
+	select FLATTENED_DEVICE_TREE
+	select RISCV_DTS
+
+if SOC_SYNTACORE_COMMON
+
+config SCR_HAL_DIR
+	string
+	default "3rdparty/scr-hal"
+	help
+	  Fallback location of SCR-HAL (used when SC_HAL_PATH is not in the
+	  environment). SCR-HAL ships as part of the Syntacore Development
+	  Toolkit (SC-DT, workspace/scr-hal).
+
+config SCR_HAL_PLATFORM
+	string
+	default "scr9_l3" if SOC_SYNTACORE_SCR9_L3
+	default "scr9_l2" if SOC_SYNTACORE_SCR9_L2
+	default "scr7_l3" if SOC_SYNTACORE_SCR7_L3
+	default "scr7_l2" if SOC_SYNTACORE_SCR7_L2
+	default "scr6" if SOC_SYNTACORE_SCR6
+	default "scr5_rv64" if SOC_SYNTACORE_SCR5_RV64
+	default "scr5_rv32" if SOC_SYNTACORE_SCR5_RV32
+
+config RISCV_WORKING_HARTID
+	int
+	default 0
+
+config MAX_CPUS
+	int
+	default 1
+
+config OPENSBI_PLATFORM
+	string
+	default "generic"
+
+# Fixed load address of the OpenSBI fw_dynamic payload. Must match the
+# OPENSBI region of the mainboard memlayout and the FW_TEXT_START the
+# blob was linked with.
+config OPENSBI_TEXT_START
+	hex
+	default 0x404000000 if SOC_SYNTACORE_SCR9_L3
+	default 0x00400000 if SOC_SYNTACORE_SCR9_L2
+	default 0x404000000 if SOC_SYNTACORE_SCR7_L3
+	default 0x00400000 if SOC_SYNTACORE_SCR7_L2
+	default 0x00400000 if SOC_SYNTACORE_SCR6
+	default 0x00400000 if SOC_SYNTACORE_SCR5_RV64
+	default 0x00400000 if SOC_SYNTACORE_SCR5_RV32
+
+
+# Memory layout anchors. Defaults mirror the SCR-HAL platform headers
+# (3rdparty/scr-hal/platform/<SCR_HAL_PLATFORM>/plf.h); a compile-time
+# check in include/soc/addressmap.h fails the build if they ever drift.
+config SCR_DDR_BASE
+	hex
+	default 0x400000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x00000000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
+	default 0x00000000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+
+config SCR_OCRAM_BASE
+	hex
+	default 0x02000000 if SOC_SYNTACORE_SCR9_L3
+	default 0x02000000 if SOC_SYNTACORE_SCR7_L3
+	default 0xffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
+	default 0xffff0000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+
+config SCR_OCRAM_SIZE
+	hex
+	default 0x200000 if SOC_SYNTACORE_SCR9_L3
+	default 0x10000 if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
+	default 0x10000 if SOC_SYNTACORE_SCR6 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+
+endif # SOC_SYNTACORE_COMMON
+
+config SOC_SYNTACORE_SCR9_L3
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR9_L2
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR7_L3
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR7_L2
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR6
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR5_RV64
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV64
+
+config SOC_SYNTACORE_SCR5_RV32
+	bool
+	select SOC_SYNTACORE_COMMON
+	select ARCH_RISCV_RV32
