@@ -16,6 +16,7 @@ uintptr_t scr_hal_mtimer_cmp_addr(unsigned long hart);
 uint64_t scr_hal_mtimer_now(void);
 unsigned long scr_hal_timebase_hz(void);
 uintptr_t scr_hal_uart_base(void);
+unsigned int scr_hal_uart_regwidth(void);
 void scr_hal_pmp_platform_init(void);
 void scr_hal_mrt_init(void);
 

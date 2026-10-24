@@ -70,7 +70,8 @@ enum cb_err fill_lb_serial(struct lb_serial *serial)
 	serial->type = LB_SERIAL_TYPE_MEMORY_MAPPED;
 	serial->baseaddr = SCR_UART0_BASE;
 	serial->baud = CONFIG_TTYS0_BAUD;
-	serial->regwidth = 1;
+	serial->regwidth = scr_hal_uart_regwidth();
+	serial->input_hertz = uart_platform_refclk();
 	return CB_SUCCESS;
 }
 #endif

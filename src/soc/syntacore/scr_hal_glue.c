@@ -20,6 +20,7 @@
 #include "drivers/mrt.h"
 #include "drivers/iccm.h"
 #include "drivers/iccm_l3.h"
+#include "drivers/uart_16550.h"
 #include "plf.h"
 
 /*
@@ -81,6 +82,11 @@ unsigned long scr_hal_timebase_hz(void)
 uintptr_t scr_hal_uart_base(void)
 {
 	return (uintptr_t)PLF_UART0_BASE;
+}
+
+unsigned int scr_hal_uart_regwidth(void)
+{
+	return UART_16550_REG_WIDTH;
 }
 
 /*
