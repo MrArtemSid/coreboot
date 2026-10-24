@@ -1,0 +1,14 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config PAYLOAD_UBOOT_SYNTACORE
+	bool "U-Boot (Syntacore)"
+	depends on SOC_SYNTACORE_COMMON
+	help
+	  Select this option to build the Syntacore U-Boot (3rdparty/u-boot
+	  submodule, branch sc/2026.04) as the S-mode payload coreboot hands
+	  over to OpenSBI. The Syntacore defconfig matching the platform is
+	  used, with U-Boot linked at the entry address coreboot passes to
+	  OpenSBI through the fw_dynamic info.
+
+	  See Documentation/mainboard/syntacore/sc-qemu.md for the build and
+	  run flows.

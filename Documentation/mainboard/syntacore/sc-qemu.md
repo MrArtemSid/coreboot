@@ -48,7 +48,17 @@ cp build/platform/generic/firmware/fw_dynamic.elf \
    <coreboot>/3rdparty/scr-blobs/
 ```
 
-U-Boot (S-mode payload, entry at dram + 2 MiB):
+U-Boot (S-mode payload) does not need to be built by hand: with
+`CONFIG_PAYLOAD_UBOOT_SYNTACORE=y` (default in the board configs)
+coreboot builds it from the 3rdparty/u-boot submodule - it applies the
+platform defconfig selected by `CONFIG_UBOOT_SCR_DEFCONFIG`, moves the
+link address to `CONFIG_UBOOT_SCR_TEXT_BASE` (dram + 2 MiB on L3,
+0x400000 on L2, keeping U-Boot clear of coreboot's ramstage) and puts
+the ELF at `payloads/external/U-Boot-Syntacore/build/u-boot`. The
+SC-DT linux-gnu GCC (`riscv64-unknown-linux-gnu-`) must be in PATH.
+
+To build it manually instead (e.g. for a PAYLOAD_ELF blob flow, entry
+at dram + 2 MiB):
 
 ```bash
 cd 3rdparty/u-boot

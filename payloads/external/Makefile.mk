@@ -324,6 +324,14 @@ payloads/external/U-Boot/build/u-boot.bin u-boot: $(DOTCONFIG)
 			CONFIG_UBOOT_REPO_URL=$(CONFIG_UBOOT_REPO_URL) \
 			CONFIG_PAYLOAD_CONFIGFILE=$(CONFIG_PAYLOAD_CONFIGFILE)
 
+# U-Boot (Syntacore)
+
+payloads/external/U-Boot-Syntacore/build/u-boot u-boot-syntacore: $(DOTCONFIG)
+	$(MAKE) -C payloads/external/U-Boot-Syntacore \
+			CONFIG_UBOOT_SCR_DEFCONFIG=$(CONFIG_UBOOT_SCR_DEFCONFIG) \
+			CONFIG_UBOOT_SCR_TEXT_BASE=$(CONFIG_UBOOT_SCR_TEXT_BASE) \
+			CONFIG_UBOOT_SCR_CROSS_COMPILE=$(CONFIG_UBOOT_SCR_CROSS_COMPILE)
+
 # TINT
 
 payloads/external/tint/tint/tint.elf tint:

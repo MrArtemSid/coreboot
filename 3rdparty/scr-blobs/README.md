@@ -7,5 +7,7 @@ Documentation/mainboard/syntacore/sc-qemu.md):
 
 - fw_dynamic.elf  OpenSBI fw_dynamic linked at CONFIG_OPENSBI_TEXT_START
                   (the submodule in 3rdparty/opensbi, branch sc/2026.04)
-- u-boot          Syntacore U-Boot ELF payload linked at dram + 2 MiB
-                  (the submodule in 3rdparty/u-boot, branch sc/2026.04)
+
+The U-Boot payload is no longer staged here: with
+CONFIG_PAYLOAD_UBOOT_SYNTACORE=y coreboot builds it from the
+3rdparty/u-boot submodule (see payloads/external/U-Boot-Syntacore).

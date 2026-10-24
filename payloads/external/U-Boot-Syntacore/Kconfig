@@ -1,0 +1,32 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if PAYLOAD_UBOOT_SYNTACORE
+
+config PAYLOAD_FILE
+	string
+	default "payloads/external/U-Boot-Syntacore/build/u-boot"
+
+config UBOOT_SCR_CROSS_COMPILE
+	string "Cross compiler prefix for the Syntacore U-Boot payload"
+	default "riscv64-unknown-linux-gnu-"
+	help
+	  The Syntacore U-Boot payload is built with the linux-gnu RISC-V
+	  GCC from the Syntacore Development Toolkit (exported by the SC-DT
+	  env.sh). The same multilib prefix also builds the RV32 payload.
+
+# The Syntacore defconfigs link U-Boot for the reference OpenSBI flow
+# (dram + 2 MiB on L3, 0x200000 on L2); coreboot occupies the bottom of
+# DRAM with its ramstage, so the payload is linked at the validated
+# addresses below. The ELF entry lands in the OpenSBI fw_dynamic info.
+config UBOOT_SCR_DEFCONFIG
+	string
+	default "scr_rv64_l3_cluster_opensbi_defconfig" if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default "scr_rv64_l2_cluster_opensbi_defconfig" if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64
+	default "scr_rv32_l2_cluster_opensbi_defconfig" if SOC_SYNTACORE_SCR5_RV32
+
+config UBOOT_SCR_TEXT_BASE
+	hex
+	default 0x402000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x400000
+
+endif # PAYLOAD_UBOOT_SYNTACORE
