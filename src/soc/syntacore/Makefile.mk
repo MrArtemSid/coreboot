@@ -19,6 +19,21 @@
 SCR_HAL := $(if $(SC_HAL_PATH),$(SC_HAL_PATH),$(call strip_quotes,$(CONFIG_SCR_HAL_DIR)))
 SCR_HAL := $(abspath $(SCR_HAL))
 
+# Board device trees come straight from the Syntacore Linux tree
+# (3rdparty/linux submodule, branch sc/main-6.12, shallow); the board
+# wrappers in the mainboard directories include its dtsi files.
+SCR_LINUX := 3rdparty/linux
+
+CPPFLAGS_dts += \
+	-I$(top)/$(SCR_LINUX)/arch/riscv/boot/dts/syntacore \
+	-I$(top)/$(SCR_LINUX)/include
+
+ifneq ($(strip $(CONFIG_RISCV_DTS_FILE)),)
+ifeq ($(wildcard $(top)/$(call strip_quotes,$(CONFIG_RISCV_DTS_FILE))),)
+$(error board DTS "$(call strip_quotes,$(CONFIG_RISCV_DTS_FILE))" not found - run: git submodule update --init --depth 1 3rdparty/linux)
+endif
+endif
+
 ifeq ($(wildcard $(SCR_HAL)/include/arch.h),)
 $(error SCR-HAL not found at "$(SCR_HAL)": source the SC-DT env.sh (SC_HAL_PATH) or set CONFIG_SCR_HAL_DIR to the scr-hal directory)
 endif

@@ -27,6 +27,6 @@ config RISCV_CODEMODEL
 
 config RISCV_DTS_FILE
 	string
-	default "src/mainboard/syntacore/scr_l2_cluster_32/devicetree-scr5_rv32.dts"
+	default "3rdparty/linux/arch/riscv/boot/dts/syntacore/vcu118_scr5_rv32_l2.dts"
 
 endif # BOARD_SYNTACORE_SCR5_RV32

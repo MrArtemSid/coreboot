@@ -83,3 +83,8 @@
 	path = 3rdparty/u-boot
 	url = https://github.com/syntacore/u-boot.git
 	branch = sc/2026.04
+[submodule "3rdparty/linux"]
+	path = 3rdparty/linux
+	url = https://github.com/syntacore/linux.git
+	branch = sc/main-6.12
+	shallow = true

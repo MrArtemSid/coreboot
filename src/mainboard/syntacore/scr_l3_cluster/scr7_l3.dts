@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * SCR7 L3 cluster board device tree, composed from the Syntacore Linux
+ * dtsi files (3rdparty/linux submodule) the same way the SCR9 L3 board
+ * file composes them - the Linux tree carries no scr7_l3 top-level file.
+ */
+
+/dts-v1/;
+
+#define SYSCLK 50000000
+#define CPUCLK 80000000
+
+#include "scr7.dtsi"
+#include "vcu118_l3.dtsi"
+
+/ {
+	model = "IPDEV VCU118 SCR7 L3 prototype";
+
+	aliases {
+		ethernet = &axi_ethernet_0;
+		serial = &uart0;
+	};
+
+	chosen {
+		bootargs = "earlycon=sbi console=ttyS0,115200 initrdmem=0x430000000,512M net.ifnames=0 swiotlb=noforce";
+		stdout-path = "serial";
+	};
+
+	cpus {
+		timebase-frequency = <1000000>;
+	};
+};

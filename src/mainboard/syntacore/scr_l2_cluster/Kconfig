@@ -61,9 +61,9 @@ config RISCV_CODEMODEL
 
 config RISCV_DTS_FILE
 	string
-	default "src/mainboard/syntacore/scr_l2_cluster/devicetree-scr9_l2.dts" if BOARD_SYNTACORE_SCR9_L2
-	default "src/mainboard/syntacore/scr_l2_cluster/devicetree-scr7_l2.dts" if BOARD_SYNTACORE_SCR7_L2
-	default "src/mainboard/syntacore/scr_l2_cluster/devicetree-scr6.dts" if BOARD_SYNTACORE_SCR6
-	default "src/mainboard/syntacore/scr_l2_cluster/devicetree-scr5_rv64.dts" if BOARD_SYNTACORE_SCR5_RV64
+	default "src/mainboard/syntacore/scr_l2_cluster/scr9_l2.dts" if BOARD_SYNTACORE_SCR9_L2
+	default "3rdparty/linux/arch/riscv/boot/dts/syntacore/vcu118_scr7_l2.dts" if BOARD_SYNTACORE_SCR7_L2
+	default "src/mainboard/syntacore/scr_l2_cluster/scr6.dts" if BOARD_SYNTACORE_SCR6
+	default "3rdparty/linux/arch/riscv/boot/dts/syntacore/vcu118_scr5_rv64_l2.dts" if BOARD_SYNTACORE_SCR5_RV64
 
 endif # BOARD_SYNTACORE_SCR_L2_CLUSTER
