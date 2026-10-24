@@ -11,13 +11,14 @@ with the Syntacore Development Toolkit (SC-DT).
 | config.syntacore_scr9_l3 | scr9_l3 (riscv64) | L3, 2 MiB OCRAM | PMP + PMA | Linux userspace (root login) |
 | config.syntacore_scr7_l3 | scr7_l3 (riscv64) | L3, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
 | config.syntacore_scr9_l2 | scr9_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
-| config.syntacore_scr7_l2 | scr7_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | U-Boot shell |
-| config.syntacore_scr5_rv64 | scr5 (riscv64) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
+| config.syntacore_scr7_l2 | scr7_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | Linux userspace (8 CPUs) |
+| config.syntacore_scr5_rv64 | scr5 (riscv64) | L2, 64 KiB OCRAM | MPU | Linux userspace (4 CPUs) |
 | config.syntacore_scr5_rv32 | scr5 (riscv32) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
 
-The matrix records earlier single-hart payload validation. The ICCM
-change was rebuilt for all six boards; current smoke-test results and
-limitations are recorded in [ICCM support](iccm.md).
+All six configurations build. SCR9 L3 and SCR9/SCR7 L2 reach Linux
+userspace with eight CPUs; SCR5 RV64 reaches userspace with four CPUs.
+SCR5 RV32 reaches U-Boot with four harts. SCR7 L3 remains single-hart.
+See [ICCM support](iccm.md) for detailed results and limitations.
 
 Prerequisites: source SC-DT `env.sh`, have the `opensbi` and `u-boot`
 Syntacore trees (sc/2026.04 branches).
@@ -107,7 +108,7 @@ the reset vector (`build/scrhal/reset_stub.bin`) is also produced for
 flows that need the stub separately:
 
 ```bash
-qemu-system-riscv64 -M scr9_l2 -smp 1 -nographic \
+qemu-system-riscv64 -M scr9_l2 -smp 8 -nographic \
     -device loader,file=build/coreboot.rom,addr=0x08000000 \
     -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0xffffffffffff0200
 ```
@@ -159,10 +160,14 @@ active count from ICCM L3. Use `-smp 8` to run all eight harts described
 by its Linux DTS. This configuration reaches Linux userspace with eight
 CPUs through the native coreboot/OpenSBI handoff and SBI HSM.
 
-Other reference configurations retain `MAX_CPUS=1`; use `-smp 1` for
-those images. Their memory layouts have not been adapted for multiple
-harts. See [ICCM support](iccm.md) for the validated stack addresses,
-startup requirements and hardware limitations.
+For L2, use `-smp 8` on SCR9/SCR7 and `-smp 4` on SCR5 RV64/RV32.
+The expected hart count comes from the Linux board DTS, so all described
+harts must start. L2 stacks require usable DDR at entry, as in the
+single-hart port; DDR training is not implemented here.
+
+SCR7 L3 retains `MAX_CPUS=1`; use `-smp 1` there. See
+[ICCM support](iccm.md) for the validated stack addresses, startup
+requirements and hardware limitations.
 
 ## Memory map (SCR9 L3, dram base 0x400000000)
 

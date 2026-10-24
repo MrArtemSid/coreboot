@@ -3,8 +3,9 @@
 The port uses coreboot's native RISC-V entry code, hart-local storage,
 `smp_pause()`, `smp_resume()` and OpenSBI handoff. There is no private
 SMP backend or Syntacore entry trampoline. SCR9 L3 reserves stacks for
-eight harts and reads the active count from ICCM L3. Other reference
-configurations retain `MAX_CPUS=1`.
+eight harts and reads the active count from ICCM L3. L2 boards reserve
+eight harts for SCR9/SCR7 and four for SCR5, matching the Linux DTS.
+SCR7 L3 retains `MAX_CPUS=1`.
 
 ## Transport
 
@@ -70,6 +71,32 @@ ID in `a0`, the shared FDT in `a1`, and dynamic info in `a2`, selecting
 the working hart as boot hart. OpenSBI initializes secondary harts;
 Linux detects SBI HSM and starts them through ordered booting.
 
+## L2 stage transitions
+
+L2 uses the same native initialization and parking-readiness wait.
+Bootblock includes romstage, so only two independent stack/HLS banks
+are needed. They remain in DDR, as in the original single-hart port:
+
+| Boards | Bootblock bank | Ramstage bank |
+|---|---|---|
+| SCR9/SCR7 L2 | `0x0000..0x7fff` | `0x8000..0xffff` |
+| SCR5 RV64/RV32 | `0x0000..0x3fff` | `0x4000..0x7fff` |
+
+Each hart uses one 4 KiB page. Console, FMAP cache and CBFS cache follow
+the two banks. Native startup continues to index pages by physical
+hart ID; the Linux DTS describes IDs 0 through 7 or 0 through 3.
+
+CSR ICCM exposes mailbox slot capacity, not an active-hart count. The
+L2 hart-count hook therefore uses the CPU nodes in the Linux board FDT.
+All described harts must execute at reset. Run SCR9/SCR7 with `-smp 8`
+and SCR5 with `-smp 4`; a smaller emulated hart count requires a matching
+board DTS. Disabled or sparse CPU configurations are not supported.
+
+DDR must already be usable and coherent at firmware entry. This port
+has no DDR training implementation; the stack expansion does not make
+it suitable for reset into uninitialized DDR. SCR QEMU supplies usable
+DDR. The equivalent loader/platform contract needs hardware validation.
+
 ## Validation and limitations
 
 All six reference configurations compile with GCC 14.2.0. SCR QEMU
@@ -80,9 +107,15 @@ without missing harts. Linux 6.12 with eight harts reports SBI HSM and
 The stage stack addresses and acquire/release fences were checked in
 the generated ELF files and disassembly.
 
-Earlier checks cover the other five boards' single-hart OpenSBI/U-Boot
-flow, generic QEMU RV64 with four harts, and standalone two-hart ICCM
-send/wake/clear probes on SCR9 L2, SCR9 L3 and SCR5 RV32.
+L2 smoke tests cover SCR9/SCR7 with eight harts and SCR5 RV64/RV32 with
+four. Three repeated boots per L2 configuration reach OpenSBI/U-Boot
+without missed harts. Linux 6.12 reaches login with eight CPUs on SCR9
+and SCR7 L2 and four CPUs on SCR5 RV64, detecting SBI HSM in each case.
+No Linux RV32 image was available; SCR5 RV32 validation stops at U-Boot.
+The early and ramstage stack banks were checked in all four L2 ELFs.
+
+Earlier checks also cover SCR7 L3's single-hart flow, generic QEMU RV64
+with four harts, and standalone two-hart ICCM send/wake/clear probes.
 
 SCR9 L3 support here targets the physical IDs 0 through 7 described by
 the Linux board DTS; native coreboot indexes stacks and HLS by physical
@@ -91,7 +124,6 @@ reserved array are unsupported. All harts reported by ICCM must start
 and reach the stage's wait; a missing or faulting hart blocks boot.
 The ICCM count does not replace this reset contract.
 
-Other boards remain single-hart. L2 early stacks retain their existing
-DDR placement, which presumes DDR is available at entry. No physical
-hardware testing has been performed: reset behavior, SRAM availability
-and cache coherency still require validation on the real SCR9 L3 board.
+SCR7 L3 remains single-hart. No physical hardware testing has been
+performed: reset behavior, SRAM/DDR availability and cache coherency
+still require validation on real boards.
