@@ -26,7 +26,7 @@
 	ignore = dirty
 [submodule "opensbi"]
 	path = 3rdparty/opensbi
-	url = https://review.coreboot.org/opensbi.git
+	url = https://github.com/syntacore/opensbi.git
 [submodule "intel-microcode"]
 	path = 3rdparty/intel-microcode
 	url = https://review.coreboot.org/intel-microcode.git
@@ -79,3 +79,7 @@
 	url = https://github.com/openSIL/openSIL.git
 	branch = turin_poc
 
+[submodule "3rdparty/u-boot"]
+	path = 3rdparty/u-boot
+	url = https://github.com/syntacore/u-boot.git
+	branch = sc/2026.04

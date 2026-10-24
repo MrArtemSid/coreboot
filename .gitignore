@@ -49,3 +49,7 @@ tarballs/
 *~
 *.kate-swp
 *.kdev4
+
+# Syntacore payload staging (see 3rdparty/scr-blobs/README.md)
+3rdparty/scr-blobs/*
+!3rdparty/scr-blobs/README.md
