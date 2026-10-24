@@ -1,8 +1,29 @@
-# Syntacore SCR9 L3 on SCR QEMU
+# Syntacore SCR boards on SCR QEMU
 
 How to build and run the full `coreboot -> OpenSBI -> U-Boot -> Linux`
-chain for the Syntacore SCR9 L3 cluster on the SCR QEMU machine that
-ships with the Syntacore Development Toolkit (SC-DT).
+chain for the Syntacore SCR clusters on the SCR QEMU machines that ship
+with the Syntacore Development Toolkit (SC-DT).
+
+## Platform matrix
+
+| Board config | QEMU machine | SoC family | Memory typing | Validated to |
+|---|---|---|---|---|
+| config.syntacore_scr9_l3 | scr9_l3 (riscv64) | L3, 2 MiB OCRAM | PMP + PMA | Linux userspace (root login) |
+| config.syntacore_scr7_l3 | scr7_l3 (riscv64) | L3, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
+| config.syntacore_scr9_l2 | scr9_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | Linux userspace (root login) |
+| config.syntacore_scr7_l2 | scr7_l2 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | U-Boot shell |
+| config.syntacore_scr6 | scr6 (riscv64) | L2, 64 KiB OCRAM | PMP + PMA | coreboot payload handoff * |
+| config.syntacore_scr5_rv64 | scr5 (riscv64) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
+| config.syntacore_scr5_rv32 | scr5 (riscv32) | L2, 64 KiB OCRAM | MPU | U-Boot shell |
+
+\* OpenSBI v1.7 (Syntacore generic platform) stays silent on the scr6
+SCR QEMU machine even in the reference miniboot flow (it reads a
+custom CSR the scr6 machine model does not implement); coreboot itself
+boots, loads both payloads and hands off correctly.
+
+All rv64 boards boot the SC-DT Linux 6.12 Image + rootfs; the boot
+command lines below use the addresses baked into the board device
+trees (`initrdmem=...`).
 
 Prerequisites: source SC-DT `env.sh`, have the `opensbi` and `u-boot`
 Syntacore trees (sc/2026.04 branches).
@@ -58,11 +79,15 @@ directory.
 
 ## 3. Run on SCR QEMU
 
-SCR machines enter the firmware at OCRAM `0x02000200` and do not set
-up any firmware themselves, so the ROM image is loaded twice: the
-bootblock (the first 128 KiB of `coreboot.rom`, linked at the reset
-vector) into OCRAM, and the whole image into the CBFS window at
-dram + 128 MiB (`0x408000000`):
+SCR machines do not set up any firmware at reset, so the ROM image is
+loaded by hand.
+
+### L3 family (scr9_l3, scr7_l3)
+
+The machine reset PC is `OCRAM + 0x200` and the whole 16 MiB ROM fits
+into the scr9_l3 OCRAM, so the image is loaded twice - once at the
+reset vector (the bootblock lives in the first 128 KiB of the ROM) and
+once into the CBFS window at dram + 128 MiB (`0x408000000`):
 
 ```bash
 qemu-system-riscv64 -M scr9_l3 -smp 1 -nographic \
@@ -73,7 +98,32 @@ qemu-system-riscv64 -M scr9_l3 -smp 1 -nographic \
 Expected console: coreboot banner -> OpenSBI v1.7 (Platform Name:
 IPDEV VCU118 SCR9 L3 prototype) -> U-Boot 2025.10 shell.
 
-## 4. Boot Linux
+### L2 family (scr9_l2, scr7_l2, scr6, scr5)
+
+The 64 KiB OCRAM sits at the very top of the address space and the
+machine reset PC is its last page, so three pieces are loaded: the
+CBFS window at dram + 128 MiB (`0x08000000`), the bootblock (the first
+128 KiB of the ROM) at `OCRAM + 0x200` and a four-byte jump stub
+(`reset_stub.bin`, shipped in the board directory) at the reset PC.
+The bootblock image must not cross the end of the address space, so
+trim it to its 50 KiB program span when loading on rv32:
+
+```bash
+qemu-system-riscv64 -M scr9_l2 -smp 1 -nographic \
+    -device loader,file=build/coreboot.rom,addr=0x08000000 \
+    -device loader,file=/tmp/bootblock.bin,addr=0xffffffffffff0200 \
+    -device loader,file=src/mainboard/syntacore/scr_l2_cluster/reset_stub.bin,addr=0xffffffffffffff00
+```
+
+(`bootblock.bin` = `cbfstool build/coreboot.rom read -r BOOTBLOCK`;
+for the rv32 board load `head -c 51200` of it at `0xffff0200` and run
+`qemu-system-riscv32 -M scr5` with the stub at `0xffffff00`.)
+
+Expected console: coreboot banner (bootblock + inline romstage from
+the 64 KiB OCRAM, stack/preram data at the bottom of DDR) -> OpenSBI
+v1.7 -> U-Boot 2025.10 shell.
+
+## 4. Boot Linux (L3 addresses shown; L2 uses the addresses below)
 
 Preload the kernel and the rootfs into DDR away from the boot flow
 regions, interrupt the U-Boot autoboot, and boot. The kernel command
@@ -115,3 +165,7 @@ Login: `root` / `root`.
 
 Keep the region above dram + 2 MiB (where U-Boot relocates the Linux
 Image) clear of locked firmware regions.
+
+L2-family addresses: kernel preload `0x0A000000`, initrd
+`0x30000000` (the `initrdmem` baked into the L2 device trees), FDT
+address as printed by U-Boot, `booti 0x0A000000 - <fdt>`.

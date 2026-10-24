@@ -56,13 +56,20 @@ the SCR-HAL platform headers.
 
 ## Supported boards
 
-- `syntacore/scr_l3_cluster` - SCR9 L3 cluster (QEMU machine
-  `scr9_l3`; named after the Syntacore U-Boot board
-  `scr_l3_cluster`). Additional MMU platforms (scr9_l2, scr7_l2/l3,
-  scr6, scr5_rv64/rv32) follow the same pattern: add a
-  `src/mainboard/syntacore/<board>` with a memlayout, a board DTS and
-  the corresponding SoC Kconfig entries; no SoC code changes are
-  required.
+- `syntacore/scr_l3_cluster` - SCR9 and SCR7 L3 clusters (QEMU
+  machines `scr9_l3`, `scr7_l3`), named after the Syntacore U-Boot
+  board `scr_l3_cluster`;
+- `syntacore/scr_l2_cluster` - SCR9/SCR7/SCR6/SCR5 RV64 L2 clusters
+  (QEMU machines `scr9_l2`, `scr7_l2`, `scr6`, `scr5`); the 64 KiB
+  OCRAM at the top of the address space carries a single early stage
+  (bootblock + inline romstage), with a four-byte reset stub at the
+  machine reset PC;
+- `syntacore/scr_l2_cluster_32` - SCR5 RV32 L2 cluster (32-bit).
+
+All seven platforms build through the same SoC layer; the per-board
+differences are the memory anchors (Kconfig), the board device tree
+(derived from the Linux `arch/riscv/boot/dts/syntacore/` board files)
+and the payload addresses.
 
 ## Building
 
