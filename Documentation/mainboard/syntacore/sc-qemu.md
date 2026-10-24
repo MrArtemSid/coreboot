@@ -154,11 +154,15 @@ Both CSR ICCM and MMIO ICCM L3 implement the native coreboot
 `set_msip()` hook. They deliver machine software interrupts and can wake
 the native `smp_pause()` wait. See [ICCM support](iccm.md).
 
-Reference configurations retain `MAX_CPUS=1`; use `-smp 1` for these
-images. Increasing the QEMU hart count alone is unsafe: the restored
-native startup indexes stacks by physical hart ID, and the board memory
-layouts do not reserve a complete multi-hart stack array. Multi-hart
-stage transitions and the OpenSBI handoff require separate validation.
+SCR9 L3 reserves eight per-hart stack pages in each stage and reads the
+active count from ICCM L3. Use `-smp 8` to run all eight harts described
+by its Linux DTS. This configuration reaches Linux userspace with eight
+CPUs through the native coreboot/OpenSBI handoff and SBI HSM.
+
+Other reference configurations retain `MAX_CPUS=1`; use `-smp 1` for
+those images. Their memory layouts have not been adapted for multiple
+harts. See [ICCM support](iccm.md) for the validated stack addresses,
+startup requirements and hardware limitations.
 
 ## Memory map (SCR9 L3, dram base 0x400000000)
 
