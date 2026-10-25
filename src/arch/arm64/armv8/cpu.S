@@ -142,7 +142,13 @@ ENTRY(arm64_init_cpu)
 
 	/* Invalidate icache and TLB for good measure */
 	ic	iallu
+#if CONFIG_ARM64_CURRENT_EL == EL3
 	tlbi	alle3
+#elif CONFIG_ARM64_CURRENT_EL == EL2
+	tlbi	alle1
+#else
+	tlbi	vmalle1
+#endif
 	dsb	sy
 	isb
 

@@ -23,6 +23,13 @@ config SOC_QUALCOMM_MSM89X7
 
 if SOC_QUALCOMM_MSM89X7
 
+# The TrustZone elexec call used by the primary bootloader to start
+# arm64 boot images drops the CPU to non-secure EL1 (x0 = DTB), so
+# coreboot must access the EL1 system registers.
+config ARM64_CURRENT_EL
+	int
+	default 1
+
 config MEMLAYOUT_LD_FILE
 	string
 	default "src/soc/qualcomm/msm89x7/memlayout.ld"
