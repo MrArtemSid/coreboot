@@ -19,6 +19,7 @@ uintptr_t scr_hal_uart_base(void);
 unsigned int scr_hal_uart_regwidth(void);
 void scr_hal_pmp_platform_init(void);
 void scr_hal_mrt_init(void);
+void scr_hal_plic_set_level_high(unsigned int irq);
 
 void scr_hal_iccm_init(void);
 int scr_hal_iccm_clear(void);

@@ -4,9 +4,11 @@
  *
  * Same composition as the board's scr9_l2.dts, plus the virtio-mmio
  * transports the SC-DT QEMU machine model creates at
- * 0x00ffffff_ff100000..0x00ffffff_ff107000 (PLIC IRQs 10..17, in the
- * sign-extended MMIO window like the UART). The Linux tree carries no
- * such nodes because the real VCU118 prototype has no virtio hardware;
+ * 0x00ffffff_ff102000..0x00ffffff_ff107000 (PLIC IRQs 12..17, in the
+ * sign-extended MMIO window like the UART). The first two transports
+ * overlap the ICCM and L2 cache registers and are not usable. The Linux
+ * tree carries no such nodes because the real VCU118 prototype has no
+ * virtio hardware;
  * an opensbi-domains region is added so the trusted-domain payload (and
  * the kernel it boots) may reach the transports through the PMP.
  */
@@ -68,49 +70,37 @@
 	};
 
 	soc {
-		virtio_mmio@ff100000 {
-			compatible = "virtio,mmio";
-			reg = <0x00ffffff 0xff100000 0x00 0x1000>;
-			interrupts-extended = <&plic 10 4>;
-		};
-
-		virtio_mmio@ff101000 {
-			compatible = "virtio,mmio";
-			reg = <0x00ffffff 0xff101000 0x00 0x1000>;
-			interrupts-extended = <&plic 11 4>;
-		};
-
-		virtio_mmio@ff102000 {
+		virtio_mmio@ffffffff102000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff102000 0x00 0x1000>;
 			interrupts-extended = <&plic 12 4>;
 		};
 
-		virtio_mmio@ff103000 {
+		virtio_mmio@ffffffff103000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff103000 0x00 0x1000>;
 			interrupts-extended = <&plic 13 4>;
 		};
 
-		virtio_mmio@ff104000 {
+		virtio_mmio@ffffffff104000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff104000 0x00 0x1000>;
 			interrupts-extended = <&plic 14 4>;
 		};
 
-		virtio_mmio@ff105000 {
+		virtio_mmio@ffffffff105000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff105000 0x00 0x1000>;
 			interrupts-extended = <&plic 15 4>;
 		};
 
-		virtio_mmio@ff106000 {
+		virtio_mmio@ffffffff106000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff106000 0x00 0x1000>;
 			interrupts-extended = <&plic 16 4>;
 		};
 
-		virtio_mmio@ff107000 {
+		virtio_mmio@ffffffff107000 {
 			compatible = "virtio,mmio";
 			reg = <0x00ffffff 0xff107000 0x00 0x1000>;
 			interrupts-extended = <&plic 17 4>;
@@ -120,6 +110,14 @@
 	cpus {
 		timebase-frequency = <1000000>;
 	};
+};
+
+/* Stock kernels bind the sifive-plic driver, not "syntacore,plic";
+ * add the standard compatible so virtio and the UART get their IRQs. */
+&plic {
+	compatible = "syntacore,plic", "sifive,plic-1.0.0";
+	/* QEMU provides 288 sources, including reserved source zero. */
+	riscv,ndev = <287>;
 };
 
 SCR_QEMU_CPU_ZICBOM_OVERRIDES(8)

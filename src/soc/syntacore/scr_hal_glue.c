@@ -21,6 +21,7 @@
 #include "drivers/iccm.h"
 #include "drivers/iccm_l3.h"
 #include "drivers/uart_16550.h"
+#include "drivers/plic.h"
 #include "plf.h"
 
 /*
@@ -37,6 +38,14 @@ SCR_PLF_EQ(CONFIG_SCR_OCRAM_BASE, (uintptr_t)PLF_OCRAM_BASE);
 SCR_PLF_EQ(CONFIG_SCR_OCRAM_SIZE, PLF_OCRAM_SIZE);
 
 #define SCR_REG32(addr)		(*(volatile uint32_t *)(uintptr_t)(addr))
+
+void scr_hal_plic_set_level_high(unsigned int irq)
+{
+#ifdef PLF_PLIC_BASE
+	PLIC_SRC_MODE[irq] = PLIC_SRC_MODE_LEVEL_HIGH;
+	fence();
+#endif
+}
 
 void scr_hal_mtimer_enable(void)
 {

@@ -5,6 +5,7 @@
 #include <symbols.h>
 #include <cbmem.h>
 #include <soc/addressmap.h>
+#include <soc/scr_hal.h>
 
 /*
  * RAM declaration, SiFive-style: the resource allocator derives the
@@ -15,6 +16,13 @@
 static void scr_mainboard_init(struct device *dev)
 {
 	ram_from_to(dev, 0, (uintptr_t)_dram, cbmem_top());
+
+	if (CONFIG(SCR9_L2_QEMU_VIRTIO)) {
+		/* The stock SiFive PLIC driver does not program SCR source modes. */
+		scr_hal_plic_set_level_high(1);
+		for (int irq = 12; irq <= 17; irq++)
+			scr_hal_plic_set_level_high(irq);
+	}
 }
 
 struct chip_operations mainboard_ops = {

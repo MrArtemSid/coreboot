@@ -123,4 +123,12 @@
 	};
 };
 
+/* Stock kernels bind the sifive-plic driver, not "syntacore,plic";
+ * add the standard compatible so virtio and the UART get their IRQs. */
+&plic {
+	compatible = "syntacore,plic", "sifive,plic-1.0.0";
+	/* QEMU provides 288 sources, including reserved source zero. */
+	riscv,ndev = <287>;
+};
+
 SCR_QEMU_CPU_ZICBOM_OVERRIDES(8)
