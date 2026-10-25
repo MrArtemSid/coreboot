@@ -69,6 +69,42 @@ make O=build CROSS_COMPILE=riscv64-unknown-linux-gnu- -j$(nproc)
 cp build/u-boot <coreboot>/3rdparty/scr-blobs/u-boot
 ```
 
+### CrabEFI payload (alternative UEFI payload, stock-kernel boot)
+
+CrabEFI is a minimal UEFI implementation in Rust; the fork at
+https://github.com/MrArtemSid/CrabEFI carries the RISC-V fixes
+(vendored fdt with FDT_NOP handling, physical EFI config-table entries,
+Zicbom probe) and boots a stock riscv64 Linux through the QEMU device
+tree. The board device trees need
+`CONFIG_SCR9_L3_QEMU_VIRTIO=y` / `CONFIG_SCR9_L2_QEMU_VIRTIO=y` (the
+virtio-mmio transports the machine models, plus the ISA/menvcfg
+additions that let a stock kernel run its non-coherent DMA path).
+
+Build the payload from the fork (PAYLOAD_BASE must match the board:
+dram + 2 MiB on L3, 0x400000 on L2):
+
+```bash
+git clone https://github.com/MrArtemSid/CrabEFI.git
+cd CrabEFI
+export CARGO_HOME=<path>/crabefi-tools/cargo RUSTUP_HOME=<path>/crabefi-tools/rustup
+export RUSTUP_TOOLCHAIN=nightly-2026-10-08
+export CC_riscv64gc_unknown_none_elf=<sc-dt>/riscv-gcc/bin/riscv64-unknown-elf-gcc
+cargo build --locked -p crabefi-coreboot --release \
+     --target riscv64gc-unknown-none-elf
+# after touching crabefi-runtime-image/, regenerate the bundled blob first:
+cargo run -q --manifest-path xtask/Cargo.toml -- \
+     --arch riscv64 bundle-runtime --secure-boot
+```
+
+Select it with `Payload -> CrabEFI` (or `CONFIG_PAYLOAD_ELF` pointing at
+`CrabEFI/target/riscv64gc-unknown-none-elf/release/crabefi`), plus
+`CONFIG_SCR9_L3_QEMU_VIRTIO=y`. The kernel command line for a stock
+Linux needs `console=ttyS0,115200 efi=novamap keep_bootcon` (identity
+virtual mapping for the runtime image; a persistent early console -
+the 8250 probe defers until a PLIC driver binds, and IRQ delivery on
+the Syntacore controller is the one remaining gap for reaching
+userspace).
+
 ## 2. Build coreboot
 
 ```bash
