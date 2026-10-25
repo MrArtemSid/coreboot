@@ -1,0 +1,3 @@
+qcom/msm89x7
+Category: dev
+Board URL: https://github.com/MrArtemSid/coreboot/tree/msm89x7

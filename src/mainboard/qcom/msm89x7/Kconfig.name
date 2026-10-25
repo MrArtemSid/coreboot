@@ -1,0 +1,6 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+comment "MSM89x7 devices booting coreboot from the stock Android bootloader"
+
+config BOARD_QCOM_MSM89X7_GENERIC
+	bool "->  Generic MSM8917/MSM8937/MSM8940 device"
