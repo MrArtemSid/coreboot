@@ -23,14 +23,16 @@ static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
 
 void scr_iccm_init(void)
 {
-	/* MMCFG access is hart-local; MRT and ICCM control are shared. */
-	scr_hal_pmp_platform_init();
+	/* PMP is hart-local; configure it once per hart in bootblock. */
+	if (ENV_BOOTBLOCK)
+		scr_hal_pmp_platform_init();
 	if (read_csr(mhartid) == CONFIG_RISCV_WORKING_HARTID) {
 		if (ENV_BOOTBLOCK && !scr_hal_mrt_is_initialized()) {
 			scr_hal_mrt_init();
 			scr_is_cold_reset = true;
 		}
-		scr_hal_iccm_init();
+		if (ENV_BOOTBLOCK)
+			scr_hal_iccm_init();
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
 	} else {
 		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE))

@@ -11,7 +11,7 @@ void mtime_init(void)
 	long hart_id = read_csr(mhartid);
 
 	scr_iccm_init();
-	if (hart_id == CONFIG_RISCV_WORKING_HARTID)
+	if (ENV_BOOTBLOCK && hart_id == CONFIG_RISCV_WORKING_HARTID)
 		scr_hal_mtimer_enable();
 
 	HLS()->time = (uint64_t *)scr_hal_mtimer_time_addr();
