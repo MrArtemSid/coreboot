@@ -18,6 +18,7 @@
 #include "drivers/pmp.h"
 #include "drivers/pma.h"
 #include "drivers/mrt.h"
+#include "drivers/aia.h"
 #include "drivers/iccm.h"
 #include "drivers/iccm_l3.h"
 #include "drivers/uart_16550.h"
@@ -99,32 +100,41 @@ unsigned int scr_hal_uart_regwidth(void)
 	return UART_16550_REG_WIDTH;
 }
 
-/*
- * MRT (cluster Memory Region Table) programming, miniboot-style: the
- * cluster config space (MRT table itself, ICCM mailboxes, cluster
- * mtimer, PLIC) is only reachable through regions mapped with the
- * CLUSTER_CSR_MPORT attribute. scr-hal's canonical mrt_init() walks
- * the platform PLF_MEM_MAP, which already carries the right per-region
- * MPORT attributes; it just needs the mem_regions[] table that normally
- * lives in scr-hal's sys_init.c (not linked here).
- */
-const scr_mem_region_info mem_regions[] = { PLF_MEM_MAP };
-const unsigned mem_region_count = sizeof(mem_regions) / sizeof(mem_regions[0]);
-
+/* Route all memory through the default port, with miniboot's CSR exceptions. */
 void scr_hal_mrt_init(void)
 {
 #if defined(PLF_MRT_SUPPORT) && (PLF_MRT_SUPPORT == 1)
-	mrt_init();
+	const scr_mem_region_info mrt_regions[] = {
+		/* A zero size covers the entire address space. */
+		{0, 0, 0, NULL, PLF_DEFAULT_MPORT},
+		{PLF_CLUSTER_CFG_BASE, 0x4000000UL, 0, NULL, CLUSTER_CSR_MPORT},
+#if defined(PLF_IMSIC_BASE_M) && defined(PLF_IMSIC_BASE_S)
+		{PLF_IMSIC_BASE_M, PLF_IMSIC_SIZE_M, 0, NULL, CLUSTER_CSR_MPORT},
+		{PLF_IMSIC_BASE_S, PLF_IMSIC_SIZE_S, 0, NULL, CLUSTER_CSR_MPORT},
+#else
+		/* Temporary AIA gateway mapping, matching miniboot. */
+		{0x10000000UL, 0x4000000UL, 0, NULL, CLUSTER_CSR_MPORT},
+#endif
+	};
+	unsigned int region_count = sizeof(mrt_regions) / sizeof(mrt_regions[0]);
+
+	if (!aia_is_available())
+		region_count--;
+
+	setup_mrt_regions(mrt_regions, region_count);
 #endif
 }
 
 int scr_hal_mrt_is_initialized(void)
 {
 #if defined(PLF_MRT_SUPPORT) && (PLF_MRT_SUPPORT == 1)
-	/* Check if MRT entry 1 has been programmed and enabled */
+	/* Miniboot's entry 1 covers all addresses: base and mask are both zero. */
 	volatile size_t *mrt_entry_ctrl = (volatile size_t *)MRT_S_ENTRY_N_CTRL(MRT_ENTRY_START);
 	volatile size_t *mrt_entry_addr = (volatile size_t *)MRT_S_ENTRY_N_ADDR(MRT_ENTRY_START);
-	return (*mrt_entry_ctrl & MRT_ENTRY_VALID) && (*mrt_entry_addr != 0);
+	volatile size_t *mrt_entry_mask = (volatile size_t *)MRT_S_ENTRY_N_MASK(MRT_ENTRY_START);
+
+	return (*mrt_entry_ctrl & MRT_ENTRY_VALID) &&
+		*mrt_entry_addr == 0 && *mrt_entry_mask == 0;
 #else
 	return 1;
 #endif
