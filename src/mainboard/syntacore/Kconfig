@@ -2,8 +2,6 @@
 
 if VENDOR_SYNTACORE
 
-source "src/mainboard/syntacore/scr_l3_cluster/Kconfig"
-source "src/mainboard/syntacore/scr_l2_cluster/Kconfig"
-source "src/mainboard/syntacore/scr_l2_cluster_32/Kconfig"
+source "src/mainboard/syntacore/scr_cluster/Kconfig"
 
 endif # VENDOR_SYNTACORE

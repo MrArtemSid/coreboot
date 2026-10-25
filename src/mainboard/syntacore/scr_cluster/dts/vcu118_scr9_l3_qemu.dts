@@ -17,7 +17,7 @@
 
 #include "scr9.dtsi"
 #include "vcu118_l3.dtsi"
-#include "../scr_qemu_cpu_isa.dtsi"
+#include "scr_qemu_cpu_isa.dtsi"
 
 / {
 	model = "IPDEV VCU118 SCR9 L3 prototype";
