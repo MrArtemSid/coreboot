@@ -72,4 +72,30 @@ config MSM89X7_QCDT_FILE
 	  device tree it hands over to coreboot; without it the boot
 	  image is created without a device tree.
 
+config MSM89X7_DISPLAY_CONSOLE
+	bool "Write console logs to the bootloader splash framebuffer"
+	default y
+	select CONSOLE_DISPLAY
+	help
+	  The stock LK bootloader leaves its continuous splash framebuffer
+	  (MIPI_FB_ADDR) scanning on the panel. Draw the coreboot console
+	  output directly into that buffer, so the log is visible without
+	  any display hardware initialization.
+
+if MSM89X7_DISPLAY_CONSOLE
+
+config MSM89X7_FB_ADDR
+	hex "Splash framebuffer address (LK's MIPI_FB_ADDR)"
+	default 0x90000000
+
+config MSM89X7_FB_WIDTH
+	int "Panel width in pixels"
+	default 720
+
+config MSM89X7_FB_HEIGHT
+	int "Panel height in pixels"
+	default 1280
+
+endif
+
 endif

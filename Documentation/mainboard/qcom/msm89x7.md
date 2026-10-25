@@ -69,11 +69,14 @@ Xiaomi Redmi 4X (santoni) it is available on the motherboard test
 points TP29 (TX) / TP30 (RX), 115200 8n1. See the postmarketOS wiki
 for the pad location on other devices.
 
-There is no display output in coreboot itself: the screen keeps
-showing whatever the primary bootloader left there until the payload
-starts. With a mainline Linux payload the display works on supported
-devices (santoni needs the ILI9881C panel variant for mainline; the
-HX8394-F driver is not in mainline yet).
+By default the console is additionally drawn into the continuous
+splash framebuffer that the stock bootloader leaves scanning on the
+panel (`MSM89X7_DISPLAY_CONSOLE`), so the log is visible on screen
+with a USB-UART adapter only needed if the splash is disabled. The
+framebuffer geometry (`MSM89X7_FB_ADDR`, `MSM89X7_FB_WIDTH`,
+`MSM89X7_FB_HEIGHT`) can be adjusted per device; LK's MIPI_FB_ADDR is
+0x90000000 on this SoC family and the panel on the Redmi 4X is
+720x1280.
 
 If the device does not boot, the stock bootloader's fastboot is still
 available: restore the original system by flashing back the stock

@@ -4,6 +4,7 @@ ifeq ($(CONFIG_SOC_QUALCOMM_MSM89X7),y)
 
 ################################################################################
 all-$(CONFIG_DRIVERS_UART) += uart.c
+all-$(CONFIG_MSM89X7_DISPLAY_CONSOLE) += display_console.c font_8x16.c
 
 ################################################################################
 bootblock-y += bootblock.c

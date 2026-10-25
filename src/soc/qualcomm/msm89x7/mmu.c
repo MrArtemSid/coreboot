@@ -18,5 +18,15 @@ void msm89x7_mmu_init(void)
 	/* SMEM is shared with other masters, keep it uncached. */
 	mmu_config_range((void *)SMEM_BASE, SMEM_SIZE, MA_DEV | MA_RW);
 
+	if (CONFIG(MSM89X7_DISPLAY_CONSOLE)) {
+		/* The splash framebuffer is scanned out by the MDP, keep
+		 * it uncached so drawing text becomes visible right
+		 * away. */
+		mmu_config_range((void *)CONFIG_MSM89X7_FB_ADDR,
+				 CONFIG_MSM89X7_FB_WIDTH *
+				 CONFIG_MSM89X7_FB_HEIGHT * 4,
+				 MA_MEM | MA_MEM_NC | MA_RW);
+	}
+
 	mmu_enable();
 }
