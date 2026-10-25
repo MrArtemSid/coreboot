@@ -119,6 +119,9 @@ ramstage-libs += $(SCR_HAL_ARCHIVE)
 
 all-y += iccm.c
 
+# The saved MRT state and both pre-romstage wait hooks live in bootblock.
+bootblock-y += romstage.c
+
 bootblock-y += cbmem.c
 bootblock-y += rom_media.c
 bootblock-y += mtime.c

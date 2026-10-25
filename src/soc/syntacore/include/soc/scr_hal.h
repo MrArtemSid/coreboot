@@ -4,6 +4,7 @@
 #define __SOC_SYNTACORE_SCR_HAL_H__
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /*
  * Functions exported by scr_hal_glue.c, the only place where SCR-HAL
@@ -19,6 +20,17 @@ uintptr_t scr_hal_uart_base(void);
 unsigned int scr_hal_uart_regwidth(void);
 void scr_hal_pmp_platform_init(void);
 void scr_hal_mrt_init(void);
+int scr_hal_mrt_is_initialized(void);
+void scr_hal_wait_key_before_ddr(void);
+
+/*
+ * Set to true in the bootblock when this boot actually performed the
+ * cluster MRT initialization (i.e. cold reset / first power-up); left
+ * untouched (false) when MRT was already initialized. Consumed before
+ * the RAM stage to decide whether to wait for a terminal keypress
+ * before touching DDR (see src/soc/syntacore/romstage.c).
+ */
+extern bool scr_is_cold_reset;
 void scr_hal_plic_set_level_high(unsigned int irq);
 
 void scr_hal_iccm_init(void);

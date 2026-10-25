@@ -7,9 +7,16 @@
 #include <endian.h>
 #include <mcall.h>
 #include <soc/scr_hal.h>
+#include <stdbool.h>
 
 /* Each loaded stage owns its initialization flag; no BSS reset is assumed. */
 static int iccm_ready __section(".data") = 0;
+/*
+ * True only in the boot that performed the MRT initialization (cold
+ * reset / first power-up). Lives in .data: every loaded stage starts
+ * with its own pristine copy, so it defaults to false everywhere.
+ */
+bool scr_is_cold_reset __section(".data") = false;
 #if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
 #endif
@@ -19,8 +26,10 @@ void scr_iccm_init(void)
 	/* MMCFG access is hart-local; MRT and ICCM control are shared. */
 	scr_hal_pmp_platform_init();
 	if (read_csr(mhartid) == CONFIG_RISCV_WORKING_HARTID) {
-		if (ENV_BOOTBLOCK)
+		if (ENV_BOOTBLOCK && !scr_hal_mrt_is_initialized()) {
 			scr_hal_mrt_init();
+			scr_is_cold_reset = true;
+		}
 		scr_hal_iccm_init();
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
 	} else {

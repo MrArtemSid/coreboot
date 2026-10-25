@@ -22,6 +22,7 @@
 #include "drivers/iccm_l3.h"
 #include "drivers/uart_16550.h"
 #include "drivers/plic.h"
+#include "drivers/console.h"
 #include "plf.h"
 
 /*
@@ -115,6 +116,37 @@ void scr_hal_mrt_init(void)
 #if defined(PLF_MRT_SUPPORT) && (PLF_MRT_SUPPORT == 1)
 	mrt_init();
 #endif
+}
+
+int scr_hal_mrt_is_initialized(void)
+{
+#if defined(PLF_MRT_SUPPORT) && (PLF_MRT_SUPPORT == 1)
+	/* Check if MRT entry 1 has been programmed and enabled */
+	volatile size_t *mrt_entry_ctrl = (volatile size_t *)MRT_S_ENTRY_N_CTRL(MRT_ENTRY_START);
+	volatile size_t *mrt_entry_addr = (volatile size_t *)MRT_S_ENTRY_N_ADDR(MRT_ENTRY_START);
+	return (*mrt_entry_ctrl & MRT_ENTRY_VALID) && (*mrt_entry_addr != 0);
+#else
+	return 1;
+#endif
+}
+
+void scr_hal_wait_key_before_ddr(void)
+{
+	con_puts("\n=======================================================\n"
+		 "SCR: Cluster MRT was uninitialized! Initialized now.\n"
+		 "Halted before DDR / RAM stage initialization.\n"
+		 "Press any key in serial terminal to continue boot...\n"
+		 "=======================================================\n");
+
+	/* Poll UART RX until a key/Enter is received */
+	while (uart0_16550_rx_ready())
+		(void)UART0_16550.data; /* drain stale input */
+
+	while (!uart0_16550_rx_ready())
+		;
+
+	(void)UART0_16550.data;
+	con_puts("Key received. Proceeding with boot...\n\n");
 }
 
 /*

@@ -106,6 +106,14 @@ config SCR_RESET_STUB_ADDR
 config SEPARATE_ROMSTAGE
 	default n if SOC_SYNTACORE_SCR7_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
 
+config SCR_WAIT_KEY_ON_FIRST_BOOT
+	bool "Wait for terminal keypress before DDR / RAM stage if MRT was uninitialized"
+	default y
+	help
+	  When enabled, bootblock checks whether the cluster Memory Region Table (MRT)
+	  is uninitialized. If so, firmware initializes MRT and halts execution,
+	  prompting on serial console for a keypress before proceeding to DDR/RAM stages.
+
 endif # SOC_SYNTACORE_COMMON
 
 config SOC_SYNTACORE_SCR9_L3
