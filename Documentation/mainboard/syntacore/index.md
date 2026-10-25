@@ -56,20 +56,19 @@ the SCR-HAL platform headers.
 
 ## Supported boards
 
-- `syntacore/scr_l3_cluster` - SCR9 and SCR7 L3 clusters (QEMU
-  machines `scr9_l3`, `scr7_l3`), named after the Syntacore U-Boot
-  board `scr_l3_cluster`;
-- `syntacore/scr_l2_cluster` - SCR9/SCR7/SCR5 RV64 L2 clusters
-  (QEMU machines `scr9_l2`, `scr7_l2`, `scr5`); the 64 KiB
-  OCRAM at the top of the address space carries a single early stage
-  (bootblock + inline romstage), with a four-byte reset stub at the
-  machine reset PC;
-- `syntacore/scr_l2_cluster_32` - SCR5 RV32 L2 cluster (32-bit).
+All six platforms use `syntacore/scr_cluster` with shared bootblock,
+romstage, mainboard code and `devicetree.cb`:
 
-All six platforms build through the same SoC layer; the per-board
-differences are the memory anchors (Kconfig), the board device tree
-(derived from the Linux `arch/riscv/boot/dts/syntacore/` board files)
-and the payload addresses.
+- SCR9/SCR7 L3 clusters (QEMU machines `scr9_l3`, `scr7_l3`) use
+  `memlayout_l3.ld`;
+- SCR9/SCR7/SCR5 RV64 and SCR5 RV32 L2 clusters (QEMU machines `scr9_l2`,
+  `scr7_l2`, `scr5`) use `memlayout_l2.ld`. The 64 KiB OCRAM at the top
+  of the address space carries bootblock + inline romstage and a reset stub.
+
+The existing board-selection symbols are unchanged. Local DTS wrappers and
+shared DTSI files live in `scr_cluster/dts/`; vendor device trees are still
+consumed from Linux `arch/riscv/boot/dts/syntacore/`. Memory anchors remain in
+the SoC Kconfig, including the RV32/RV64 differences.
 
 ## Building
 
