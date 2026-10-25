@@ -37,9 +37,12 @@ extern const uint8_t font_8x16[256][16];
 #define SSPP_SRC_FORMAT		0x30	/* CPP [10:9] = bytes per pixel - 1 */
 
 /* Source pipes LK may have used for the splash, offsets from the MDP
- * base (VIG_0/VIG_1, RGB_0/RGB_1, DMA_0/DMA_1) */
+ * base. Only the pipes that exist on msm89x7 (per the Linux mdp5
+ * configuration: VIG_0, RGB_0/1, DMA_0) — reading an unimplemented
+ * MDP block hangs the bus. RGB_0 first, it is what LK uses for the
+ * splash on these devices. */
 static const uint32_t sspp_pipes[] = {
-	0x5000, 0x7000, 0x15000, 0x17000, 0x25000, 0x27000,
+	0x15000, 0x17000, 0x25000, 0x5000,
 };
 
 #define DDR_START	0x80000000ULL
