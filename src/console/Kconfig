@@ -46,6 +46,15 @@ config CONSOLE_SERIAL
 	  When CONSOLE_SERIAL_RUNTIME is also enabled, this option only sets the
 	  default for the "serial_console" runtime option (see that Kconfig).
 
+config CONSOLE_DISPLAY
+	bool "Framebuffer display console"
+	default n
+	help
+	  Draw coreboot debug output into a framebuffer provided by the
+	  platform, e.g. the continuous splash framebuffer that an earlier
+	  firmware stage left scanning on the panel. The implementation is
+	  provided by the SoC.
+
 config CONSOLE_SERIAL_RUNTIME
 	bool "Allow enabling serial console via option API"
 	depends on DRIVERS_UART
