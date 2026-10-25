@@ -17,6 +17,7 @@
 
 #include "scr9.dtsi"
 #include "vcu118_l3.dtsi"
+#include "../scr_qemu_cpu_isa.dtsi"
 
 / {
 	model = "IPDEV VCU118 SCR9 L3 prototype";
@@ -27,7 +28,7 @@
 	};
 
 	chosen {
-		bootargs = "earlycon=sbi console=ttyS0,115200 initrdmem=0x430000000,512M net.ifnames=0 swiotlb=noforce";
+		bootargs = "earlycon=sbi console=ttyS0,115200 efi=novamap initrdmem=0x430000000,512M net.ifnames=0 swiotlb=noforce";
 		stdout-path = "serial";
 
 		opensbi-domains {
@@ -121,3 +122,5 @@
 		timebase-frequency = <1000000>;
 	};
 };
+
+SCR_QEMU_CPU_ZICBOM_OVERRIDES(8)

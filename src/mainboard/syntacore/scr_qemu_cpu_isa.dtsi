@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Stock-kernel ISA additions for the SC-DT QEMU machines.
+ *
+ * The syntacore-scr9 QEMU core implements the Zicbom cache-block
+ * instructions, but access from S-mode is gated by menvcfg.CBCFE/CBIE,
+ * which OpenSBI only sets when the handoff device tree claims the
+ * extension - and the template ISA string in scr*.dtsi does not. Include
+ * this file from a board QEMU wrapper and expand
+ * SCR_QEMU_CPU_ZICBOM_OVERRIDES(<hart count>) at top level so OpenSBI
+ * enables menvcfg and stock kernels run their non-coherent DMA cache
+ * maintenance.
+ */
+
+#define SCR_QEMU_ISA \
+	"rv64imafdc_zicond_zba_zbb_zbc_zbs_sscofpmf_zicbom"
+
+#define SCR_QEMU_ISA_EXTENSIONS \
+	"i", "m", "a", "f", "d", "c", "zicond", "zba", "zbb", "zbc", "zbs", \
+	"sscofpmf", "zicbom"
+
+#define SCR_QEMU_CPU_ZICBOM(n) \
+	&cpu##n { \
+		riscv,isa = SCR_QEMU_ISA; \
+		riscv,isa-extensions = SCR_QEMU_ISA_EXTENSIONS; \
+	};
+
+/* Expansion ladder: SCR_QEMU_CPU_ZICBOM_OVERRIDES(n) emits the overrides
+ * for harts 0..n-1. Extend the ladder for larger hart counts. */
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_1		SCR_QEMU_CPU_ZICBOM(0)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_2		SCR_QEMU_CPU_ZICBOM_OVERRIDES_1 SCR_QEMU_CPU_ZICBOM(1)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_3		SCR_QEMU_CPU_ZICBOM_OVERRIDES_2 SCR_QEMU_CPU_ZICBOM(2)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_4		SCR_QEMU_CPU_ZICBOM_OVERRIDES_3 SCR_QEMU_CPU_ZICBOM(3)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_5		SCR_QEMU_CPU_ZICBOM_OVERRIDES_4 SCR_QEMU_CPU_ZICBOM(4)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_6		SCR_QEMU_CPU_ZICBOM_OVERRIDES_5 SCR_QEMU_CPU_ZICBOM(5)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_7		SCR_QEMU_CPU_ZICBOM_OVERRIDES_6 SCR_QEMU_CPU_ZICBOM(6)
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES_8		SCR_QEMU_CPU_ZICBOM_OVERRIDES_7 SCR_QEMU_CPU_ZICBOM(7)
+
+#define SCR_QEMU_CPU_ZICBOM_OVERRIDES(n)	SCR_QEMU_CPU_ZICBOM_OVERRIDES_##n
