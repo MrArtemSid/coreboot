@@ -1,0 +1,57 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config SOC_QUALCOMM_MSM89X7
+	bool
+	default n
+	select ARCH_BOOTBLOCK_ARMV8_64
+	select ARCH_VERSTAGE_ARMV8_64
+	select ARCH_ROMSTAGE_ARMV8_64
+	select ARCH_RAMSTAGE_ARMV8_64
+	select ARM64_USE_ARCH_TIMER
+	select FLATTENED_DEVICE_TREE
+	select HAVE_UART_SPECIAL
+	help
+	  Qualcomm MSM8917/MSM8937/MSM8940 (a.k.a. msm89x7) SoC family,
+	  octa-core Cortex-A53 with TrustZone firmware providing PSCI.
+
+	  This port is designed to run as a second-stage bootloader: the
+	  stock Android bootloader (LK/aboot) loads the coreboot image
+	  from the boot partition like a Linux kernel and enters it with
+	  the ARM64 boot protocol (x0 = DTB provided by LK). DRAM, clocks
+	  and the debug UART are already initialized by the primary
+	  bootloader and are not touched again.
+
+if SOC_QUALCOMM_MSM89X7
+
+config MEMLAYOUT_LD_FILE
+	string
+	default "src/soc/qualcomm/msm89x7/memlayout.ld"
+
+# Base of DRAM as mapped by the primary bootloader (always 0x80000000
+# on this SoC family, matching the address LK loads arm64 kernels to).
+config MSM89X7_DDR_START
+	hex
+	default 0x80000000
+
+# Size of DRAM in MiB as reported to coreboot. This is only a fallback:
+# if the device tree handed over by the primary bootloader contains a
+# /memory node, its ranges take precedence.
+config MSM89X7_DRAM_SIZE_MB
+	int
+	default 2048
+
+# Address the stock LK bootloader loads arm64 boot images to
+# (ABOOT_FORCE_KERNEL64_ADDR = DDR_START + 0x80000). The coreboot ROM
+# (bootblock at offset 0, then FMAP and CBFS) lives there.
+config MSM89X7_BOOT_IMAGE_ADDR
+	hex
+	default 0x80080000
+
+# Base of the UART DM used for the coreboot console. The clock and pin
+# muxing for this port must already have been set up by the primary
+# bootloader (usually BLSP1_UART2 @ 0x78b0000 on msm89x7 devices).
+config MSM89X7_UART_BASE
+	hex
+	default 0x078b0000
+
+endif
