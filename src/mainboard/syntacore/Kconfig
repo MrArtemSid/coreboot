@@ -2,6 +2,14 @@
 
 if VENDOR_SYNTACORE
 
+choice
+	prompt "Mainboard model"
+	default BOARD_SYNTACORE_SCR9_L3
+
+source "src/mainboard/syntacore/scr_cluster/Kconfig.name"
+
+endchoice
+
 source "src/mainboard/syntacore/scr_cluster/Kconfig"
 
 endif # VENDOR_SYNTACORE

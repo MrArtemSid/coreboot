@@ -1,24 +1,4 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
 config VENDOR_SYNTACORE
 	bool "Syntacore"
-
-if VENDOR_SYNTACORE
-
-config BOARD_SYNTACORE_SCR9_L3
-	bool "SCR9 L3 cluster"
-
-config BOARD_SYNTACORE_SCR7_L3
-	bool "SCR7 L3 cluster"
-
-config BOARD_SYNTACORE_SCR9_L2
-	bool "SCR9 L2 cluster"
-
-config BOARD_SYNTACORE_SCR7_L2
-	bool "SCR7 L2 cluster"
-
-config BOARD_SYNTACORE_SCR5_RV64
-	bool "SCR5 RV64 L2 cluster"
-
-config BOARD_SYNTACORE_SCR5_RV32
-	bool "SCR5 RV32 L2 cluster"
-
-endif # VENDOR_SYNTACORE
