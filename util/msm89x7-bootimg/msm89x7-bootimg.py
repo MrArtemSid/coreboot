@@ -74,10 +74,19 @@ def cmd_extract_qcdt(args):
 
 
 def cmd_make(args):
-    kernel = args.kernel.read()
+    kernel = bytearray(args.kernel.read())
     if len(kernel) < 0x40 or kernel[0x38:0x3c] != b"ARMd":
         sys.exit("kernel does not look like a coreboot ROM with an "
                  "ARM64 kernel image header in its bootblock")
+
+    # A single device tree appended behind the image. The stock LK
+    # reads its offset from word 0x2c of the ARM64 kernel image header
+    # (dev_tree_appended()).
+    if args.append_dtb:
+        dtb = args.append_dtb.read()
+        dtb_offset = len(kernel)
+        kernel += dtb
+        struct.pack_into("<I", kernel, 0x2c, dtb_offset)
 
     qcdt = args.qcdt.read() if args.qcdt else b""
     # A 1-byte ramdisk, like lk2nd uses when it is booted as a second
@@ -119,6 +128,10 @@ def main():
     p = sub.add_parser("make", help="build a boot image from coreboot.rom")
     p.add_argument("--kernel", required=True, type=argparse.FileType("rb"),
                    help="coreboot.rom")
+    p.add_argument("--append-dtb", type=argparse.FileType("rb"),
+                   help="device tree to append behind the image (offset "
+                        "referenced from the ARM64 kernel image header), "
+                        "e.g. the lk2nd device tree for the target")
     p.add_argument("--qcdt", type=argparse.FileType("rb"),
                    help="QCDT device tree table from the stock boot image")
     p.add_argument("--cmdline", default="coreboot")

@@ -72,6 +72,17 @@ config MSM89X7_QCDT_FILE
 	  device tree it hands over to coreboot; without it the boot
 	  image is created without a device tree.
 
+config MSM89X7_APPEND_DTB_FILE
+	string "Device tree appended behind the image"
+	default ""
+	help
+	  Path to a device tree that is appended behind the coreboot
+	  image in the boot partition; the stock LK finds it via the
+	  offset in the ARM64 kernel image header. Use the mainline DTB
+	  of the device (optionally with qcom,msm-id/qcom,board-id added
+	  for the stock bootloader's selection logic, like the lk2nd
+	  device trees have). Alternative to MSM89X7_QCDT_FILE.
+
 config MSM89X7_DISPLAY_CONSOLE
 	bool "Write console logs to the bootloader splash framebuffer"
 	default y
