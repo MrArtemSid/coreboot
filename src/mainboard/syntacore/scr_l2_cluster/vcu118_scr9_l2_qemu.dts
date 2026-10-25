@@ -1,0 +1,122 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * SCR9 L2 cluster QEMU device tree.
+ *
+ * Same composition as the board's scr9_l2.dts, plus the virtio-mmio
+ * transports the SC-DT QEMU machine model creates at
+ * 0x00ffffff_ff100000..0x00ffffff_ff107000 (PLIC IRQs 10..17, in the
+ * sign-extended MMIO window like the UART). The Linux tree carries no
+ * such nodes because the real VCU118 prototype has no virtio hardware;
+ * an opensbi-domains region is added so the trusted-domain payload (and
+ * the kernel it boots) may reach the transports through the PMP.
+ */
+
+/dts-v1/;
+
+#define SCR_OCTA_CORE 1
+#define SYSCLK 50000000
+#define CPUCLK 80000000
+
+#include "scr9.dtsi"
+#include "vcu118_l2.dtsi"
+
+/ {
+	model = "IPDEV VCU118 SCR9 L2 prototype";
+
+	aliases {
+		ethernet = &axi_ethernet_0;
+		serial = &uart0;
+	};
+
+	chosen {
+		bootargs = "earlycon=sbi console=ttyS0,115200 initrdmem=0x30000000,512M net.ifnames=0 swiotlb=noforce";
+		stdout-path = "serial";
+
+		opensbi-domains {
+			virtio_reg: virtio_reg {
+				compatible = "opensbi,domain,memregion";
+				base = <0x00ffffff 0xff100000>;
+				order = <19>;
+				mmio;
+			};
+
+			trusted-domain {
+				regions =
+					<&dma_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						   SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE |
+						   SCR_PMA_UNC)>,
+					<&dram_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE | SCR_PMP_MMODE_EXECUTE |
+						    SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE | SCR_PMP_SUMODE_EXECUTE)>,
+					<&mcfg_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						    SCR_PMP_SUMODE_READ |
+						    SCR_PMA_MMIO)>,
+					<&mmio_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						    SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE |
+						    SCR_PMA_UNC)>,
+					<&plic_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						    SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE |
+						    SCR_PMA_UNC)>,
+					<&virtio_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						      SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE |
+						      SCR_PMA_MMIO)>;
+				/* The regions list above replaces the one from
+				 * vcu118_l2.dtsi wholesale: it is the original five
+				 * entries plus virtio_reg. */
+			};
+		};
+	};
+
+	soc {
+		virtio_mmio@ff100000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff100000 0x00 0x1000>;
+			interrupts-extended = <&plic 10 4>;
+		};
+
+		virtio_mmio@ff101000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff101000 0x00 0x1000>;
+			interrupts-extended = <&plic 11 4>;
+		};
+
+		virtio_mmio@ff102000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff102000 0x00 0x1000>;
+			interrupts-extended = <&plic 12 4>;
+		};
+
+		virtio_mmio@ff103000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff103000 0x00 0x1000>;
+			interrupts-extended = <&plic 13 4>;
+		};
+
+		virtio_mmio@ff104000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff104000 0x00 0x1000>;
+			interrupts-extended = <&plic 14 4>;
+		};
+
+		virtio_mmio@ff105000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff105000 0x00 0x1000>;
+			interrupts-extended = <&plic 15 4>;
+		};
+
+		virtio_mmio@ff106000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff106000 0x00 0x1000>;
+			interrupts-extended = <&plic 16 4>;
+		};
+
+		virtio_mmio@ff107000 {
+			compatible = "virtio,mmio";
+			reg = <0x00ffffff 0xff107000 0x00 0x1000>;
+			interrupts-extended = <&plic 17 4>;
+		};
+	};
+
+	cpus {
+		timebase-frequency = <1000000>;
+	};
+};
