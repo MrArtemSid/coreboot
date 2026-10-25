@@ -4,10 +4,22 @@ if PAYLOAD_CRABEFI
 
 config PAYLOAD_FILE
 	string "CrabEFI ELF binary"
-	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/debug/crabefi" if CRABEFI_DEBUG
-	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/release/crabefi"
+	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/debug/crabefi" if CRABEFI_DEBUG && !ARCH_RISCV_RV64
+	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/release/crabefi" if !ARCH_RISCV_RV64
+	default "payloads/external/CrabEFI/CrabEFI/target/riscv64gc-unknown-none-elf/debug/crabefi" if CRABEFI_DEBUG
+	default "payloads/external/CrabEFI/CrabEFI/target/riscv64gc-unknown-none-elf/release/crabefi"
 	help
 	  The path to the CrabEFI ELF binary.
+
+config CRABEFI_RISCV_PAYLOAD_BASE
+	string "RISC-V payload link base"
+	depends on ARCH_RISCV_RV64
+	default "0x402000000"
+	help
+	  Passed to the CrabEFI build as PAYLOAD_BASE (the riscv64-coreboot
+	  linker script anchors the image there). Set per board: the SCR
+	  QEMU clusters use 0x402000000 (L3, DRAM at 0x4_00000000) or
+	  0x400000 (L2, DRAM at 0x0).
 
 choice
 	prompt "CrabEFI version"

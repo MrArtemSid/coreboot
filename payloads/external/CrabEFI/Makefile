@@ -13,6 +13,12 @@ CRABEFI_REPO ?= https://github.com/ArthurHeymans/CrabEFI
 CRABEFI_TAG_OR_REV ?= origin/master
 CRABEFI_CARGO_TARGET := x86_64-unknown-none
 CRABEFI_CARGO_PACKAGE := crabefi-coreboot
+CRABEFI_EXTRA_ENV :=
+
+ifeq ($(CONFIG_ARCH_RISCV_RV64),y)
+CRABEFI_CARGO_TARGET := riscv64gc-unknown-none-elf
+CRABEFI_EXTRA_ENV := CC_riscv64gc_unknown_none_elf=$(CROSS_COMPILE)gcc PAYLOAD_BASE=$(CONFIG_CRABEFI_RISCV_PAYLOAD_BASE)
+endif
 
 ifeq ($(CONFIG_CRABEFI_DEBUG),y)
 CRABEFI_BUILD_TYPE := debug
@@ -37,7 +43,7 @@ ifneq ($(CRABEFI_TAG_OR_REV),)
 endif
 
 $(CRABEFI_ELF): $(CRABEFI_DIR)
-	cd "$(CRABEFI_DIR)" && cargo build -p $(CRABEFI_CARGO_PACKAGE) --target $(CRABEFI_CARGO_TARGET) $(CRABEFI_CARGO_FLAGS)
+	cd "$(CRABEFI_DIR)" && $(CRABEFI_EXTRA_ENV) cargo build -p $(CRABEFI_CARGO_PACKAGE) --target $(CRABEFI_CARGO_TARGET) $(CRABEFI_CARGO_FLAGS)
 
 clean:
 	test -d "$(CRABEFI_DIR)" && cd "$(CRABEFI_DIR)" && cargo clean || true
