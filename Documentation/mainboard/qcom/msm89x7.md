@@ -27,9 +27,14 @@ kernel — and hands over through TrustZone.
 ## Building
 
 ```bash
-make menuconfig   # mainboard: Qualcomm -> Generic MSM8917/MSM8937/MSM8940
+make menuconfig   # mainboard: Qualcomm -> e.g. Xiaomi Redmi 4X (santoni)
 make
 ```
+
+When `MSM89X7_BOOTIMG` is enabled (the default), `make` also creates
+`build/boot.img`, the image to flash to the boot partition. To embed a
+device tree for the primary bootloader, set `MSM89X7_QCDT_FILE` (see
+below); without it the boot image is created without a device tree.
 
 The resulting `build/coreboot.rom` contains the bootblock at offset 0
 followed by FMAP and CBFS; the whole file is what gets booted.
@@ -38,13 +43,15 @@ followed by FMAP and CBFS; the whole file is what gets booted.
 
 The primary bootloader needs a device tree it can pass on, which on
 this SoC generation is provided as a QCDT table inside the boot
-image. Extract it from the device's stock boot image:
+image. Extract it from the device's stock boot image (e.g. dumped via
+TWRP or adb from the `boot` partition) and point the build at it:
 
 ```bash
 util/msm89x7-bootimg/msm89x7-bootimg.py extract-qcdt stock-boot.img -o stock-dt.img
+# then select MSM89X7_QCDT_FILE=stock-dt.img in menuconfig and rebuild
 ```
 
-Then package coreboot:
+For manual packaging (e.g. with a different payload):
 
 ```bash
 util/msm89x7-bootimg/msm89x7-bootimg.py make \
@@ -53,6 +60,24 @@ fastboot flash boot boot.img
 ```
 
 The stock bootloader must be unlocked, since the image is unsigned.
+
+## Debugging on a device
+
+The coreboot console goes to UART DM (BLSP1_UART2, GPIO4/5), which is
+the same UART the stock bootloader and mainline Linux use. On the
+Xiaomi Redmi 4X (santoni) it is available on the motherboard test
+points TP29 (TX) / TP30 (RX), 115200 8n1. See the postmarketOS wiki
+for the pad location on other devices.
+
+There is no display output in coreboot itself: the screen keeps
+showing whatever the primary bootloader left there until the payload
+starts. With a mainline Linux payload the display works on supported
+devices (santoni needs the ILI9881C panel variant for mainline; the
+HX8394-F driver is not in mainline yet).
+
+If the device does not boot, the stock bootloader's fastboot is still
+available: restore the original system by flashing back the stock
+boot image that was replaced.
 
 ## Payload
 

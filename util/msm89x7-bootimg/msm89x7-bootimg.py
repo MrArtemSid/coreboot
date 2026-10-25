@@ -42,6 +42,10 @@ def pad(data, page_size):
     return data + b"\0" * pad_len
 
 
+def round_page(size, page_size):
+    return (size + page_size - 1) // page_size * page_size
+
+
 def read_stock_header(f):
     hdr = struct.unpack(HDR_FMT, f.read(HDR_SIZE))
     if hdr[0] != BOOT_MAGIC:
@@ -57,9 +61,9 @@ def cmd_extract_qcdt(args):
 
     page = page_size
     offset = page
-    offset += -kernel_size % page
-    offset += -ramdisk_size % page if ramdisk_size else 0
-    offset += -second_size % page if second_size else 0
+    offset += round_page(kernel_size, page)
+    offset += round_page(ramdisk_size, page)
+    offset += round_page(second_size, page)
 
     args.stock.seek(offset)
     qcdt = args.stock.read(dt_size)

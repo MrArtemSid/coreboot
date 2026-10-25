@@ -6,3 +6,18 @@ bootblock-y += media.c
 romstage-y += media.c
 ramstage-y += media.c
 ramstage-y += reset.c
+
+ifeq ($(CONFIG_MSM89X7_BOOTIMG),y)
+
+MSM89X7_QCDT := $(call strip_quotes,$(CONFIG_MSM89X7_QCDT_FILE))
+
+$(obj)/boot.img: $(obj)/coreboot.rom $(top)/util/msm89x7-bootimg/msm89x7-bootimg.py
+	printf "    MSM89X7    Creating $(subst $(obj)/,,$@)\n"
+	$(top)/util/msm89x7-bootimg/msm89x7-bootimg.py make \
+		--kernel $< \
+		$(if $(MSM89X7_QCDT),--qcdt $(MSM89X7_QCDT)) \
+		-o $@
+
+real-all: $(obj)/boot.img
+
+endif
