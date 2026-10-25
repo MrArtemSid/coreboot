@@ -7,35 +7,120 @@
  * drawing text there shows up on the panel without any display
  * hardware initialization in coreboot.
  *
- * The framebuffer address, width and height are set in Kconfig. LK
- * uses a 32bpp (XRGB8888) format on this SoC family; the text is
- * drawn white on black cells, which reads correctly regardless of
- * channel order.
+ * Instead of hardcoding the framebuffer geometry, the live
+ * configuration of the MDP5 source pipes is read: the pipe that LK
+ * programmed for the splash carries the actual framebuffer address,
+ * panel width, stride and pixels-per-pixel (the splash is 24bpp RGB
+ * on this SoC family, not 32bpp). Text is drawn white on black cells,
+ * which reads correctly regardless of the channel order.
  */
 
 #include <commonlib/helpers.h>
 #include <console/display_console.h>
 #include <device/mmio.h>
+#include <soc/display_console.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+#include <soc/addressmap.h>
 
 extern const uint8_t font_8x16[256][16];
 
 #define FONT_WIDTH	8
 #define FONT_HEIGHT	16
 
-#define FG_COLOR	0xffffffff
-#define BG_COLOR	0x00000000
+/* MDP5 SSPP registers, relative to the pipe base */
+#define SSPP_SRC_SIZE		0x00	/* height << 16 | width */
+#define SSPP_SRC0_ADDR		0x14
+#define SSPP_SRC_YSTRIDE	0x24	/* bytes per line */
+#define SSPP_SRC_FORMAT		0x30	/* CPP [10:9] = bytes per pixel - 1 */
 
-static uint32_t col, row;
+/* Source pipes LK may have used for the splash, offsets from the MDP
+ * base (VIG_0/VIG_1, RGB_0/RGB_1, DMA_0/DMA_1) */
+static const uint32_t sspp_pipes[] = {
+	0x5000, 0x7000, 0x15000, 0x17000, 0x25000, 0x27000,
+};
+
+#define DDR_START	0x80000000ULL
+#define DDR_END		0xE0000000ULL
+
+static uint64_t fb_addr;
+static uint32_t fb_stride, fb_width, fb_height, fb_bpp;
+static uint32_t col, row, max_col, max_row;
 static bool enabled;
+
+/* Returns the framebuffer region the display console draws to, so the
+ * MMU setup can map it non-cacheable. Zero size if nothing detected. */
+void display_console_fb_region(uint64_t *base, size_t *size)
+{
+	*base = fb_addr;
+	*size = fb_addr ? fb_stride * fb_height : 0;
+}
+
+static void detect_framebuffer(void)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(sspp_pipes); ++i) {
+		uint32_t pipe = MDSS_MDP_BASE + sspp_pipes[i];
+		uint32_t size, format, stride, width, height, bpp;
+		uint32_t addr = read32((void *)(uintptr_t)(pipe + SSPP_SRC0_ADDR));
+
+		if (addr < DDR_START || addr >= DDR_END)
+			continue;
+
+		size = read32((void *)(uintptr_t)(pipe + SSPP_SRC_SIZE));
+		width = size & 0xffff;
+		height = size >> 16;
+		if (width < 100 || width > 4096 || height < 100 ||
+		    height > 8192)
+			continue;
+
+		format = read32((void *)(uintptr_t)(pipe + SSPP_SRC_FORMAT));
+		bpp = ((format >> 9) & 0x3) + 1;
+		if (bpp < 3 || bpp > 4)
+			continue;
+
+		stride = read32((void *)(uintptr_t)(pipe + SSPP_SRC_YSTRIDE));
+		if (stride < width * bpp)
+			continue;
+
+		fb_addr = addr;
+		fb_stride = stride;
+		fb_width = width;
+		fb_height = height;
+		fb_bpp = bpp;
+		max_col = fb_width / FONT_WIDTH;
+		max_row = fb_height / FONT_HEIGHT;
+		return;
+	}
+
+	/* Nothing detected (splash disabled?): fall back to the Kconfig
+	 * geometry. Drawing is harmless even if it is invisible. */
+	fb_addr = CONFIG_MSM89X7_FB_ADDR;
+	fb_stride = CONFIG_MSM89X7_FB_WIDTH * 4;
+	fb_width = CONFIG_MSM89X7_FB_WIDTH;
+	fb_height = CONFIG_MSM89X7_FB_HEIGHT;
+	fb_bpp = 4;
+	max_col = fb_width / FONT_WIDTH;
+	max_row = fb_height / FONT_HEIGHT;
+}
 
 static void *pixel_base(uint32_t x, uint32_t y)
 {
-	void *fb = (void *)(uintptr_t)CONFIG_MSM89X7_FB_ADDR;
+	return (void *)(uintptr_t)(fb_addr + y * fb_stride + x * fb_bpp);
+}
 
-	return fb + y * CONFIG_MSM89X7_FB_WIDTH * 4 + x * 4;
+static void pixel_put(uint32_t x, uint32_t y, int on)
+{
+	if (fb_bpp == 3) {
+		uint8_t *p = pixel_base(x, y);
+		uint8_t v = on ? 0xff : 0x00;
+		p[0] = v;
+		p[1] = v;
+		p[2] = v;
+	} else {
+		write32(pixel_base(x, y), on ? 0xffffffff : 0x00000000);
+	}
 }
 
 static void draw_char(char c)
@@ -45,29 +130,27 @@ static void draw_char(char c)
 	for (uint32_t gy = 0; gy < FONT_HEIGHT; ++gy) {
 		uint8_t bits = glyph[gy];
 		for (uint32_t gx = 0; gx < FONT_WIDTH; ++gx)
-			write32(pixel_base(col * FONT_WIDTH + gx,
-					   row * FONT_HEIGHT + gy),
-				(bits & (1 << (7 - gx))) ? FG_COLOR : BG_COLOR);
+			pixel_put(col * FONT_WIDTH + gx,
+				  row * FONT_HEIGHT + gy,
+				  bits & (1 << (7 - gx)));
 	}
 }
 
 static void scroll(void)
 {
-	uint32_t stride = CONFIG_MSM89X7_FB_WIDTH * 4;
-	void *fb = (void *)(uintptr_t)CONFIG_MSM89X7_FB_ADDR;
-	uint32_t top = FONT_HEIGHT * stride;
+	void *fb = (void *)(uintptr_t)fb_addr;
+	uint32_t line = FONT_HEIGHT * fb_stride;
 
-	memmove(fb, fb + top,
-		(CONFIG_MSM89X7_FB_HEIGHT - FONT_HEIGHT) * stride);
-	memset(fb + (CONFIG_MSM89X7_FB_HEIGHT - FONT_HEIGHT) * stride, 0,
-	       FONT_HEIGHT * stride);
+	memmove(fb, fb + line, (fb_height - FONT_HEIGHT) * fb_stride);
+	memset(fb + (fb_height - FONT_HEIGHT) * fb_stride, 0,
+	       FONT_HEIGHT * fb_stride);
 }
 
 static void newline(void)
 {
 	col = 0;
-	if (++row >= CONFIG_MSM89X7_FB_HEIGHT / FONT_HEIGHT) {
-		row = CONFIG_MSM89X7_FB_HEIGHT / FONT_HEIGHT - 1;
+	if (++row >= max_row) {
+		row = max_row - 1;
 		scroll();
 	}
 }
@@ -82,15 +165,14 @@ static void display_consoleputc(unsigned char byte)
 		col = 0;
 		return;
 	case '\t':
-		col = MIN(ALIGN_UP(col + 1, 8),
-			  CONFIG_MSM89X7_FB_WIDTH / FONT_WIDTH - 1);
+		col = MIN(ALIGN_UP(col + 1, 8), max_col - 1);
 		return;
 	default:
 		break;
 	}
 
 	draw_char(byte);
-	if (++col >= CONFIG_MSM89X7_FB_WIDTH / FONT_WIDTH)
+	if (++col >= max_col)
 		newline();
 }
 
@@ -98,6 +180,7 @@ void __display_console_init(void)
 {
 	/* The splash framebuffer content is left as-is; the cursor just
 	 * starts at the top left corner on top of it. */
+	detect_framebuffer();
 	enabled = true;
 }
 

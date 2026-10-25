@@ -5,6 +5,7 @@
 #include <arch/cache.h>
 #include <soc/mmu.h>
 #include <soc/addressmap.h>
+#include <soc/display_console.h>
 
 void msm89x7_mmu_init(void)
 {
@@ -21,10 +22,18 @@ void msm89x7_mmu_init(void)
 	if (CONFIG(MSM89X7_DISPLAY_CONSOLE)) {
 		/* The splash framebuffer is scanned out by the MDP, keep
 		 * it uncached so drawing text becomes visible right
-		 * away. */
-		mmu_config_range((void *)CONFIG_MSM89X7_FB_ADDR,
-				 CONFIG_MSM89X7_FB_WIDTH *
-				 CONFIG_MSM89X7_FB_HEIGHT * 4,
+		 * away. Use the region detected from the live MDP
+		 * configuration; fall back to the Kconfig geometry. */
+		uint64_t base;
+		size_t size;
+
+		display_console_fb_region(&base, &size);
+		if (!size) {
+			base = CONFIG_MSM89X7_FB_ADDR;
+			size = (size_t)CONFIG_MSM89X7_FB_WIDTH *
+			       CONFIG_MSM89X7_FB_HEIGHT * 4;
+		}
+		mmu_config_range((void *)(uintptr_t)base, size,
 				 MA_MEM | MA_MEM_NC | MA_RW);
 	}
 

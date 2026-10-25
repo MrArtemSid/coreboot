@@ -12,6 +12,9 @@
 /* BLSP1 UART2, the debug UART on most msm89x7 devices (uartdm v1.4) */
 #define BLSP1_UART2_BASE		0x078b0000
 
+/* MDSS/MDP5, used to detect the live splash framebuffer configuration */
+#define MDSS_MDP_BASE			0x01a00000
+
 /* Shared memory used by RPM/modem/TZ, must not be overwritten */
 #define SMEM_BASE			0x86300000
 #define SMEM_SIZE			0x200000
