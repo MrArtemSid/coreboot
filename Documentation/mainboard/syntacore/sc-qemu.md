@@ -80,30 +80,35 @@ tree. The board device trees need
 virtio-mmio transports the machine models, plus the ISA/menvcfg
 additions that let a stock kernel run its non-coherent DMA path).
 
-Build the payload from the fork (PAYLOAD_BASE must match the board:
-dram + 2 MiB on L3, 0x400000 on L2):
+Committed board configs select the payload through the external
+payload flow (coreboot clones the fork at the pinned revision and
+builds it - cargo nightly and the SC-DT riscv GCC must be in PATH):
 
 ```bash
-git clone https://github.com/MrArtemSid/CrabEFI.git
-cd CrabEFI
-export CARGO_HOME=<path>/crabefi-tools/cargo RUSTUP_HOME=<path>/crabefi-tools/rustup
-export RUSTUP_TOOLCHAIN=nightly-2026-10-08
-export CC_riscv64gc_unknown_none_elf=<sc-dt>/riscv-gcc/bin/riscv64-unknown-elf-gcc
-cargo build --locked -p crabefi-coreboot --release \
-     --target riscv64gc-unknown-none-elf
-# after touching crabefi-runtime-image/, regenerate the bundled blob first:
+make CROSS_COMPILE=<sc-dt>/riscv-gcc/bin/riscv64-unknown-elf- \
+     obj=build-scr9-l3-crabefi \
+     DOTCONFIG=configs/config.syntacore_scr9_l3_crabefi olddefconfig
+make CROSS_COMPILE=<sc-dt>/riscv-gcc/bin/riscv64-unknown-elf- \
+     obj=build-scr9-l3-crabefi \
+     DOTCONFIG=configs/config.syntacore_scr9_l3_crabefi -j$(nproc)
+```
+
+`CONFIG_CRABEFI_RISCV_PAYLOAD_BASE` carries the per-board link base
+(dram + 2 MiB on L3, 0x400000 on L2) and `CONFIG_CRABEFI_TAG_OR_REV`
+pins the fork revision. To build the payload from an existing CrabEFI
+checkout instead (faster iteration), point `CONFIG_PAYLOAD_ELF` at
+`CrabEFI/target/riscv64gc-unknown-none-elf/release/crabefi` and rebuild
+the ELF with `PAYLOAD_BASE` set; regenerate the bundled runtime blob
+after touching `crabefi-runtime-image/` with
+
+```bash
 cargo run -q --manifest-path xtask/Cargo.toml -- \
      --arch riscv64 bundle-runtime --secure-boot
 ```
 
-Select it with `Payload -> CrabEFI` (or `CONFIG_PAYLOAD_ELF` pointing at
-`CrabEFI/target/riscv64gc-unknown-none-elf/release/crabefi`), plus
-`CONFIG_SCR9_L3_QEMU_VIRTIO=y`. The kernel command line for a stock
-Linux needs `console=ttyS0,115200 efi=novamap keep_bootcon` (identity
-virtual mapping for the runtime image; a persistent early console -
-the 8250 probe defers until a PLIC driver binds, and IRQ delivery on
-the Syntacore controller is the one remaining gap for reaching
-userspace).
+The kernel command line for a stock Linux needs `console=ttyS0,115200
+efi=novamap earlycon` (identity virtual mapping for the runtime image;
+earlycon for early boot logging until ttyS0 takes over).
 
 ## 2. Build coreboot
 
