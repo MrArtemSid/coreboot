@@ -122,6 +122,7 @@ static jmp_buf failed;
 #define scr_hal_cache_shared_init() ((void)0)
 #define scr_hal_cache_local_init() ((void)0)
 #define scr_hal_cache_sync_code(a,b) ((void)0)
+#define scr_hal_features_init() ((void)0)
 #define SCR_HART_WAIT_SPINS 100
 ''' + function('iccm.c','scr_iccm_init') + '''
 int main(void) {
