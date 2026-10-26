@@ -158,10 +158,10 @@ void scr_hal_mrt_init(void)
 int scr_hal_mrt_is_initialized(void)
 {
 #if defined(PLF_MRT_SUPPORT) && (PLF_MRT_SUPPORT == 1)
-	/* Miniboot's entry 1 covers all addresses: base and mask are both zero. */
-	volatile size_t *mrt_entry_ctrl = (volatile size_t *)MRT_S_ENTRY_N_CTRL(MRT_ENTRY_START);
-	volatile size_t *mrt_entry_addr = (volatile size_t *)MRT_S_ENTRY_N_ADDR(MRT_ENTRY_START);
-	volatile size_t *mrt_entry_mask = (volatile size_t *)MRT_S_ENTRY_N_MASK(MRT_ENTRY_START);
+	/* Miniboot's active entry 1 covers all addresses: base and mask are zero. */
+	volatile size_t *mrt_entry_ctrl = (volatile size_t *)MRT_A_ENTRY_N_CTRL(MRT_ENTRY_START);
+	volatile size_t *mrt_entry_addr = (volatile size_t *)MRT_A_ENTRY_N_ADDR(MRT_ENTRY_START);
+	volatile size_t *mrt_entry_mask = (volatile size_t *)MRT_A_ENTRY_N_MASK(MRT_ENTRY_START);
 
 	return (*mrt_entry_ctrl & MRT_ENTRY_VALID) &&
 		*mrt_entry_addr == 0 && *mrt_entry_mask == 0;
