@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <console/cbmem_console.h>
+#include <console/display_console.h>
 #include <console/flash.h>
 #include <console/i2c_smbus.h>
 #include <console/ne2k.h>
 #include <console/qemu_debugcon.h>
+#include <console/ramoops_console.h>
 #include <console/simnow.h>
 #include <console/spi.h>
 #include <console/spkmodem.h>
@@ -23,6 +25,8 @@ void console_hw_init(void)
 	__qemu_debugcon_init();
 
 	__uart_init();
+	__display_console_init();
+	__ramoops_init();
 	__ne2k_init();
 	__usbdebug_init();
 	__spiconsole_init();
@@ -44,6 +48,8 @@ void console_interactive_tx_byte(unsigned char byte, void *data_unused)
 	__spkmodem_tx_byte(byte);
 	__qemu_debugcon_tx_byte(byte);
 	__uart_tx_byte(byte);
+	__display_console_tx_byte(byte);
+	__ramoops_tx_byte(byte);
 	__ne2k_tx_byte(byte);
 	__usb_tx_byte(byte);
 	__spiconsole_tx_byte(byte);
