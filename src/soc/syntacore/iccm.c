@@ -31,16 +31,21 @@ void scr_iccm_init(void)
 	/* Generic SMP indexes both stacks and HLS by physical, contiguous hart ID. */
 	if (hartid >= CONFIG_MAX_CPUS)
 		die("SCR hart ID exceeds reserved stacks");
-	/* PMP is hart-local; configure it once per hart in bootblock. */
+	/*
+	 * Bootblock follows miniboot's per-hart order: MMCFG typing, caches,
+	 * final memory types, then (working hart only) MRT and ICCM.
+	 */
 	if (ENV_BOOTBLOCK)
-		scr_hal_pmp_platform_init();
-	if (read_csr(mhartid) == CONFIG_RISCV_WORKING_HARTID) {
-		if (ENV_BOOTBLOCK && !scr_hal_mrt_is_initialized()) {
-			scr_hal_mrt_init();
-			scr_is_cold_reset = true;
-		}
+		scr_hal_pmp_early_init();
+	if (hartid == CONFIG_RISCV_WORKING_HARTID) {
 		if (ENV_BOOTBLOCK) {
 			scr_hal_cache_shared_init();
+			scr_hal_cache_local_init();
+			scr_hal_pmp_platform_init();
+			if (!scr_hal_mrt_is_initialized()) {
+				scr_hal_mrt_init();
+				scr_is_cold_reset = true;
+			}
 			scr_hal_iccm_init();
 		}
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
@@ -51,9 +56,11 @@ void scr_iccm_init(void)
 			if (!--spins)
 				die("SCR working hart initialization timed out");
 		}
+		if (ENV_BOOTBLOCK) {
+			scr_hal_cache_local_init();
+			scr_hal_pmp_platform_init();
+		}
 	}
-	if (ENV_BOOTBLOCK)
-		scr_hal_cache_local_init();
 	/* Every hart must discard stale instructions on each loaded-stage entry. */
 	scr_hal_cache_sync_code(0, 0);
 #if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)

@@ -208,7 +208,31 @@ void scr_hal_wait_key_before_ddr(void)
  * OCRAM and DDR cacheable, followed by an all-address IO fallback.
  * The SCR5 MPU platforms have no PMP at all - OpenSBI configures the
  * MPU through the scr_mpu device tree node.
+ *
+ * Like miniboot, only MMCFG is typed before the caches are initialized;
+ * OCRAM and DDR become cacheable afterwards.
  */
+void scr_hal_pmp_early_init(void)
+{
+#if defined(PLF_PMP_SUPPORT) && (PLF_PMP_SUPPORT == 1)
+	if (pma_is_available()) {
+		size_t pma_num = get_pma_regions();
+
+		if (pma_num < 2)
+			scr_hal_fatal("SCR: fewer than two PMA regions\n");
+		/* L2 registers must be configured as IO. */
+		set_pma_region(pma_num - 2, PLF_MMCFG_BASE, PLF_MMCFG_SIZE,
+			       PMA_MEM_REGION_IO);
+		ifence();
+		return;
+	}
+
+	create_pmp_region(14, PLF_MMCFG_BASE, ~(PLF_MMCFG_SIZE - 1),
+			  PLF_MMCFG_ATTR);
+	ifence();
+#endif /* PLF_PMP_SUPPORT */
+}
+
 void scr_hal_pmp_platform_init(void)
 {
 #if defined(PLF_PMP_SUPPORT) && (PLF_PMP_SUPPORT == 1)
@@ -229,8 +253,6 @@ void scr_hal_pmp_platform_init(void)
 
 	create_pmp_region(13, PLF_OCRAM_BASE, ~(PLF_OCRAM_SIZE - 1),
 			  PLF_OCRAM_ATTR);
-	create_pmp_region(14, PLF_MMCFG_BASE, ~(PLF_MMCFG_SIZE - 1),
-			  PLF_MMCFG_ATTR);
 	create_pmp_region(15, PLF_MEM_BASE, ~(PLF_MEM_SIZE - 1),
 			  PLF_MEM_ATTR);
 	ifence();

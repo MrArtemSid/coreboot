@@ -115,6 +115,7 @@ static bool scr_is_cold_reset;
 static jmp_buf failed;
 #define die(msg) longjmp(failed,1)
 #define scr_hal_pmp_platform_init() ((void)0)
+#define scr_hal_pmp_early_init() ((void)0)
 #define scr_hal_mrt_is_initialized() 1
 #define scr_hal_mrt_init() ((void)0)
 #define scr_hal_iccm_init() ((void)0)
