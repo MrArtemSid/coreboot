@@ -2,6 +2,7 @@
 
 /* Machine timer services. Machine software interrupts use ICCM in iccm.c. */
 
+#include <console/console.h>
 #include <mcall.h>
 #include <timer.h>
 #include <soc/scr_hal.h>
@@ -23,5 +24,9 @@ void timer_monotonic_get(struct mono_time *mt)
 	uint64_t ticks = scr_hal_mtimer_now();
 	unsigned long tb = scr_hal_timebase_hz();
 
-	mt->microseconds = (uint32_t)(ticks / (tb / 1000000));
+	/* Split before scaling: preserve uptime and non-integral MHz timebases. */
+	if (!tb || tb > UINT32_MAX)
+		die("Invalid SCR timer timebase");
+	mt->microseconds = (ticks / tb) * USECS_PER_SEC +
+		(ticks % tb) * USECS_PER_SEC / tb;
 }
