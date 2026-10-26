@@ -42,6 +42,13 @@ SCR_PLF_EQ(CONFIG_SCR_OCRAM_SIZE, PLF_OCRAM_SIZE);
 
 #define SCR_REG32(addr)		(*(volatile uint32_t *)(uintptr_t)(addr))
 
+static __attribute__((noreturn)) void scr_hal_fatal(const char *message)
+{
+	con_puts(message);
+	for (;;)
+		__asm__ volatile("wfi");
+}
+
 void scr_hal_cache_shared_init(void)
 {
 	/* cache.o skips L3 invalidation: it may already hold live bootblock data. */
@@ -197,8 +204,8 @@ void scr_hal_wait_key_before_ddr(void)
  *   entry 13: OCRAM weakly-ordered/cacheable
  *   entry 14: MMCFG (cluster config) as config space
  *   entry 15: DDR weakly-ordered/cacheable
- * On cores with PMA CSRs the equivalent scr-hal PMA regions are used
- * instead, exactly like miniboot's pmp_early_init/pmp_init pair.
+ * On cores with PMA CSRs the final miniboot map is used instead:
+ * OCRAM and DDR cacheable, followed by an all-address IO fallback.
  * The SCR5 MPU platforms have no PMP at all - OpenSBI configures the
  * MPU through the scr_mpu device tree node.
  */
@@ -208,12 +215,15 @@ void scr_hal_pmp_platform_init(void)
 	if (pma_is_available()) {
 		size_t pma_num = get_pma_regions();
 
+		if (pma_num < 3)
+			scr_hal_fatal("SCR: fewer than three PMA regions\n");
+		/* Miniboot's final map: specific RAM regions precede the IO fallback. */
 		set_pma_region(pma_num - 3, PLF_OCRAM_BASE, PLF_OCRAM_SIZE,
 			       PMA_MEM_REGION_C_WO);
-		set_pma_region(pma_num - 2, PLF_MMCFG_BASE, PLF_MMCFG_SIZE,
-			       PMA_MEM_REGION_IO);
-		set_pma_region(pma_num - 1, PLF_MEM_BASE, PLF_MEM_SIZE,
+		set_pma_region(pma_num - 2, PLF_MEM_BASE, PLF_MEM_SIZE,
 			       PMA_MEM_REGION_C_WO);
+		set_pma_region(pma_num - 1, 0, 0, PMA_MEM_REGION_IO);
+		ifence();
 		return;
 	}
 
