@@ -10,9 +10,8 @@ ifeq ($(CONFIG_SOC_SYNTACORE_COMMON),y)
 #     UART driver in src/drivers/uart/scr_hal.c
 #   * the memory map comes from the SCR-HAL platform plf.h
 # Only the small self-contained SCR-HAL drivers are compiled in (as the
-# libscrhal archive); crt0, trap handling, SMP and cache setup stay
-# coreboot's own (bootblock.S and friends), so the two firmwares do not
-# fight over machine state.
+# libscrhal archive); crt0, trap handling and SMP stay coreboot's own.
+# Cache setup is called through the SoC bridge, not the SCR-HAL runtime.
 #
 # The SCR-HAL location is resolved from the SC_HAL_PATH environment
 # variable exported by the SC-DT env.sh, falling back to the
@@ -49,8 +48,8 @@ scr_hal_inc := \
 # SCR-HAL objects are built with their own flags: they expect the
 # toolchain's freestanding headers and SCR-HAL tunables, not coreboot's
 # ENV_* environment.
-scr_hal_cflags := \
-	-march=$(call strip_quotes,$(CONFIG_RISCV_ARCH)) \
+scr_hal_cflags = \
+	-march=$(call strip_quotes,$(CONFIG_RISCV_ARCH))$(MARCH_SUFFIX) \
 	-mabi=$(call strip_quotes,$(CONFIG_RISCV_ABI)) \
 	-mcmodel=$(call strip_quotes,$(CONFIG_RISCV_CODEMODEL)) \
 	-mstrict-align -Os -fno-common -fdata-sections -ffunction-sections \
@@ -79,7 +78,8 @@ $(obj)/scrhal/console.o: $(SCR_HAL)/src/drivers/console.c $(obj)/config.h
 
 $(obj)/scrhal/cache.o: $(SCR_HAL)/src/drivers/cache.c $(obj)/config.h
 	@mkdir -p $(dir $@)
-	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+	# L3 may already cache bootblock stacks/data; preserve dirty lines.
+	$(CC_ramstage) $(scr_hal_cflags) -DPLF_SKIP_CACHE_INVALIDATION -c -o $@ $<
 
 $(obj)/scrhal/hwinfo.o: $(SCR_HAL)/src/drivers/hwinfo/hwinfo.c $(obj)/config.h
 	@mkdir -p $(dir $@)
@@ -118,6 +118,7 @@ romstage-libs += $(SCR_HAL_ARCHIVE)
 ramstage-libs += $(SCR_HAL_ARCHIVE)
 
 all-y += iccm.c
+all-y += cache.c
 
 # The saved MRT state and both pre-romstage wait hooks live in bootblock.
 bootblock-y += romstage.c

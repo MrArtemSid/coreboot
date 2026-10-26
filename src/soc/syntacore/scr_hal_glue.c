@@ -24,6 +24,7 @@
 #include "drivers/uart_16550.h"
 #include "drivers/plic.h"
 #include "drivers/console.h"
+#include "drivers/cache.h"
 #include "plf.h"
 
 /*
@@ -40,6 +41,35 @@ SCR_PLF_EQ(CONFIG_SCR_OCRAM_BASE, (uintptr_t)PLF_OCRAM_BASE);
 SCR_PLF_EQ(CONFIG_SCR_OCRAM_SIZE, PLF_OCRAM_SIZE);
 
 #define SCR_REG32(addr)		(*(volatile uint32_t *)(uintptr_t)(addr))
+
+void scr_hal_cache_shared_init(void)
+{
+	/* cache.o skips L3 invalidation: it may already hold live bootblock data. */
+	plf_l3cache_init();
+#if !defined(PLF_CACHE_L2_DEDICATED) || !PLF_CACHE_L2_DEDICATED
+	/* HAL L2 init invalidates without cleaning. Never reinitialize a live L2. */
+	if (!plf_l2cache_is_enabled())
+		plf_l2cache_init();
+#endif
+	fence();
+}
+
+void scr_hal_cache_local_init(void)
+{
+#if defined(PLF_CACHE_L2_DEDICATED) && PLF_CACHE_L2_DEDICATED
+	if (!plf_l2cache_is_enabled())
+		plf_l2cache_init();
+#endif
+	plf_l1cache_init();
+	ifence();
+}
+
+void scr_hal_cache_sync_code(uintptr_t start, size_t size)
+{
+	/* Publish the producing hart's dirty lines before executing loaded code. */
+	cache_l1_flush((void *)start, (long)size);
+	ifence();
+}
 
 void scr_hal_plic_set_level_high(unsigned int irq)
 {

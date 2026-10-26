@@ -31,13 +31,19 @@ void scr_iccm_init(void)
 			scr_hal_mrt_init();
 			scr_is_cold_reset = true;
 		}
-		if (ENV_BOOTBLOCK)
+		if (ENV_BOOTBLOCK) {
+			scr_hal_cache_shared_init();
 			scr_hal_iccm_init();
+		}
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
 	} else {
 		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE))
 			;
 	}
+	if (ENV_BOOTBLOCK)
+		scr_hal_cache_local_init();
+	/* Synchronize instructions on each loaded-stage entry. */
+	scr_hal_cache_sync_code(0, 0);
 #if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 	/* hls_init() has cleared this hart's native synchronization fields. */
 	__atomic_store_n(&hart_ready[read_csr(mhartid)], 1, __ATOMIC_RELEASE);
