@@ -59,7 +59,10 @@ scr_hal_cflags = \
 
 # coreboot-side code (soc files, UART driver, memlayout) reaches the
 # SCR-HAL platform headers through <soc/addressmap.h> and direct includes.
-CPPFLAGS_common += $(scr_hal_inc) -I$(top)/src/soc/syntacore/include
+CPPFLAGS_common += -I$(top)/src/soc/syntacore/include
+
+# Only the UART adapter includes HAL headers outside the isolated archive.
+$(foreach stage,bootblock romstage ramstage,$(eval $(call src-to-obj,$(stage),src/drivers/uart/scr_hal.c): CPPFLAGS_$(stage) += $(scr_hal_inc)))
 
 # Self-contained SCR-HAL sources shared by every stage (console + hwinfo;
 # the UART driver itself is header-only and pulled in through plf.h).
