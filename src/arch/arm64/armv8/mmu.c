@@ -453,10 +453,23 @@ void mmu_init(void)
 	/* Initialize MAIR indices */
 	raw_write_mair(MAIR_ATTRIBUTES);
 
-	/* Initialize TCR flags */
-	raw_write_tcr(TCR_TOSZ | TCR_IRGN0_NM_WBWAC | TCR_ORGN0_NM_WBWAC |
-				 TCR_SH0_IS | TCR_TG0_4KB | TCR_PS_256TB |
-				 TCR_TBI_USED);
+	/* EL1 and EL2/EL3 have different physical-address-size fields. */
+	uint64_t tcr = TCR_TOSZ | TCR_IRGN0_NM_WBWAC | TCR_ORGN0_NM_WBWAC |
+		       TCR_SH0_IS | TCR_TG0_4KB | TCR_TBI_USED;
+	if (CONFIG_ARM64_CURRENT_EL == EL1) {
+		/* Do not request a PA width greater than the CPU implements.
+		 * This mapper supports at most 48-bit output addresses. */
+		uint64_t pa_range = raw_read_id_aa64mmfr0_el1() & 0xf;
+		if (pa_range > 5)
+			pa_range = 5;
+		/* We only install TTBR0; disable TTBR1 table walks while
+		 * still giving its address-size/granule fields valid values. */
+		tcr |= (pa_range << TCR_EL1_IPS_SHIFT) | TCR_EL1_EPD1 |
+		       (TCR_TOSZ << TCR_EL1_T1SZ_SHIFT) | TCR_EL1_TG1_4KB;
+	} else {
+		tcr |= TCR_PS_256TB;
+	}
+	raw_write_tcr(tcr);
 }
 
 /* Func : mmu_save_context

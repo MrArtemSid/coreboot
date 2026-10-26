@@ -124,6 +124,13 @@
 #define TCR_TG0_64KB               (0x1 << TCR_TG0_SHIFT)
 #define TCR_TG0_16KB               (0x2 << TCR_TG0_SHIFT)
 
+/* EL1 has IPS at [34:32]; [18:16] belongs to T1SZ, not PS. */
+#define TCR_EL1_IPS_SHIFT          32
+#define TCR_EL1_EPD1               (1UL << 23)
+#define TCR_EL1_T1SZ_SHIFT         16
+#define TCR_EL1_TG1_4KB            (2UL << 30)
+
+/* PS layout for EL2/EL3. */
 #define TCR_PS_SHIFT               16
 #define TCR_PS_4GB                 (0x0 << TCR_PS_SHIFT)
 #define TCR_PS_64GB                (0x1 << TCR_PS_SHIFT)
