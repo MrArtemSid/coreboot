@@ -52,7 +52,7 @@ scr_hal_cflags = \
 	-march=$(call strip_quotes,$(CONFIG_RISCV_ARCH))$(MARCH_SUFFIX) \
 	-mabi=$(call strip_quotes,$(CONFIG_RISCV_ABI)) \
 	-mcmodel=$(call strip_quotes,$(CONFIG_RISCV_CODEMODEL)) \
-	-mstrict-align -Os -fno-common -fdata-sections -ffunction-sections \
+	-mstrict-align -Os -fno-common -fdata-sections -ffunction-sections -MMD -MP \
 	-DPRINTF_LEVEL=2 \
 	-include $(obj)/config.h \
 	$(scr_hal_inc)
@@ -71,6 +71,8 @@ scr_hal_objs := $(obj)/scrhal/console.o \
 		$(obj)/scrhal/sys_utils.o \
 		$(obj)/scrhal/scr_hal_glue.o \
 		$(obj)/scrhal/mrt.o
+
+-include $(scr_hal_objs:.o=.d)
 
 $(obj)/scrhal/console.o: $(SCR_HAL)/src/drivers/console.c $(obj)/config.h
 	@mkdir -p $(dir $@)
@@ -102,6 +104,9 @@ $(obj)/scrhal/scr_hal_glue.o: $(top)/src/soc/syntacore/scr_hal_glue.c $(obj)/con
 $(obj)/scrhal/mrt.o: $(SCR_HAL)/src/drivers/mrt.c $(obj)/config.h
 	@mkdir -p $(dir $@)
 	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+
+# Keep command-line changes effective for already-built HAL objects too.
+$(scr_hal_objs): $(top)/src/soc/syntacore/Makefile.mk
 
 $(SCR_HAL_ARCHIVE): $(scr_hal_objs)
 	printf "    AR         SCR-HAL\n"
