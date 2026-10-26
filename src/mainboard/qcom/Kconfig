@@ -1,0 +1,17 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_QCOM
+
+choice
+	prompt "Mainboard model"
+
+source "src/mainboard/qcom/*/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/qcom/*/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Qualcomm"
+
+endif # VENDOR_QCOM
