@@ -347,6 +347,13 @@ static inline void tlbiall_el1(void)
 	__asm__ __volatile__("tlbi alle1\n\t" : : : "memory");
 }
 
+/* Stage 1 EL1&0 invalidation that is legal when executing at EL1;
+ * TLBI ALLE1 is only available from EL2 or higher. */
+static inline void tlbi_vmalle1(void)
+{
+	__asm__ __volatile__("tlbi vmalle1\n\t" : : : "memory");
+}
+
 static inline void tlbiall_el2(void)
 {
 	__asm__ __volatile__("tlbi alle2\n\t" : : : "memory");
@@ -360,7 +367,7 @@ static inline void tlbiall_el3(void)
 static inline void tlbiall(void)
 {
 	if (CONFIG_ARM64_CURRENT_EL == EL1)
-		tlbiall_el1();
+		tlbi_vmalle1();
 	else if (CONFIG_ARM64_CURRENT_EL == EL2)
 		tlbiall_el2();
 	else
