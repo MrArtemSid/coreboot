@@ -50,8 +50,8 @@ config RISCV_WORKING_HARTID
 
 config MAX_CPUS
 	int
-	default 8 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2
-	default 4 if SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default 8 if SOC_SYNTACORE_SCR9 || SOC_SYNTACORE_SCR7_L2
+	default 4 if SOC_SYNTACORE_SCR5
 	default 1
 
 config OPENSBI_PLATFORM
@@ -63,7 +63,7 @@ config OPENSBI_PLATFORM
 # blob was linked with: dram + 64 MiB on every platform.
 config OPENSBI_TEXT_START
 	hex
-	default 0x404000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x404000000 if SOC_SYNTACORE_L3_CLUSTER
 	default 0x04000000
 
 # The Kconfig memory anchors below mirror the SCR-HAL platform headers
@@ -71,16 +71,16 @@ config OPENSBI_TEXT_START
 # check in include/soc/plf_check.h fails the build if they ever drift.
 config SCR_DDR_BASE
 	hex
-	default 0x400000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x400000000 if SOC_SYNTACORE_L3_CLUSTER
 	default 0x00000000
 
 config SCR_OCRAM_BASE
 	hex
-	default 0x02000000 if SOC_SYNTACORE_SCR9_L3 || SOC_SYNTACORE_SCR7_L3
+	default 0x02000000 if SOC_SYNTACORE_L3_CLUSTER
 	# The L2-family OCRAM sits at the top of the address space
 	# (plf.h EXPAND32ADDR(0xffff0000)).
-	default 0xffffffffffff0000 if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64
 	default 0x00000000ffff0000 if SOC_SYNTACORE_SCR5_RV32
+	default 0xffffffffffff0000 if SOC_SYNTACORE_L2_CLUSTER
 
 config SCR_OCRAM_SIZE
 	hex
@@ -93,7 +93,7 @@ config SCR_OCRAM_SIZE
 # the bootblock hands over to _start.
 config SCR_RESET_AT_TOP
 	bool
-	default y if SOC_SYNTACORE_SCR9_L2 || SOC_SYNTACORE_SCR7_L2 || SOC_SYNTACORE_SCR5_RV64 || SOC_SYNTACORE_SCR5_RV32
+	default y if SOC_SYNTACORE_L2_CLUSTER
 
 config SCR_RESET_STUB_ADDR
 	hex
@@ -116,8 +116,26 @@ config SCR_WAIT_KEY_ON_FIRST_BOOT
 
 endif # SOC_SYNTACORE_COMMON
 
+# Core family and cluster type, selected by the SoC variants below.
+config SOC_SYNTACORE_SCR9
+	bool
+
+config SOC_SYNTACORE_SCR7
+	bool
+
+config SOC_SYNTACORE_SCR5
+	bool
+
+config SOC_SYNTACORE_L2_CLUSTER
+	bool
+
+config SOC_SYNTACORE_L3_CLUSTER
+	bool
+
 config SOC_SYNTACORE_SCR9_L3
 	bool
+	select SOC_SYNTACORE_SCR9
+	select SOC_SYNTACORE_L3_CLUSTER
 	select RISCV_GET_HART_COUNT_AT_RUNTIME
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
@@ -125,6 +143,8 @@ config SOC_SYNTACORE_SCR9_L3
 
 config SOC_SYNTACORE_SCR9_L2
 	bool
+	select SOC_SYNTACORE_SCR9
+	select SOC_SYNTACORE_L2_CLUSTER
 	select RISCV_GET_HART_COUNT_AT_RUNTIME
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
@@ -132,12 +152,16 @@ config SOC_SYNTACORE_SCR9_L2
 
 config SOC_SYNTACORE_SCR7_L3
 	bool
+	select SOC_SYNTACORE_SCR7
+	select SOC_SYNTACORE_L3_CLUSTER
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
 	select ARCH_RISCV_PMP
 
 config SOC_SYNTACORE_SCR7_L2
 	bool
+	select SOC_SYNTACORE_SCR7
+	select SOC_SYNTACORE_L2_CLUSTER
 	select RISCV_GET_HART_COUNT_AT_RUNTIME
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
@@ -145,12 +169,16 @@ config SOC_SYNTACORE_SCR7_L2
 
 config SOC_SYNTACORE_SCR5_RV64
 	bool
+	select SOC_SYNTACORE_SCR5
+	select SOC_SYNTACORE_L2_CLUSTER
 	select RISCV_GET_HART_COUNT_AT_RUNTIME
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV64
 
 config SOC_SYNTACORE_SCR5_RV32
 	bool
+	select SOC_SYNTACORE_SCR5
+	select SOC_SYNTACORE_L2_CLUSTER
 	select RISCV_GET_HART_COUNT_AT_RUNTIME
 	select SOC_SYNTACORE_COMMON
 	select ARCH_RISCV_RV32
