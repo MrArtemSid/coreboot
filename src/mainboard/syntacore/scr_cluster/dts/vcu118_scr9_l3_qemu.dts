@@ -35,7 +35,7 @@
 			virtio_reg: virtio_reg {
 				compatible = "opensbi,domain,memregion";
 				base = <0x00 0xff020000>;
-				order = <21>;
+				order = <15>; /* Exactly 32 KiB for eight transports. */
 				mmio;
 			};
 
