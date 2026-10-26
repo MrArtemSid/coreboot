@@ -53,7 +53,7 @@ ifneq ($(CRABEFI_TAG_OR_REV),)
 endif
 
 $(CRABEFI_ELF): crabefi_sync
-	cd "$(CRABEFI_DIR)" && $(CRABEFI_EXTRA_ENV) cargo build -p $(CRABEFI_CARGO_PACKAGE) --target $(CRABEFI_CARGO_TARGET) $(CRABEFI_CARGO_FLAGS)
+	cd "$(CRABEFI_DIR)" && $(CRABEFI_EXTRA_ENV) cargo build --locked -p $(CRABEFI_CARGO_PACKAGE) --target $(CRABEFI_CARGO_TARGET) $(CRABEFI_CARGO_FLAGS)
 
 clean:
 	test -d "$(CRABEFI_DIR)" && cd "$(CRABEFI_DIR)" && cargo clean || true
