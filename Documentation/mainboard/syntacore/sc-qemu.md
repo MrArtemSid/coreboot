@@ -82,7 +82,8 @@ additions that let a stock kernel run its non-coherent DMA path).
 
 Committed board configs select the payload through the external
 payload flow (coreboot clones the fork at the pinned revision and
-builds it - cargo nightly and the SC-DT riscv GCC must be in PATH):
+builds it with `cargo build --locked`; cargo nightly and the SC-DT
+riscv GCC must be in PATH):
 
 ```bash
 make CROSS_COMPILE=<sc-dt>/riscv-gcc/bin/riscv64-unknown-elf- \
