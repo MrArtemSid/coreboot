@@ -313,7 +313,7 @@ int scr_hal_iccm_send(unsigned int slot)
 #endif
 }
 
-#if CONFIG_SOC_SYNTACORE_SCR9_L3
+#if defined(PLF_ICCM_L3_SUPPORT) && PLF_ICCM_L3_SUPPORT
 unsigned int scr_hal_iccm_hart_count(void)
 {
 	return iccm_l3_get_harts_num();
