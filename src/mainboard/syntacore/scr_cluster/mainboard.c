@@ -62,7 +62,7 @@ static void scr_memory_resources(struct device *dev)
 
 static void scr_mainboard_init(struct device *dev)
 {
-	scr_memory_resources(dev);
+	(void)dev;
 
 	/* The stock SiFive PLIC driver does not program SCR source modes. */
 	if (CONFIG(SCR9_L2_QEMU_VIRTIO) || CONFIG(SCR9_L3_QEMU_VIRTIO)) {
@@ -82,6 +82,10 @@ static void scr_mainboard_init(struct device *dev)
 			scr_hal_plic_set_level_high(irq);
 	}
 }
+
+struct device_operations scr_cpu_ops = {
+	.read_resources = scr_memory_resources,
+};
 
 struct chip_operations mainboard_ops = {
 	.name = "Syntacore " CONFIG_MAINBOARD_PART_NUMBER,
