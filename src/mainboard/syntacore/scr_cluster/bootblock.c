@@ -4,6 +4,8 @@
 #include <cbfs.h>
 #include <console/console.h>
 #include <commonlib/device_tree.h>
+#include <endian.h>
+#include <halt.h>
 #include <mcall.h>
 #include <soc/scr_hal.h>
 
@@ -43,16 +45,13 @@ void bootblock_mainboard_init(void)
 	size_t size = 0;
 	void *fdt = cbfs_ro_map("DTB", &size);
 
-	if (!fdt) {
-		printk(BIOS_ERR, "SCR: no 'dtb' file in CBFS\n");
-		return;
-	}
+	if (!fdt)
+		die("SCR: no 'DTB' file in CBFS\n");
 
-	if (!fdt_is_valid(fdt)) {
-		printk(BIOS_ERR, "SCR: invalid FDT magic at %p\n", fdt);
-		cbfs_unmap(fdt);
-		return;
-	}
+	if (size < sizeof(struct fdt_header) ||
+	    be32toh(((const struct fdt_header *)fdt)->totalsize) > size ||
+	    !fdt_is_valid(fdt))
+		die("SCR: invalid or truncated FDT in CBFS\n");
 
 	HLS()->fdt = fdt;
 	printk(BIOS_DEBUG, "SCR: FDT @ %p (%zu bytes)\n", fdt, size);
