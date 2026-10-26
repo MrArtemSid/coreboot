@@ -17,6 +17,6 @@
 
 /* Shared memory used by RPM/modem/TZ, must not be overwritten */
 #define SMEM_BASE			0x86300000
-#define SMEM_SIZE			0x200000
+#define SMEM_SIZE			0x100000
 
 #endif /* __SOC_QUALCOMM_MSM89X7_ADDRESSMAP_H__ */
