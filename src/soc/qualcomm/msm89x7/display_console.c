@@ -15,14 +15,18 @@
  * which reads correctly regardless of the channel order.
  */
 
+#include <arch/lib_helpers.h>
 #include <commonlib/helpers.h>
+#include <console/console.h>
 #include <console/display_console.h>
 #include <device/mmio.h>
+#include <rules.h>
 #include <soc/display_console.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
+#include <soc/ramoops.h>
 #include <soc/addressmap.h>
 
 extern const uint8_t font_8x16[256][16];
@@ -99,6 +103,8 @@ static void detect_framebuffer(void)
 
 	/* Nothing detected (splash disabled?): fall back to the Kconfig
 	 * geometry. Drawing is harmless even if it is invisible. */
+	printk(BIOS_ERR, "display console: no MDP pipe detected, using "
+	       "Kconfig fallback\n");
 	fb_addr = CONFIG_MSM89X7_FB_ADDR;
 	fb_stride = CONFIG_MSM89X7_FB_WIDTH * 4;
 	fb_width = CONFIG_MSM89X7_FB_WIDTH;
@@ -116,7 +122,7 @@ static void *pixel_base(uint32_t x, uint32_t y)
 static void pixel_put(uint32_t x, uint32_t y, int on)
 {
 	if (fb_bpp == 3) {
-		uint8_t *p = pixel_base(x, y);
+		volatile uint8_t *p = pixel_base(x, y);
 		uint8_t v = on ? 0xff : 0x00;
 		p[0] = v;
 		p[1] = v;
@@ -149,6 +155,26 @@ static void scroll(void)
 	       FONT_HEIGHT * fb_stride);
 }
 
+/* The cursor lives in IMEM (not BSS): every stage has its own BSS and
+ * would otherwise restart at (0,0), drawing over the previous stage's
+ * log. IMEM survives stage transitions and warm resets. */
+static void cursor_save(void)
+{
+	write32((void *)MSM89X7_IMEM_CURSOR_ADDR, row);
+	write32((void *)(MSM89X7_IMEM_CURSOR_ADDR + 4), col);
+}
+
+static void cursor_restore(void)
+{
+	uint32_t r = read32((void *)MSM89X7_IMEM_CURSOR_ADDR);
+	uint32_t c = read32((void *)(MSM89X7_IMEM_CURSOR_ADDR + 4));
+
+	if (r < max_row && c < max_col) {
+		row = r;
+		col = c;
+	}
+}
+
 static void newline(void)
 {
 	col = 0;
@@ -156,10 +182,34 @@ static void newline(void)
 		row = max_row - 1;
 		scroll();
 	}
+	cursor_save();
 }
 
 static void display_consoleputc(unsigned char byte)
 {
+	static enum { ESC_NONE, ESC_START, ESC_CSI } escape_state;
+
+	/* Pet watchdog on console activity so long dumps don't bite */
+	if (CONFIG(MSM89X7_RAMOOPS_CONSOLE))
+		msm89x7_wdt_pet();
+
+	/* printk sends ANSI color sequences to all interactive consoles.
+	 * This console has no colors; consume CSI sequences instead of
+	 * drawing the escape character and its parameters as glyphs. */
+	if (byte == '\x1b') {
+		escape_state = ESC_START;
+		return;
+	}
+	if (escape_state == ESC_START) {
+		escape_state = byte == '[' ? ESC_CSI : ESC_NONE;
+		return;
+	}
+	if (escape_state == ESC_CSI) {
+		if (byte >= 0x40 && byte <= 0x7e)
+			escape_state = ESC_NONE;
+		return;
+	}
+
 	switch (byte) {
 	case '\n':
 		newline();
@@ -177,14 +227,40 @@ static void display_consoleputc(unsigned char byte)
 	draw_char(byte);
 	if (++col >= max_col)
 		newline();
+	else
+		cursor_save();
 }
 
 void __display_console_init(void)
 {
-	/* The splash framebuffer content is left as-is; the cursor just
-	 * starts at the top left corner on top of it. */
+	/* Each stage has its own BSS: rediscover the inherited scanout so
+	 * enabled and the geometry are valid in romstage and ramstage too. */
 	detect_framebuffer();
+
+	if (ENV_BOOTBLOCK) {
+		/* Clear the splash with plain aligned 32-bit stores:
+		 * the bootblock console runs before the MMU is enabled,
+		 * where a library memset may fault on wide/unaligned
+		 * accesses to device memory. */
+		volatile uint32_t *p = (void *)(uintptr_t)fb_addr;
+		size_t words = (size_t)fb_stride * fb_height / 4;
+
+		for (size_t i = 0; i < words; ++i)
+			p[i] = 0;
+		row = 0;
+		col = 0;
+		cursor_save();
+	} else {
+		cursor_restore();
+	}
+
 	enabled = true;
+
+	printk(BIOS_NOTICE, "display console [%s]: fb=0x%llx %ux%u "
+	       "stride=%u bpp=%u row=%u col=%u\n",
+	       ENV_BOOTBLOCK ? "bootblock" : ENV_RAMSTAGE ? "ramstage" :
+				       "romstage",
+	       fb_addr, fb_width, fb_height, fb_stride, fb_bpp, row, col);
 }
 
 void __display_console_tx_byte(unsigned char data)

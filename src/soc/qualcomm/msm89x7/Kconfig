@@ -34,10 +34,11 @@ config MEMLAYOUT_LD_FILE
 	string
 	default "src/soc/qualcomm/msm89x7/memlayout.ld"
 
-# Base of DRAM as mapped by the primary bootloader (always 0x80000000
-# on this SoC family, matching the address LK loads arm64 kernels to).
+# Physical DRAM base, independent of the linked coreboot image address.
+# Santoni's LK /memory contains 1 GiB at 0x40000000 and 2 GiB at 0x80000000.
 config MSM89X7_DDR_START
 	hex
+	default 0x40000000 if BOARD_QCOM_MSM89X7_SANTONI
 	default 0x80000000
 
 # Size of DRAM in MiB as reported to coreboot. This is only a fallback:
@@ -99,6 +100,29 @@ config MSM89X7_DISPLAY_CONSOLE
 	  (MIPI_FB_ADDR) scanning on the panel. Draw the coreboot console
 	  output directly into that buffer, so the log is visible without
 	  any display hardware initialization.
+
+config MSM89X7_RAMOOPS_CONSOLE
+	bool "Mirror console into the lk2nd ramoops buffer"
+	default y
+	select CONSOLE_RAMOOPS
+	help
+	  Mirror the console log into the ramoops console buffer that
+	  lk2nd places at the top of the flash scratch area. After a
+	  reset the log is fetched with:
+	    fastboot oem ramoops console
+	    fastboot get_staged coreboot.log
+
+if MSM89X7_RAMOOPS_CONSOLE
+
+config MSM89X7_RAMOOPS_ADDR
+	hex "Ramoops console buffer address"
+	default 0xbffc0000
+
+config MSM89X7_RAMOOPS_SIZE
+	hex "Ramoops console buffer size (must match lk2nd's console_size)"
+	default 0x40000
+
+endif
 
 if MSM89X7_DISPLAY_CONSOLE
 

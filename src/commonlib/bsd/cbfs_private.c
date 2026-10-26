@@ -10,16 +10,27 @@ static enum cb_err read_next_header(cbfs_dev_t dev, size_t *offset, struct cbfs_
 	DEBUG("Looking for next file @%#zx...\n", *offset);
 	*offset = ALIGN_UP(*offset, CBFS_ALIGNMENT);
 	while (*offset + sizeof(*buffer) < devsize) {
-		if (cbfs_dev_read(dev, buffer, *offset, sizeof(*buffer)) != sizeof(*buffer))
+		if (cbfs_dev_read(dev, buffer, *offset, sizeof(*buffer)) != sizeof(*buffer)) {
+			printk(BIOS_ERR, "[CBFS_READ] IO error reading @%#zx\n", *offset);
 			return CB_CBFS_IO;
+		}
 
 		if (memcmp(buffer->magic, CBFS_FILE_MAGIC, sizeof(buffer->magic)) == 0)
 			return CB_SUCCESS;
 
+		if (*offset == 0) {
+			printk(BIOS_INFO, "[CBFS_READ] First 8 bytes @0: %02x %02x %02x %02x %02x %02x %02x %02x ('%.8s')\n",
+			       (unsigned char)buffer->magic[0], (unsigned char)buffer->magic[1],
+			       (unsigned char)buffer->magic[2], (unsigned char)buffer->magic[3],
+			       (unsigned char)buffer->magic[4], (unsigned char)buffer->magic[5],
+			       (unsigned char)buffer->magic[6], (unsigned char)buffer->magic[7],
+			       buffer->magic);
+		}
+
 		*offset += CBFS_ALIGNMENT;
 	}
 
-	DEBUG("End of CBFS reached\n");
+	printk(BIOS_INFO, "[CBFS_READ] End of CBFS reached at offset %#zx\n", *offset);
 	return CB_CBFS_NOT_FOUND;
 }
 
@@ -36,6 +47,7 @@ enum cb_err cbfs_walk(cbfs_dev_t dev, enum cb_err (*walker)(cbfs_dev_t dev, size
 	if (do_hash && vb2_digest_init(&dc, CBFS_HASH_HWCRYPTO, metadata_hash->algo, 0))
 		return CB_ERR_ARG;
 
+	printk(BIOS_INFO, "[CBFS_WALK] devsize=%#zx\n", devsize);
 	size_t offset = 0;
 	enum cb_err ret_header;
 	enum cb_err ret_walker = CB_CBFS_NOT_FOUND;
@@ -46,6 +58,9 @@ enum cb_err cbfs_walk(cbfs_dev_t dev, enum cb_err (*walker)(cbfs_dev_t dev, size
 		const uint32_t data_length = be32toh(mdata.h.len);
 		const uint32_t type = be32toh(mdata.h.type);
 		const bool empty = (type == CBFS_TYPE_DELETED || type == CBFS_TYPE_NULL);
+
+		printk(BIOS_INFO, "[CBFS_WALK] Header @%#zx: type=%#x attr=%#x data=%#x len=%#x\n",
+		       offset, type, attr_offset, data_offset, data_length);
 
 		DEBUG("Found CBFS header @%#zx (type %d, attr +%#x, data +%#x, length %#x)\n",
 		      offset, type, attr_offset, data_offset, data_length);
@@ -107,6 +122,10 @@ next_file:
 			memcpy(metadata_hash->raw, real_hash, hash_size);
 		else if (memcmp(metadata_hash->raw, real_hash, hash_size) != 0)
 			return CB_CBFS_HASH_MISMATCH;
+	}
+
+	if (ret_walker == CB_CBFS_NOT_FOUND) {
+		printk(BIOS_INFO, "[CBFS_WALK] Completed scan, ret_walker=NOT_FOUND\n");
 	}
 
 	return ret_walker;

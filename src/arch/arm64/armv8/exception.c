@@ -152,6 +152,17 @@ static int handle_exception(struct exc_state *state, uint64_t idx)
 
 void exc_dispatch(struct exc_state *state, uint64_t idx)
 {
+	if (CONFIG(SOC_QUALCOMM_MSM89X7)) {
+		volatile uint64_t *raw = (void *)(uintptr_t)0xbfffff80;
+		if (raw[0] == 0 || raw[0] == UINT64_MAX) {
+			raw[0] = raw_read_esr();
+			raw[1] = raw_read_far();
+			raw[2] = raw_read_elr();
+			raw[3] = raw_read_sctlr();
+			raw[4] = idx;
+			dsb();
+		}
+	}
 	int ret;
 
 	if (idx >= NUM_EXC_VIDS) {

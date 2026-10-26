@@ -600,3 +600,13 @@ config HWBASE_DEBUG_NULL
 	depends on !HWBASE_DEBUG_CB
 
 endmenu
+
+config CONSOLE_RAMOOPS
+	bool "Mirror console output into a persistent RAM buffer"
+	default n
+	help
+	  Write the console output into a fixed RAM region in the pstore
+	  persistent_ram console format (signature 'DBGC', no ECC), so the
+	  log survives a reset and can be read out by the next boot stage
+	  (e.g. lk2nd's "fastboot oem ramoops console"). The implementation
+	  is provided by the SoC.

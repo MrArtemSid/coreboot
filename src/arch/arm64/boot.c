@@ -35,6 +35,9 @@ void arch_prog_run(struct prog *prog)
 
 	doit = prog_entry(prog);
 
+	printk(BIOS_INFO, "[ARCH_PROG_RUN] stage=%s entry=%p arg=0x%lx\n",
+	       prog_name(prog), doit, (unsigned long)prog_entry_arg(prog));
+
 	doit(prog_entry_arg(prog));
 }
 

@@ -16,18 +16,14 @@ size_t strlen(const char *str)
 size_t strnlen(const char *str, size_t maxlen)
 {
 	const char *ptr = str;
-	const char *end = str + maxlen;
 
 	if (!maxlen)
 		return 0;
 
-	while (*ptr++) {
-		/* Make sure this checks for ==, not >=, because the calculation
-		   for `end` may overflow in some edge cases. */
-		if (ptr == end)
-			return maxlen;
-	}
-	return ptr - str - 1;
+	while (maxlen-- > 0 && *ptr)
+		ptr++;
+
+	return ptr - str;
 }
 
 char *strcat(char *dst, const char *src)

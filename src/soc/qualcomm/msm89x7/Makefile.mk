@@ -5,10 +5,11 @@ ifeq ($(CONFIG_SOC_QUALCOMM_MSM89X7),y)
 ################################################################################
 all-$(CONFIG_DRIVERS_UART) += uart.c
 all-$(CONFIG_MSM89X7_DISPLAY_CONSOLE) += display_console.c font_8x16.c
+all-$(CONFIG_MSM89X7_RAMOOPS_CONSOLE) += ramoops.c
 
 ################################################################################
 bootblock-y += bootblock.c
-bootblock-y += mmu.c
+bootblock-y += mmu.c mmu_probe.S
 
 ################################################################################
 romstage-y += cbmem.c

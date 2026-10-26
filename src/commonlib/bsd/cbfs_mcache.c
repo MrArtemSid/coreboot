@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <commonlib/bsd/cbfs_private.h>
 #include <commonlib/bsd/helpers.h>
+#include <console/console.h>
 
 /*
  * A CBFS metadata cache is an in memory data structure storing CBFS file headers (= metadata).
@@ -48,11 +49,19 @@ static enum cb_err build_walker(cbfs_dev_t dev, size_t offset, const union cbfs_
 	union mcache_entry *entry = args->mcache;
 	const uint32_t data_offset = be32toh(mdata->h.offset);
 
-	if (args->end - args->mcache < data_offset)
-		return CB_CBFS_CACHE_FULL;
+	printk(BIOS_INFO, "[MCACHE_BUILD] File '%s' @%#zx, data_offset=%#x, count=%d\n",
+	       mdata->h.filename, offset, data_offset, args->count);
 
-	if (cbfs_copy_fill_metadata(args->mcache, mdata, already_read, dev, offset))
+	if (args->end - args->mcache < data_offset) {
+		printk(BIOS_ERR, "[MCACHE_BUILD] Overflow: left=%#zx needed=%#x\n",
+		       (size_t)(args->end - args->mcache), data_offset);
+		return CB_CBFS_CACHE_FULL;
+	}
+
+	if (cbfs_copy_fill_metadata(args->mcache, mdata, already_read, dev, offset)) {
+		printk(BIOS_ERR, "[MCACHE_BUILD] copy_fill failed!\n");
 		return CB_CBFS_IO;
+	}
 
 	entry->magic = MCACHE_MAGIC_FILE;
 	entry->offset = offset;

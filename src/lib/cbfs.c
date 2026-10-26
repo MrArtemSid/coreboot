@@ -621,6 +621,7 @@ enum cb_err cbfs_prog_stage_load(struct prog *pstage)
 	struct region_device rdev;
 	enum cb_err err;
 
+	printk(BIOS_INFO, "[CBFS] Loading stage '%s'...\n", prog_name(pstage));
 	prog_locate_hook(pstage);
 
 	if ((err = _cbfs_boot_lookup(prog_name(pstage), false, &mdata, &rdev)))
@@ -668,15 +669,21 @@ enum cb_err cbfs_prog_stage_load(struct prog *pstage)
 
 	size_t fsize = cbfs_load_and_decompress(&rdev, prog_start(pstage), prog_size(pstage),
 						compression, &mdata, false);
-	if (!fsize)
+	if (!fsize) {
+		printk(BIOS_ERR, "[CBFS] Decompression failed!\n");
 		return CB_ERR;
+	}
+
+	printk(BIOS_INFO, "[CBFS] Decompressed %zu bytes, clearing BSS...\n", fsize);
 
 	/* Clear area not covered by file. */
 	memset(prog_start(pstage) + fsize, 0, prog_size(pstage) - fsize);
 
+	printk(BIOS_INFO, "[CBFS] Flushing caches for loaded stage...\n");
 	prog_segment_loaded((uintptr_t)prog_start(pstage), prog_size(pstage),
 			    SEG_FINAL);
 
+	printk(BIOS_INFO, "[CBFS] Stage loaded successfully!\n");
 	return CB_SUCCESS;
 }
 
@@ -756,12 +763,14 @@ const struct cbfs_boot_device *cbfs_get_boot_device(bool force_ro)
 	   place (e.g. Intel Top Swap). */
 	const char *region = cbfs_fmap_region_hint();
 
+	printk(BIOS_INFO, "[CBFS] Locating %s region...\n", region);
 	if (fmap_locate_area_as_rdev(region, &ro.rdev))
 		die("Cannot locate %s CBFS", region);
 
-	printk(BIOS_INFO, "Booting from %s region\n", region);
+	printk(BIOS_INFO, "[CBFS] Booting from %s region\n", region);
 
 	if (ENV_INITIAL_STAGE) {
+		printk(BIOS_INFO, "[CBFS] Initializing boot device metadata...\n");
 		enum cb_err err = cbfs_init_boot_device(&ro, metadata_hash_get());
 		if (err == CB_CBFS_HASH_MISMATCH)
 			die("RO CBFS metadata hash verification failure");

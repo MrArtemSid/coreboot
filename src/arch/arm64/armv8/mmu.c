@@ -98,7 +98,8 @@ static uint64_t *setup_new_table(uint64_t desc, size_t xlat_size)
 
 	void *frame_base = (void *)(desc & XLAT_ADDR_MASK);
 	const char *level_name = table_level_name(xlat_size);
-	printk(BIOS_DEBUG,
+	/* Keep table-allocation chatter off the panel during msm89x7 bring-up. */
+	printk(CONFIG(SOC_QUALCOMM_MSM89X7) ? BIOS_SPEW : BIOS_DEBUG,
 	       "Backing address range [" ADDR_FMT ":" ADDR_FMT ") with new %s table @%p\n",
 	       (uintptr_t)frame_base,
 	       (uintptr_t)frame_base + (xlat_size << BITS_RESOLVED_PER_LVL),
@@ -232,8 +233,18 @@ static uint64_t get_pte(void *addr)
 static void assert_correct_ttb_mapping(void *addr)
 {
 	uint64_t pte = get_pte(addr);
-	assert(((pte >> BLOCK_INDEX_SHIFT) & BLOCK_INDEX_MASK)
-	       == BLOCK_INDEX_MEM_NORMAL && !(pte & BLOCK_NS));
+	bool valid = ((pte >> BLOCK_INDEX_SHIFT) & BLOCK_INDEX_MASK)
+		     == BLOCK_INDEX_MEM_NORMAL && !(pte & BLOCK_NS);
+
+	if (CONFIG(SOC_QUALCOMM_MSM89X7) && !valid) {
+		printk(BIOS_ERR, "[TTB] addr=0x%llx pte=0x%016llx\n",
+		       (unsigned long long)(uintptr_t)addr, (unsigned long long)pte);
+		printk(BIOS_ERR, "[TTB] AttrIdx=%u NS=%u TTBR0=0x%llx\n",
+		       (unsigned int)((pte >> BLOCK_INDEX_SHIFT) & BLOCK_INDEX_MASK),
+		       !!(pte & BLOCK_NS), (unsigned long long)raw_read_ttbr0());
+		die("Invalid TTB mapping; MMU remains OFF\n");
+	}
+	assert(valid);
 }
 
 
@@ -453,10 +464,23 @@ void mmu_init(void)
 	/* Initialize MAIR indices */
 	raw_write_mair(MAIR_ATTRIBUTES);
 
-	/* Initialize TCR flags */
-	raw_write_tcr(TCR_TOSZ | TCR_IRGN0_NM_WBWAC | TCR_ORGN0_NM_WBWAC |
-				 TCR_SH0_IS | TCR_TG0_4KB | TCR_PS_256TB |
-				 TCR_TBI_USED);
+	/* EL1 and EL2/EL3 have different physical-address-size fields. */
+	uint64_t tcr = TCR_TOSZ | TCR_IRGN0_NM_WBWAC | TCR_ORGN0_NM_WBWAC |
+		       TCR_SH0_IS | TCR_TG0_4KB | TCR_TBI_USED;
+	if (CONFIG_ARM64_CURRENT_EL == EL1) {
+		/* Do not request a PA width greater than the CPU implements.
+		 * This mapper supports at most 48-bit output addresses. */
+		uint64_t pa_range = raw_read_id_aa64mmfr0_el1() & 0xf;
+		if (pa_range > 5)
+			pa_range = 5;
+		/* We only install TTBR0; disable TTBR1 table walks while
+		 * still giving its address-size/granule fields valid values. */
+		tcr |= (pa_range << TCR_EL1_IPS_SHIFT) | TCR_EL1_EPD1 |
+		       (TCR_TOSZ << TCR_EL1_T1SZ_SHIFT) | TCR_EL1_TG1_4KB;
+	} else {
+		tcr |= TCR_PS_256TB;
+	}
+	raw_write_tcr(tcr);
 }
 
 /* Func : mmu_save_context
@@ -495,13 +519,24 @@ void mmu_restore_context(const struct mmu_context *mmu_context)
 
 void mmu_enable(void)
 {
+	volatile uint64_t *diag = (void *)(uintptr_t)0xbfffffd8;
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*diag = 0xcb310010;
 	assert_correct_ttb_mapping(_ttb);
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*diag = 0xcb310020;
 	assert_correct_ttb_mapping((void *)((uintptr_t)_ettb - 1));
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*diag = 0xcb310030;
 
 	uint32_t sctlr = raw_read_sctlr();
 	raw_write_sctlr(sctlr | SCTLR_C | SCTLR_M | SCTLR_I);
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*diag = 0xcb310040;
 
 	isb();
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*diag = 0xcb310050;
 }
 
 /*

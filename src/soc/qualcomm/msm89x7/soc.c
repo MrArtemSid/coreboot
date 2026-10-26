@@ -16,7 +16,9 @@
  * and TrustZone carved out, so they are the most reliable source of
  * usable RAM and reserved regions.
  */
-static void lk_dtb_add_ranges(enum bootmem_type tag)
+/* Install RAM as device resources before bootmem reserves CBMEM and stages.
+ * The later platform hook must only add reservations, never RAM. */
+static bool lk_dtb_add_ranges(struct device *dev)
 {
 	const void *blob;
 	struct device_tree_region regions[16];
@@ -28,7 +30,7 @@ static void lk_dtb_add_ranges(enum bootmem_type tag)
 	if (!blob || !fdt_is_valid(blob)) {
 		printk(BIOS_INFO, "No valid device tree from primary "
 		       "bootloader\n");
-		return;
+		return false;
 	}
 
 	printk(BIOS_INFO, "Using memory map from primary bootloader DTB\n");
@@ -38,10 +40,15 @@ static void lk_dtb_add_ranges(enum bootmem_type tag)
 	if (offset) {
 		count = fdt_read_reg_prop(blob, offset, addr_cells, size_cells,
 					  regions, ARRAY_SIZE(regions));
-		for (i = 0; i < count; ++i)
-			bootmem_add_range(regions[i].addr, regions[i].size,
-					  tag);
+		if (dev) {
+			for (i = 0; i < count; ++i)
+				ram_range(dev, i, regions[i].addr, regions[i].size);
+			return count != 0;
+		}
 	}
+
+	if (dev)
+		return false;
 
 	offset = fdt_find_node_by_path(blob, "/reserved-memory", &addr_cells,
 				       &size_cells);
@@ -61,6 +68,7 @@ static void lk_dtb_add_ranges(enum bootmem_type tag)
 						  BM_MEM_RESERVED);
 		}
 	}
+	return true;
 }
 
 void bootmem_platform_add_ranges(void)
@@ -73,21 +81,31 @@ void bootmem_platform_add_ranges(void)
 	/* Shared memory used by RPM, modem and TrustZone. */
 	bootmem_add_range(SMEM_BASE, SMEM_SIZE, BM_MEM_RESERVED);
 
-	/* Memory map from the primary bootloader takes precedence over
-	 * the fallback in soc_read_resources. */
-	lk_dtb_add_ranges(BM_MEM_RAM);
+	if (CONFIG(MSM89X7_RAMOOPS_CONSOLE))
+		bootmem_add_range(CONFIG_MSM89X7_RAMOOPS_ADDR,
+				  CONFIG_MSM89X7_RAMOOPS_SIZE, BM_MEM_RESERVED);
+
+	/* Fixed first-fault and progress beacons, independent of ramoops config. */
+	bootmem_add_range(0xbfffff80, 0x80, BM_MEM_RESERVED);
+
+	/* Only reservations here: RAM must not overwrite CBMEM/stage ranges. */
+	lk_dtb_add_ranges(NULL);
 }
 
 static void soc_read_resources(struct device *dev)
 {
-	/* Fallback until the DTB from the primary bootloader has been
-	 * parsed; ranges overlap with it are overridden above. */
+	if (lk_dtb_add_ranges(dev))
+		return;
+
+	/* Fallback when the primary bootloader supplied no RAM map. */
 	ram_range(dev, 0, (uintptr_t)_dram,
 		  (uint64_t)CONFIG_MSM89X7_DRAM_SIZE_MB * MiB);
 }
 
 static void soc_init(struct device *dev)
 {
+	printk(BIOS_INFO, "MSM89X7: soc_init entered in ramstage!\n");
+	/* LK owns the active display clocks; preserve continuous splash. */
 }
 
 static struct device_operations soc_ops = {

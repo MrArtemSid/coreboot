@@ -54,9 +54,11 @@ static void report(const struct fmap *fmap)
 {
 	print_once(BIOS_DEBUG, "FMAP: Found \"%s\" version %d.%d at %#x.\n",
 	       fmap->name, fmap->ver_major, fmap->ver_minor, FMAP_OFFSET);
-	print_once(BIOS_DEBUG, "FMAP: base = %#llx size = %#x #areas = %d\n",
+	printk(BIOS_DEBUG, "FMAPTRACE: report mid\n");
+	printk(BIOS_DEBUG, "FMAP: base = %#llx size = %#x #areas = %d\n",
 	       (long long)le64toh(fmap->base), le32toh(fmap->size),
 	       le16toh(fmap->nareas));
+	printk(BIOS_DEBUG, "FMAPTRACE: report end\n");
 	fmap_print_once = 1;
 }
 
@@ -105,6 +107,7 @@ static void setup_preram_cache(struct region_device *cache_rdev)
 	report(fmap);
 
 register_cache:
+	printk(BIOS_DEBUG, "FMAPTRACE: cache register\n");
 	rdev_chain_mem(cache_rdev, fmap, FMAP_SIZE);
 }
 
@@ -176,8 +179,11 @@ int fmap_locate_area(const char *name, struct region *ar)
 	if (name == NULL || ar == NULL)
 		return -1;
 
+	printk(BIOS_DEBUG, "FMAPTRACE: locate_area enter\n");
 	if (find_fmap_directory(&fmrd))
 		return -1;
+	printk(BIOS_DEBUG, "FMAPTRACE: directory ok, sz=%zu\n",
+	       region_device_sz(&fmrd));
 
 	/* Start reading the areas just after fmap header. */
 	offset = sizeof(struct fmap);
@@ -189,6 +195,9 @@ int fmap_locate_area(const char *name, struct region *ar)
 
 		if (area == NULL)
 			return -1;
+
+		printk(BIOS_DEBUG, "FMAPTRACE: off=%#zx n0=%02x\n",
+		       offset, area->name[0]);
 
 		if (strcmp((const char *)area->name, name)) {
 			rdev_munmap(&fmrd, area);

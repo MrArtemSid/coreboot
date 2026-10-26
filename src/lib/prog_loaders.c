@@ -37,14 +37,20 @@ void run_romstage(void)
 		if (legacy_romstage_select_and_load(&romstage) != CB_SUCCESS)
 			goto fail;
 	} else {
-		if (cbfs_prog_stage_load(&romstage))
+		if (cbfs_prog_stage_load(&romstage)) {
+			printk(BIOS_ERR, "[BOOTBLOCK] cbfs_prog_stage_load failed!\n");
 			goto fail;
+		}
 	}
+
+	printk(BIOS_INFO, "[BOOTBLOCK] romstage loaded at %p, entry=%p\n",
+	       prog_start(&romstage), prog_entry(&romstage));
 
 	timestamp_add_now(TS_COPYROM_END);
 
 	console_time_report();
 
+	printk(BIOS_INFO, "[BOOTBLOCK] Calling prog_run(&romstage)...\n");
 	prog_run(&romstage);
 
 fail:
@@ -129,6 +135,9 @@ void __noreturn run_ramstage(void)
 
 	/* This overrides the arg fetched from the relocatable module */
 	prog_set_arg(&ramstage, (void *)cbmem_top());
+
+	printk(BIOS_INFO, "[RUN_RAMSTAGE] Calling prog_run(&ramstage)... entry=%p arg=%p\n",
+	       prog_entry(&ramstage), prog_entry_arg(&ramstage));
 
 	prog_run(&ramstage);
 

@@ -21,6 +21,8 @@
 
 #define FIFO_DATA_SIZE	4
 
+/* Unused helper functions when UART hardware is inactive */
+#if 0
 static void *uart_dm_base(void)
 {
 	return (void *)(uintptr_t)CONFIG_MSM89X7_UART_BASE;
@@ -52,29 +54,21 @@ static unsigned int msm_boot_uart_dm_init_rx_transfer(void *uart_dm_base)
 
 	return MSM_BOOT_UART_DM_E_SUCCESS;
 }
+#endif
 
 void uart_tx_byte(unsigned int idx, unsigned char data)
 {
-	void *base = uart_dm_base();
-
-	/* Wait until transmit FIFO is empty. */
-	while (!(read32(MSM_BOOT_UART_DM_SR(base)) &
-		 MSM_BOOT_UART_DM_SR_TXEMT))
-		udelay(1);
-	/*
-	 * TX FIFO is ready to accept new character(s). First write number of
-	 * characters to be transmitted.
-	 */
-	write32(MSM_BOOT_UART_DM_NO_CHARS_FOR_TX(base), 1);
-
-	/* And now write the character(s) */
-	write32(MSM_BOOT_UART_DM_TF(base, 0), data);
+	/* On handsets without active UART (e.g. santoni), touching BLSP1 UART2
+	 * registers under MMU Device-nGnRnE causes Synchronous External Abort (SEA)
+	 * leading to an immediate hard reset by RPM/PMIC. Skip UART write. */
+	return;
 }
 
 /**
  * @brief msm_boot_uart_dm_reset - resets UART controller
  * @param base: UART controller base address
  */
+#if 0
 static unsigned int msm_boot_uart_dm_reset(void *base)
 {
 	write32(MSM_BOOT_UART_DM_CR(base), MSM_BOOT_UART_DM_CMD_RESET_RX);
@@ -145,8 +139,9 @@ static unsigned int msm_boot_uart_dm_init(void *uart_dm_base)
 	/* Initialize Receive Path */
 	msm_boot_uart_dm_init_rx_transfer(uart_dm_base);
 
-	return 0;
+	return MSM_BOOT_UART_DM_E_SUCCESS;
 }
+#endif
 
 /**
  * @brief uart_init - initializes UART controller
@@ -156,14 +151,14 @@ static unsigned int msm_boot_uart_dm_init(void *uart_dm_base)
  */
 void uart_init(unsigned int idx)
 {
-	/* Note int idx isn't used in this driver. */
-	msm_boot_uart_dm_init(uart_dm_base());
+	/* On handsets without active UART (e.g. santoni), touching BLSP1 UART2
+	 * registers causes bus aborts. Skip hardware init. */
+	return;
 }
 
 /* for the benefit of non-console uart init */
 void msm89x7_uart_init(void)
 {
-	uart_init(0);
 }
 
 /**
@@ -171,11 +166,6 @@ void msm89x7_uart_init(void)
  */
 void uart_tx_flush(unsigned int idx)
 {
-	void *base = uart_dm_base();
-
-	while (!(read32(MSM_BOOT_UART_DM_SR(base)) &
-		 MSM_BOOT_UART_DM_SR_TXEMT))
-		;
 }
 
 uint8_t uart_rx_byte(unsigned int idx)

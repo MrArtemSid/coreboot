@@ -91,10 +91,30 @@ static void line_start(union log_state state)
 		__cbmemc_tx_byte(marker);
 		return;
 	}
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff8 = 0xcb340040;
 	console_stored_tx_byte(marker, NULL);
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff8 = 0xcb340050;
 
 	/* Interactive consoles get a `[DEBUG]  ` style readable prefix,
 	   and potentially an escape sequence for highlighting. */
+	if (CONFIG(SOC_QUALCOMM_MSM89X7)) {
+		console_interactive_tx_byte('[', NULL);
+		if (state.level <= BIOS_LOG_PREFIX_MAX_LEVEL) {
+			for (int j = 0; j < 5; j++)
+				console_interactive_tx_byte(bios_log_prefix[state.level][j], NULL);
+		} else {
+			const char *p = "LOG  ";
+			while (*p)
+				console_interactive_tx_byte(*p++, NULL);
+		}
+		console_interactive_tx_byte(']', NULL);
+		console_interactive_tx_byte(' ', NULL);
+		console_interactive_tx_byte(' ', NULL);
+		return;
+	}
+
 	if (CONFIG(CONSOLE_USE_ANSI_ESCAPES))
 		wrap_interactive_printf(BIOS_LOG_ESCAPE_PATTERN, bios_log_escape[state.level]);
 	if (CONFIG(CONSOLE_USE_LOGLEVEL_PREFIX))
@@ -134,15 +154,31 @@ int vprintk(int msg_level, const char *fmt, va_list args)
 	if (CONFIG(SQUELCH_EARLY_SMP) && ENV_ROMSTAGE_OR_BEFORE && !boot_cpu())
 		return 0;
 
+	if (CONFIG(SOC_QUALCOMM_MSM89X7)) {
+		uint64_t ticks, sctlr;
+		__asm__ volatile("mrs %0, cntpct_el0" : "=r"(ticks));
+		__asm__ volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+		*(volatile uint64_t *)(uintptr_t)0xbfffffb0 = ticks;
+		*(volatile uint64_t *)(uintptr_t)0xbfffffb8 = sctlr;
+		*(volatile uint64_t *)(uintptr_t)0xbffffff0 = 0xcb330010;
+	}
 	state.speed = console_log_level(msg_level);
 	if (state.speed < CONSOLE_LOG_FAST)
 		return 0;
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff0 = 0xcb330020;
 
 	spin_lock(&console_lock);
 
 	console_time_run();
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff0 = 0xcb330030;
 
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff8 = 0xcb340010;
 	i = vtxprintf(wrap_putchar, fmt, args, state.as_ptr);
+	if (CONFIG(SOC_QUALCOMM_MSM89X7))
+		*(volatile uint64_t *)(uintptr_t)0xbffffff0 = 0xcb330040;
 	if (!LOG_FAST(state))
 		console_tx_flush();
 
