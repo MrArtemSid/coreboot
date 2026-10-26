@@ -25,6 +25,7 @@
 #include "drivers/plic.h"
 #include "drivers/console.h"
 #include "drivers/cache.h"
+#include "perf.h"
 #include "plf.h"
 
 /*
@@ -76,6 +77,10 @@ void plf_init_features(void);
 
 void scr_hal_features_init(void)
 {
+#if PLF_CORE_VARIANT_SCR > 1
+	/* Run and expose the counters as HAL_ENABLE_PERF does in miniboot. */
+	perf_init_hpm();
+#endif
 	/* Feature-enable CSR policy as in miniboot's plf_init_generic(). */
 	plf_init_features();
 }
