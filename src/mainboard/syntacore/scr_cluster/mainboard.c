@@ -64,19 +64,20 @@ static void scr_mainboard_init(struct device *dev)
 {
 	scr_memory_resources(dev);
 
+	/* The stock SiFive PLIC driver does not program SCR source modes. */
+	if (CONFIG(SCR9_L2_QEMU_VIRTIO) || CONFIG(SCR9_L3_QEMU_VIRTIO)) {
+		scr_hal_plic_set_level_high(2); /* Ethernet DMA */
+		scr_hal_plic_set_level_high(3);
+	}
+
 	if (CONFIG(SCR9_L2_QEMU_VIRTIO)) {
-		/* The stock SiFive PLIC driver does not program SCR source modes. */
-		scr_hal_plic_set_level_high(1);
+		scr_hal_plic_set_level_high(1); /* UART0 */
 		for (int irq = 12; irq <= 17; irq++)
 			scr_hal_plic_set_level_high(irq);
 	}
 
 	if (CONFIG(SCR9_L3_QEMU_VIRTIO)) {
-		/*
-		 * Set Syntacore PLIC source modes to level-high for UART and
-		 * the QEMU virtio transports (IRQs 240..247).
-		 */
-		scr_hal_plic_set_level_high(60); /* UART0 IRQ */
+		scr_hal_plic_set_level_high(60); /* UART0 */
 		for (int irq = 240; irq <= 247; irq++)
 			scr_hal_plic_set_level_high(irq);
 	}
