@@ -1,20 +1,39 @@
-/* Minimal ARM64 payload for coreboot on MSM8937 santoni */
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Santoni diagnostic only: entry beacon and 3s WDT.
+ * No GPIO, clock, pinmux or UART accesses. Not an OS-ready payload.
+ */
+#ifndef PAYLOAD_GENERATION
+#error "Build with util/msm89x7-bootimg/build_payload.py"
+#endif
 .global _start
 .section .text.entry, "ax"
 _start:
-	/* Entry: x0 receives coreboot tables / arg pointer */
-	mov	x19, x0
+	/* Existing reserved/NC diagnostic tail: unused u64 outside fault
+	 * slots [80,a8), printk [b0,c0), and MMU/progress [c0,100).
+	 * Publish before framebuffer access, without stack or console.
+	 */
+	ldr	x1, =0xbfffffa8
+	ldr	x2, =PAYLOAD_GENERATION
+	str	x2, [x1]
+	dsb	sy
 
-	/* Paint a bright green rectangle at top-left of continuous splash FB */
-	ldr	x1, =0x90001000		/* FB base */
-	ldr	w2, =0x00FF00		/* Green in RGB888 / XRGB8888 */
-	ldr	x3, =720 * 80		/* 80 lines */
-1:
-	str	w2, [x1], #4
-	subs	x3, x3, #1
-	b.ne	1b
+	/* platform_prog_run disarms the bring-up WDT. Diagnostic-only
+	 * re-arm with the hardware-tested KPSS layout and 32768-Hz clock.
+	 * BARK stays past BITE; never pet in the final loop.
+	 */
+	ldr	x1, =0x0b017000
+	str	wzr, [x1, #0x08]
+	mov	w2, #1
+	str	w2, [x1, #0x04]
+	ldr	w3, =0xfffff
+	str	w3, [x1, #0x10]
+	ldr	w3, =98304		/* 3000 ms */
+	str	w3, [x1, #0x14]
+	str	w2, [x1, #0x08]
+	dsb	sy
 
-	/* Hang safely */
+	/* Entry-only: inherited santoni scanout is RGB888, not XRGB8888.
+	 * Leave framebuffer contents and geometry entirely untouched. */
 2:
 	wfe
 	b	2b

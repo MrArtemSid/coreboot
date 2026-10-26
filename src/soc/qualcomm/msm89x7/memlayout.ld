@@ -43,8 +43,14 @@ SECTIONS
 	ROMSTAGE(CONFIG_MSM89X7_BOOT_IMAGE_ADDR + 0x2234000, 0x20000)
 	PRERAM_CBMEM_CONSOLE(CONFIG_MSM89X7_BOOT_IMAGE_ADDR + 0x2254000, 0x20000)
 	RAMSTAGE(CONFIG_MSM89X7_BOOT_IMAGE_ADDR + 0x2274000, 0x1000000)
-	/* Right behind ramstage: the payload placeholder is linked near
-	 * 0x85000000 and the downstream "other_ext" reservation starts at
-	 * 0x85b00000, so the postram CBFS cache can not go high. */
+	/* Santoni's QSEECOM override starts at 0x84a00000 (not the
+	 * generic MSM8937 0x85b00000). Keep the full declared cache below
+	 * that boundary and leave [84400000,84500000) for the diagnostic. */
 	POSTRAM_CBFS_CACHE(CONFIG_MSM89X7_BOOT_IMAGE_ADDR + 0x3300000, 0x1000000)
+	ASSERT(_eramstage <= _postram_cbfs_cache, "ramstage overlaps postram cache")
+#if CONFIG(BOARD_QCOM_MSM89X7_SANTONI)
+	ASSERT(_epostram_cbfs_cache <= 0x84a00000, "cache overlaps santoni firmware")
+	ASSERT(_estack <= 0x84a00000, "stack overlaps santoni firmware")
+	ASSERT(_ettb <= 0x84a00000, "TTB overlaps santoni firmware")
+#endif
 }

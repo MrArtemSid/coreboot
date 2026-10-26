@@ -74,6 +74,16 @@ static void test_fdt_find_node_by_path(void **state)
 						       &addrcp, &sizecp));
 }
 
+static void test_fdt_read_memory_regions(void **state)
+{
+	struct device_tree_region regions[4] = {0};
+
+	/* Real flattened fixture contains only memory@80000000, not /memory. */
+	assert_int_equal(1, fdt_read_memory_regions(*state, regions, 4));
+	assert_int_equal(0x80000000, regions[0].addr);
+	assert_int_equal(0x40000000, regions[0].size);
+}
+
 static void test_fdt_find_subnodes_by_prefix(void **state)
 {
 	uint32_t offset = fdt_find_node_by_path(*state, "/cpus", NULL, NULL);
@@ -262,6 +272,7 @@ int main(void)
 {
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test(test_fdt_find_node_by_path),
+		cmocka_unit_test(test_fdt_read_memory_regions),
 		cmocka_unit_test(test_fdt_find_subnodes_by_prefix),
 		cmocka_unit_test(test_fdt_find_node_by_alias),
 		cmocka_unit_test(test_fdt_find_prop_in_node),

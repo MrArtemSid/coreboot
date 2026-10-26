@@ -10,7 +10,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class MemoryResourcesTest(unittest.TestCase):
+    def test_santoni_linker_guards_firmware_boundary(self):
+        source = (ROOT / 'src/soc/qualcomm/msm89x7/memlayout.ld').read_text()
+        self.assertIn('ASSERT(_epostram_cbfs_cache <= 0x84a00000', source)
+        self.assertIn('ASSERT(_eramstage <= _postram_cbfs_cache', source)
+
+    def test_memory_unit_address_uses_dt_not_fallback(self):
+        self._check_resources(unit_address=True)
+
     def test_dt_ram_is_resource_not_late_bootmem_override(self):
+        self._check_resources()
+
+    def _check_resources(self, unit_address=False):
         source = (ROOT / 'src/soc/qualcomm/msm89x7/soc.c').read_text()
         source = '\n'.join(s for s in source.splitlines() if not s.startswith('#include'))
         harness = r'''
@@ -34,11 +45,13 @@ typedef uint32_t u32;
 #define SMEM_BASE 0x86300000
 #define SMEM_SIZE 0x200000
 static char _bootblock[1], _lk_dtb[8];
+#define _postram_cbfs_cache ((void *)0x83380000)
+#define REGION_SIZE(name) 0x1000000
 #define _dram ((void *)0x40000000)
 struct device { int dummy; };
 struct device_tree_region { uint64_t addr, size; };
 enum bootmem_type { BM_MEM_RAM, BM_MEM_RESERVED };
-static int ram_resources, late_ram, reservations, ramoops_reserved, diag_reserved;
+static int ram_resources, late_ram, reservations, ramoops_reserved, diag_reserved, cache_reserved;
 static void ram_range(struct device *dev, unsigned idx, uint64_t base, uint64_t size) {
     if (base == 0x40000000 && size == 0xc0000000) ram_resources++;
     else { fprintf(stderr, "wrong RAM resource %llx+%llx\n",
@@ -47,8 +60,10 @@ static void ram_range(struct device *dev, unsigned idx, uint64_t base, uint64_t 
 static void bootmem_add_range(uint64_t base, uint64_t size, enum bootmem_type tag) {
     if (tag == BM_MEM_RAM) late_ram++;
     else reservations++;
-    if (tag == BM_MEM_RESERVED && base == CONFIG_MSM89X7_RAMOOPS_ADDR &&
-        size == CONFIG_MSM89X7_RAMOOPS_SIZE) ramoops_reserved++;
+    /* LK owns the complete 512 KiB, not only its console half. */
+    if (tag == BM_MEM_RESERVED && base == 0xbff80000 && size == 0x80000)
+        ramoops_reserved++;
+    if (tag == BM_MEM_RESERVED && base == 0x83380000 && size == 0x1000000) cache_reserved++;
     if (tag == BM_MEM_RESERVED && base == 0xbfffff80 && size == 0x80) diag_reserved++;
 }
 static uint64_t read64(void *p) { return 0x12340000; }
@@ -74,6 +89,17 @@ struct chip_operations { const char *name; void (*enable_dev)(struct device *); 
 '''
         harness = harness.replace('struct device { int dummy; };',
                                   'struct device_operations;\nstruct device { struct device_operations *ops; };')
+        if unit_address:
+            # Simulate a valid /memory@40000000 map smaller than fallback.
+            harness = harness.replace('size == 0xc0000000', 'size == 0x80000000')
+            harness = harness.replace('off == 1 ? 0xc0000000', 'off == 1 ? 0x80000000')
+            harness = harness.replace('return !strcmp(path, "/memory") ? 1 : 2;',
+                                      'return !strcmp(path, "/memory") ? 0 : 2;')
+        harness += r'''
+static size_t fdt_read_memory_regions(const void *p, struct device_tree_region *r, size_t n) {
+    return fdt_read_reg_prop(p, 1, 2, 2, r, n);
+}
+'''
         harness += source
         harness += r'''
 int main(void) {
@@ -82,7 +108,7 @@ int main(void) {
     bootmem_platform_add_ranges();
     if (late_ram) { fprintf(stderr, "DT RAM overwrites existing CBMEM/stage reservations\n"); return 1; }
     if (ram_resources != 1 || reservations < 3 ||
-        ramoops_reserved != 1 || diag_reserved != 1) {
+        ramoops_reserved != 1 || diag_reserved != 1 || cache_reserved != 1) {
         fprintf(stderr, "RAM resources=%d reservations=%d\n", ram_resources, reservations); return 1;
     }
     return 0;

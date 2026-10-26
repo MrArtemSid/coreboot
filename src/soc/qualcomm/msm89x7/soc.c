@@ -35,20 +35,14 @@ static bool lk_dtb_add_ranges(struct device *dev)
 
 	printk(BIOS_INFO, "Using memory map from primary bootloader DTB\n");
 
-	offset = fdt_find_node_by_path(blob, "/memory", &addr_cells,
-				       &size_cells);
-	if (offset) {
-		count = fdt_read_reg_prop(blob, offset, addr_cells, size_cells,
-					  regions, ARRAY_SIZE(regions));
-		if (dev) {
-			for (i = 0; i < count; ++i)
+	if (dev) {
+		/* LK may retain the standard memory@ unit-address spelling. */
+		count = fdt_read_memory_regions(blob, regions, ARRAY_SIZE(regions));
+		for (i = 0; i < count; ++i)
+			if (regions[i].size)
 				ram_range(dev, i, regions[i].addr, regions[i].size);
-			return count != 0;
-		}
+		return count != 0;
 	}
-
-	if (dev)
-		return false;
 
 	offset = fdt_find_node_by_path(blob, "/reserved-memory", &addr_cells,
 				       &size_cells);
@@ -78,12 +72,17 @@ void bootmem_platform_add_ranges(void)
 	bootmem_add_range((uintptr_t)_bootblock,
 			  (uintptr_t)CONFIG_ROM_SIZE, BM_MEM_RESERVED);
 
+	/* CBFS may still serve the payload from this live cache. Generic
+	 * bootmem reserves the used ramstage, not this linker region. */
+	bootmem_add_range((uintptr_t)_postram_cbfs_cache,
+			  REGION_SIZE(postram_cbfs_cache), BM_MEM_RESERVED);
+
 	/* Shared memory used by RPM, modem and TrustZone. */
 	bootmem_add_range(SMEM_BASE, SMEM_SIZE, BM_MEM_RESERVED);
 
-	if (CONFIG(MSM89X7_RAMOOPS_CONSOLE))
-		bootmem_add_range(CONFIG_MSM89X7_RAMOOPS_ADDR,
-				  CONFIG_MSM89X7_RAMOOPS_SIZE, BM_MEM_RESERVED);
+	/* LK's raw pstore allocation also contains the lower dump records.
+	 * An NC mapping alone does not keep payload allocations out of it. */
+	bootmem_add_range(0xbff80000, 0x80000, BM_MEM_RESERVED);
 
 	/* Fixed first-fault and progress beacons, independent of ramoops config. */
 	bootmem_add_range(0xbfffff80, 0x80, BM_MEM_RESERVED);

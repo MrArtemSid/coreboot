@@ -99,7 +99,10 @@ void __ramoops_init(void)
 void __ramoops_tx_byte(unsigned char data)
 {
 	struct ramoops_header *h = ramoops_hdr();
-	const uint32_t cap = CONFIG_MSM89X7_RAMOOPS_SIZE - sizeof(*h);
+	/* Keep the final 256 bytes out of the ring: fixed first-fault,
+	 * progress and diagnostic-payload beacons live there. LK's raw
+	 * reader still uses the unchanged 256-KiB console allocation. */
+	const uint32_t cap = CONFIG_MSM89X7_RAMOOPS_SIZE - sizeof(*h) - 0x100;
 
 	/* Pet the APSS watchdog on any console output: with the display
 	 * console disabled nothing else feeds it, and a healthy headless
