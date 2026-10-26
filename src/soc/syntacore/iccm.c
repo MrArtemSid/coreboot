@@ -24,7 +24,7 @@ bool scr_is_cold_reset __section(".data") = false;
 static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
 #endif
 
-void scr_iccm_init(void)
+void scr_hart_init(void)
 {
 	unsigned long hartid = read_csr(mhartid);
 
@@ -33,8 +33,8 @@ void scr_iccm_init(void)
 		die("SCR hart ID exceeds reserved stacks");
 	/*
 	 * Bootblock follows miniboot's per-hart order: MMCFG typing, caches,
-	 * final memory types, then (working hart only) MRT, core features
-	 * and ICCM.
+	 * final memory types and per-hart core features. Only the working
+	 * hart initializes the shared MRT and ICCM.
 	 */
 	if (ENV_BOOTBLOCK)
 		scr_hal_pmp_early_init();

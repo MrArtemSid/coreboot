@@ -13,7 +13,9 @@ def function(file, name):
     while depth:
         depth += (text[end] == '{') - (text[end] == '}')
         end += 1
-    return text[start:end]
+    return (text[start:end].replace("CONFIG" + "(", "MOCK_CONFIG" + "(")
+            .replace("CONFIG_MAX_CPUS", "MOCK_MAX_CPUS")
+            .replace("CONFIG_RISCV_WORKING_HARTID", "MOCK_WORKING_HARTID"))
 
 def run_c(name, code):
     src = TMP / (name + '.c')
@@ -103,10 +105,10 @@ int main(void) {
 
     def test_hart_bounds(self):
         run_c('hart_bounds', '''
-#define CONFIG(x) 1
+#define MOCK_CONFIG(x) 1
 #define ENV_BOOTBLOCK 1
-#define CONFIG_MAX_CPUS 4
-#define CONFIG_RISCV_WORKING_HARTID 0
+#define MOCK_MAX_CPUS 4
+#define MOCK_WORKING_HARTID 0
 static unsigned long mock_hartid=4;
 #define read_csr(csr) mock_hartid
 static int iccm_ready;
@@ -124,19 +126,19 @@ static jmp_buf failed;
 #define scr_hal_cache_sync_code(a,b) ((void)0)
 #define scr_hal_features_init() ((void)0)
 #define SCR_HART_WAIT_SPINS 100
-''' + function('iccm.c','scr_iccm_init') + '''
+''' + function('iccm.c','scr_hart_init') + '''
 int main(void) {
- if(!setjmp(failed)) {scr_iccm_init(); assert(0);}
+ if(!setjmp(failed)) {scr_hart_init(); assert(0);}
  assert(iccm_ready==0); assert(!scr_is_cold_reset);
- mock_hartid=0; scr_iccm_init(); assert(hart_ready[0]==1);
+ mock_hartid=0; scr_hart_init(); assert(hart_ready[0]==1);
 }
 ''')
 
     def test_missing_hart_fails_closed(self):
         run_c('missing', '''
-#define CONFIG(x) 1
-#define CONFIG_MAX_CPUS 4
-#define CONFIG_RISCV_WORKING_HARTID 0
+#define MOCK_CONFIG(x) 1
+#define MOCK_MAX_CPUS 4
+#define MOCK_WORKING_HARTID 0
 #define SCR_HART_WAIT_SPINS 10
 #define OTHER_HLS(i) (&hls[i])
 static struct { struct { struct {int counter;} sync_a;} entry;} hls[4];
