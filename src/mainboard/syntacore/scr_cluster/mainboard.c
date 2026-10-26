@@ -1,21 +1,68 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <commonlib/device_tree.h>
 #include <console/console.h>
 #include <device/device.h>
-#include <symbols.h>
-#include <cbmem.h>
-#include <soc/addressmap.h>
+#include <halt.h>
+#include <mcall.h>
 #include <soc/scr_hal.h>
+#include <string.h>
 
-/*
- * RAM declaration, SiFive-style: the resource allocator derives the
- * OS-visible RAM map from the resources declared on the mainboard
- * device, so the payload staging area (all of DDR up to cbmem top)
- * has to be reported here.
- */
+#define SCR_MAX_MEMORY_REGIONS 16
+
+static void scr_memory_resources(struct device *dev)
+{
+	const void *fdt = HLS()->fdt;
+	struct device_tree_region regions[SCR_MAX_MEMORY_REGIONS] = {0};
+	u32 nodes[SCR_MAX_MEMORY_REGIONS];
+	u32 addr_cells, size_cells;
+	unsigned long index = 0;
+	size_t count;
+
+	if (!fdt || !fdt_is_valid(fdt))
+		die("SCR: missing or invalid FDT\n");
+
+	/* CBMEM top is a staging limit, not the end of installed RAM. */
+	count = fdt_read_memory_regions(fdt, regions, ARRAY_SIZE(regions));
+	if (!count || count >= ARRAY_SIZE(regions))
+		die("SCR: missing or too many FDT memory regions\n");
+	for (size_t i = 0; i < count; i++) {
+		if (!regions[i].size || regions[i].addr + regions[i].size < regions[i].addr)
+			die("SCR: invalid FDT memory region\n");
+		ram_range(dev, index++, regions[i].addr, regions[i].size);
+	}
+
+	/* Include carveouts even when the DT excludes them from /memory. */
+	u32 reserved = fdt_find_node_by_path(fdt, "/reserved-memory", &addr_cells,
+					     &size_cells);
+	if (!reserved)
+		return;
+	count = fdt_find_subnodes_by_prefix(fdt, reserved, "", &addr_cells, &size_cells,
+					   nodes, ARRAY_SIZE(nodes));
+	if (count >= ARRAY_SIZE(nodes))
+		die("SCR: too many FDT reserved-memory nodes\n");
+	for (size_t i = 0; i < count; i++) {
+		struct fdt_property prop;
+
+		if (fdt_read_prop(fdt, nodes[i], "status", &prop) &&
+		    (prop.size != sizeof("okay") || memcmp(prop.data, "okay", sizeof("okay"))) &&
+		    (prop.size != sizeof("ok") || memcmp(prop.data, "ok", sizeof("ok"))))
+			continue;
+		size_t n = fdt_read_reg_prop(fdt, nodes[i], addr_cells, size_cells,
+					     regions, ARRAY_SIZE(regions));
+		if (n >= ARRAY_SIZE(regions))
+			die("SCR: too many FDT reserved-memory regions\n");
+		for (size_t j = 0; j < n; j++) {
+			if (!regions[j].size || regions[j].addr + regions[j].size < regions[j].addr)
+				die("SCR: invalid FDT reserved-memory region\n");
+			reserved_ram_range(dev, index++, regions[j].addr, regions[j].size);
+		}
+	}
+}
+
 static void scr_mainboard_init(struct device *dev)
 {
-	ram_from_to(dev, 0, (uintptr_t)_dram, cbmem_top());
+	scr_memory_resources(dev);
 
 	if (CONFIG(SCR9_L2_QEMU_VIRTIO)) {
 		/* The stock SiFive PLIC driver does not program SCR source modes. */
