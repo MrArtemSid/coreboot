@@ -138,6 +138,12 @@ ramstage-libs += $(SCR_HAL_ARCHIVE)
 
 all-y += iccm.c
 all-y += cache.c
+all-y += handoff.c
+
+# Interpose only the stage handoff, after generic FDT serialization.
+LDFLAGS_bootblock += --wrap=smp_resume
+LDFLAGS_romstage += --wrap=smp_resume
+LDFLAGS_ramstage += --wrap=smp_resume
 
 # The saved MRT state and both pre-romstage wait hooks live in bootblock.
 bootblock-y += romstage.c
