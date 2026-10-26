@@ -33,7 +33,8 @@ void scr_iccm_init(void)
 		die("SCR hart ID exceeds reserved stacks");
 	/*
 	 * Bootblock follows miniboot's per-hart order: MMCFG typing, caches,
-	 * final memory types, then (working hart only) MRT and ICCM.
+	 * final memory types, then (working hart only) MRT, core features
+	 * and ICCM.
 	 */
 	if (ENV_BOOTBLOCK)
 		scr_hal_pmp_early_init();
@@ -46,6 +47,7 @@ void scr_iccm_init(void)
 				scr_hal_mrt_init();
 				scr_is_cold_reset = true;
 			}
+			scr_hal_features_init();
 			scr_hal_iccm_init();
 		}
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
@@ -59,6 +61,7 @@ void scr_iccm_init(void)
 		if (ENV_BOOTBLOCK) {
 			scr_hal_cache_local_init();
 			scr_hal_pmp_platform_init();
+			scr_hal_features_init();
 		}
 	}
 	/* Every hart must discard stale instructions on each loaded-stage entry. */

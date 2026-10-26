@@ -24,6 +24,7 @@ void scr_hal_pmp_platform_init(void);
 void scr_hal_cache_shared_init(void);
 void scr_hal_cache_local_init(void);
 void scr_hal_cache_sync_code(uintptr_t start, size_t size);
+void scr_hal_features_init(void);
 void scr_hal_mrt_init(void);
 int scr_hal_mrt_is_initialized(void);
 void scr_hal_wait_key_before_ddr(void);

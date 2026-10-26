@@ -69,6 +69,8 @@ scr_hal_objs := $(obj)/scrhal/console.o \
 		$(obj)/scrhal/hwinfo.o \
 		$(obj)/scrhal/hwinfo_mmio.o \
 		$(obj)/scrhal/sys_utils.o \
+		$(obj)/scrhal/sys_init.o \
+		$(obj)/scrhal/arch.o \
 		$(obj)/scrhal/scr_hal_glue.o \
 		$(obj)/scrhal/mrt.o
 
@@ -93,6 +95,16 @@ $(obj)/scrhal/hwinfo_mmio.o: $(SCR_HAL)/src/drivers/hwinfo/hwinfo_mmio.c $(obj)/
 SCR_HAL_ARCHIVE := $(obj)/scrhal/libscrhal.a
 
 $(obj)/scrhal/sys_utils.o: $(SCR_HAL)/src/sys/sys_utils.S $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+
+$(obj)/scrhal/arch.o: $(SCR_HAL)/src/sys/arch.c $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+
+# Only plf_init_features() is used; the HAL runtime around it is
+# discarded by --gc-sections.
+$(obj)/scrhal/sys_init.o: $(SCR_HAL)/src/sys/sys_init.c $(obj)/config.h
 	@mkdir -p $(dir $@)
 	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
 

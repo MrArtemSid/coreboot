@@ -71,6 +71,15 @@ void scr_hal_cache_local_init(void)
 	ifence();
 }
 
+/* Defined in SCR-HAL sys_init.c, which declares it only locally. */
+void plf_init_features(void);
+
+void scr_hal_features_init(void)
+{
+	/* Feature-enable CSR policy as in miniboot's plf_init_generic(). */
+	plf_init_features();
+}
+
 void scr_hal_cache_sync_code(uintptr_t start, size_t size)
 {
 	/* Publish the producing hart's dirty lines before executing loaded code. */
