@@ -151,7 +151,15 @@ ENTRY(exception_init_asm)
 	msr	SPSel, #SPSR_USE_L
 	adr	x0, exc_vectors
 	msr	CURRENT_EL(vbar), x0
+#if CONFIG(ARM64_KEEP_IRQ_FIQ_MASKED)
+	/* Prior firmware may leave an interrupt controller configured that
+	 * coreboot does not own. Keep IRQ/FIQ masked, but still unmask debug
+	 * and SError exceptions. */
+	msr	DAIFSet, #0x3
+	msr	DAIFClr, #0xc
+#else
 	msr	DAIFClr, #0xf
+#endif
 	dsb	sy
 	isb
 	ret

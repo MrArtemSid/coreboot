@@ -37,6 +37,14 @@ config ARM64_CURRENT_EL
 	  that require running a different firmware before coreboot which drops
 	  to a lower exception level.
 
+config ARM64_KEEP_IRQ_FIQ_MASKED
+	bool
+	default n
+	help
+	  Keep IRQ and FIQ masked when installing the exception vectors.
+	  For platforms entered by prior firmware which leaves an interrupt
+	  controller configured that coreboot does not take over.
+
 config ARM64_USE_ARCH_TIMER
 	bool
 	default n
