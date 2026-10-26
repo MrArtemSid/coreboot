@@ -51,7 +51,7 @@ static __attribute__((noreturn)) void scr_hal_fatal(const char *message)
 
 void scr_hal_cache_shared_init(void)
 {
-	/* cache.o skips L3 invalidation: it may already hold live bootblock data. */
+	/* Like miniboot: invalidate all L3 banks before enabling the inner caches. */
 	plf_l3cache_init();
 #if !defined(PLF_CACHE_L2_DEDICATED) || !PLF_CACHE_L2_DEDICATED
 	/* HAL L2 init invalidates without cleaning. Never reinitialize a live L2. */

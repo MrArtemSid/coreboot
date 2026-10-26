@@ -80,8 +80,7 @@ $(obj)/scrhal/console.o: $(SCR_HAL)/src/drivers/console.c $(obj)/config.h
 
 $(obj)/scrhal/cache.o: $(SCR_HAL)/src/drivers/cache.c $(obj)/config.h
 	@mkdir -p $(dir $@)
-	# L3 may already cache bootblock stacks/data; preserve dirty lines.
-	$(CC_ramstage) $(scr_hal_cflags) -DPLF_SKIP_CACHE_INVALIDATION -c -o $@ $<
+	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
 
 $(obj)/scrhal/hwinfo.o: $(SCR_HAL)/src/drivers/hwinfo/hwinfo.c $(obj)/config.h
 	@mkdir -p $(dir $@)
