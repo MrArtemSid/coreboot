@@ -9,6 +9,9 @@
 #include <soc/scr_hal.h>
 #include <stdbool.h>
 
+/* Also works before the working hart has enabled the platform timer. */
+#define SCR_HART_WAIT_SPINS 100000000U
+
 /* Each loaded stage owns its initialization flag; no BSS reset is assumed. */
 static int iccm_ready __section(".data") = 0;
 /*
@@ -23,6 +26,11 @@ static int hart_ready[CONFIG_MAX_CPUS] __section(".data") = { 0 };
 
 void scr_iccm_init(void)
 {
+	unsigned long hartid = read_csr(mhartid);
+
+	/* Generic SMP indexes both stacks and HLS by physical, contiguous hart ID. */
+	if (hartid >= CONFIG_MAX_CPUS)
+		die("SCR hart ID exceeds reserved stacks");
 	/* PMP is hart-local; configure it once per hart in bootblock. */
 	if (ENV_BOOTBLOCK)
 		scr_hal_pmp_platform_init();
@@ -37,16 +45,20 @@ void scr_iccm_init(void)
 		}
 		__atomic_store_n(&iccm_ready, 1, __ATOMIC_RELEASE);
 	} else {
-		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE))
-			;
+		unsigned int spins = SCR_HART_WAIT_SPINS;
+
+		while (!__atomic_load_n(&iccm_ready, __ATOMIC_ACQUIRE)) {
+			if (!--spins)
+				die("SCR working hart initialization timed out");
+		}
 	}
 	if (ENV_BOOTBLOCK)
 		scr_hal_cache_local_init();
-	/* Synchronize instructions on each loaded-stage entry. */
+	/* Every hart must discard stale instructions on each loaded-stage entry. */
 	scr_hal_cache_sync_code(0, 0);
 #if CONFIG(RISCV_GET_HART_COUNT_AT_RUNTIME)
 	/* hls_init() has cleared this hart's native synchronization fields. */
-	__atomic_store_n(&hart_ready[read_csr(mhartid)], 1, __ATOMIC_RELEASE);
+	__atomic_store_n(&hart_ready[hartid], 1, __ATOMIC_RELEASE);
 #endif
 }
 
@@ -131,15 +143,24 @@ unsigned int smp_get_hart_count(void)
 	}
 	if (!count || count > CONFIG_MAX_CPUS)
 		die("Hart count exceeds reserved stacks");
+	if (CONFIG_RISCV_WORKING_HARTID >= count)
+		die("Working hart is outside contiguous hart set");
 	for (unsigned int i = 0; i < count; i++) {
+		unsigned int spins = SCR_HART_WAIT_SPINS;
+
 		if (i == CONFIG_RISCV_WORKING_HARTID)
 			continue;
-		while (!__atomic_load_n(&hart_ready[i], __ATOMIC_ACQUIRE))
-			;
+		while (!__atomic_load_n(&hart_ready[i], __ATOMIC_ACQUIRE)) {
+			if (!--spins)
+				die("SCR missing hart in contiguous hart set");
+		}
 		/* Native smp_pause() publishes HART_SLEEPING (1) before WFI. */
+		spins = SCR_HART_WAIT_SPINS;
 		while (__atomic_load_n(&OTHER_HLS(i)->entry.sync_a.counter,
-				       __ATOMIC_ACQUIRE) != 1)
-			;
+				       __ATOMIC_ACQUIRE) != 1) {
+			if (!--spins)
+				die("SCR hart failed to enter smp_pause");
+		}
 	}
 	return count;
 }
