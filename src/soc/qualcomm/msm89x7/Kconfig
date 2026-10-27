@@ -1,0 +1,127 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config SOC_QUALCOMM_MSM89X7
+	bool
+	default n
+	select ARCH_BOOTBLOCK_ARMV8_64
+	select ARCH_VERSTAGE_ARMV8_64
+	select ARCH_ROMSTAGE_ARMV8_64
+	select ARCH_RAMSTAGE_ARMV8_64
+	select ARM64_USE_ARCH_TIMER
+	select FLATTENED_DEVICE_TREE
+	help
+	  Qualcomm MSM8917/MSM8937/MSM8940 (a.k.a. msm89x7) SoC family,
+	  octa-core Cortex-A53 with TrustZone firmware providing PSCI.
+
+	  This port is designed to run as a second-stage bootloader: the
+	  stock Android bootloader (LK/aboot) loads the coreboot image
+	  from the boot partition like a Linux kernel and enters it with
+	  the ARM64 boot protocol (x0 = DTB provided by LK). DRAM and
+	  clocks are already initialized by the primary bootloader and
+	  are not touched again.
+
+if SOC_QUALCOMM_MSM89X7
+
+# The TrustZone elexec call used by the primary bootloader to start
+# arm64 boot images drops the CPU to non-secure EL1 (x0 = DTB), so
+# coreboot must access the EL1 system registers.
+config ARM64_CURRENT_EL
+	int
+	default 1
+
+config MEMLAYOUT_LD_FILE
+	string
+	default "src/soc/qualcomm/msm89x7/memlayout.ld"
+
+# Physical DRAM base, independent of the linked coreboot image address.
+config MSM89X7_DDR_START
+	hex
+	default 0x80000000
+
+# Size of DRAM in MiB as reported to coreboot. This is only a fallback:
+# if the device tree handed over by the primary bootloader contains a
+# /memory node, its ranges take precedence.
+config MSM89X7_DRAM_SIZE_MB
+	int
+	default 2048
+
+# Address the stock LK bootloader loads arm64 boot images to
+# (ABOOT_FORCE_KERNEL64_ADDR = DDR_START + 0x80000). The coreboot ROM
+# (bootblock at offset 0, then FMAP and CBFS) lives there.
+config MSM89X7_BOOT_IMAGE_ADDR
+	hex
+	default 0x80080000
+
+config MSM89X7_BOOTIMG
+	bool "Create build/boot.img for the stock Android bootloader"
+	default y
+	help
+	  Package the coreboot ROM as an Android boot image that can be
+	  flashed to the boot partition of a device with a stock,
+	  unlocked Android bootloader (LK).
+
+config MSM89X7_QCDT_FILE
+	string "QCDT device tree table extracted from the stock boot image"
+	default ""
+	help
+	  Path to the QCDT table extracted from the device's stock boot
+	  image with util/msm89x7-bootimg/msm89x7-bootimg.py
+	  extract-qcdt. The primary bootloader needs it to prepare the
+	  device tree it hands over to coreboot; without it the boot
+	  image is created without a device tree.
+
+config MSM89X7_APPEND_DTB_FILE
+	string "Device tree appended behind the image"
+	default ""
+	help
+	  Path to a device tree that is appended behind the coreboot
+	  image in the boot partition; the stock LK finds it via the
+	  offset in the ARM64 kernel image header. Use the mainline DTB
+	  of the device (optionally with qcom,msm-id/qcom,board-id added
+	  for the stock bootloader's selection logic, like the lk2nd
+	  device trees have). Alternative to MSM89X7_QCDT_FILE.
+
+config MSM89X7_DISPLAY_CONSOLE
+	bool "Write console logs to the bootloader splash framebuffer"
+	default y
+	select CONSOLE_DISPLAY
+	help
+	  The stock LK bootloader leaves its continuous splash framebuffer
+	  (MIPI_FB_ADDR) scanning on the panel. Draw the coreboot console
+	  output directly into that buffer, so the log is visible without
+	  any display hardware initialization.
+
+config MSM89X7_RAMOOPS_CONSOLE
+	bool "Mirror console into the lk2nd ramoops buffer"
+	default y
+	select CONSOLE_RAMOOPS
+	help
+	  Mirror the console log into the ramoops console buffer that
+	  lk2nd places at the top of the flash scratch area. After a
+	  reset the log is fetched with:
+	    fastboot oem ramoops console
+	    fastboot get_staged coreboot.log
+
+if MSM89X7_RAMOOPS_CONSOLE
+
+config MSM89X7_RAMOOPS_ADDR
+	hex "Ramoops console buffer address"
+	default 0xbffc0000
+
+config MSM89X7_RAMOOPS_SIZE
+	hex "Ramoops console buffer size (must match lk2nd's console_size)"
+	default 0x40000
+
+config MSM89X7_DEBUG_WATCHDOG
+	bool "Reset to fastboot on hangs and fatal errors"
+	default n
+	help
+	  Arm the APSS watchdog during bring-up so that a hang resets the
+	  device after 3 seconds without console output, and make die()
+	  request fastboot mode and reset. lk2nd then serves the ramoops
+	  log over fastboot. The watchdog is disabled before the payload
+	  is started.
+
+endif
+
+endif
