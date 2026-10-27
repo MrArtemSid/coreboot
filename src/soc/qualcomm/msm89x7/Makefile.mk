@@ -3,6 +3,9 @@
 ifeq ($(CONFIG_SOC_QUALCOMM_MSM89X7),y)
 
 ################################################################################
+all-y += ../common/gpio.c
+all-y += clock.c
+all-$(CONFIG_DRIVERS_UART) += uart.c
 all-$(CONFIG_MSM89X7_DISPLAY_CONSOLE) += display_console.c font_8x16.c
 all-$(CONFIG_MSM89X7_RAMOOPS_CONSOLE) += ramoops.c
 
@@ -21,5 +24,6 @@ ramstage-y += soc.c
 ################################################################################
 
 CPPFLAGS_common += -Isrc/soc/qualcomm/msm89x7/include
+CPPFLAGS_common += -Isrc/soc/qualcomm/common/include
 
 endif

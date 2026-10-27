@@ -9,6 +9,7 @@ config SOC_QUALCOMM_MSM89X7
 	select ARCH_RAMSTAGE_ARMV8_64
 	select ARM64_USE_ARCH_TIMER
 	select FLATTENED_DEVICE_TREE
+	select GENERIC_GPIO_LIB
 	help
 	  Qualcomm MSM8917/MSM8937/MSM8940 (a.k.a. msm89x7) SoC family,
 	  octa-core Cortex-A53 with TrustZone firmware providing PSCI.
@@ -90,6 +91,16 @@ config MSM89X7_PARSE_DT_CARVEOUTS
 	  When disabled (default), only coreboot's execution region, DTB,
 	  framebuffer, CBMEM window, and ramoops are explicitly mapped
 	  (whitelist MMU).
+
+config MSM89X7_UART_CONSOLE
+	bool "Serial console on BLSP1 UART2 (GPIO4/GPIO5)"
+	default n
+	select HAVE_UART_SPECIAL
+	help
+	  Drive the UART_DM debug port at 115200 8N1. coreboot enables
+	  the BLSP1 AHB and UART2 core clocks itself before touching the
+	  block, so it does not depend on the primary bootloader having
+	  left the UART running. Needs access to the TX/RX test points.
 
 config MSM89X7_DISPLAY_CONSOLE
 	bool "Write console logs to the bootloader splash framebuffer"
