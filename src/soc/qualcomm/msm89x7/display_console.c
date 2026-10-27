@@ -65,6 +65,16 @@ void display_console_fb_region(uint64_t *base, size_t *size)
 	*size = fb_addr ? fb_stride * fb_height : 0;
 }
 
+/* Stop drawing and blank the panel, e.g. before handing it to the payload. */
+void display_console_clear(void)
+{
+	if (!enabled)
+		return;
+
+	enabled = false;
+	memset((void *)(uintptr_t)fb_addr, 0, (size_t)fb_stride * fb_height);
+}
+
 static void detect_framebuffer(void)
 {
 	fb_addr = 0;

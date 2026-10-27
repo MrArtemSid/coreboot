@@ -11,4 +11,8 @@
  * with CONFIG_MSM89X7_DISPLAY_CONSOLE enabled. */
 void display_console_fb_region(uint64_t *base, size_t *size);
 
+/* Stop the display console and blank the panel. No-op if it is not
+ * active. Only meaningful with CONFIG_MSM89X7_DISPLAY_CONSOLE enabled. */
+void display_console_clear(void);
+
 #endif /* __SOC_QUALCOMM_MSM89X7_DISPLAY_CONSOLE_H__ */

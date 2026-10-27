@@ -103,6 +103,17 @@ config MSM89X7_PAYLOAD_LK_DTB
 	  Leave disabled for libpayload based payloads, which expect the
 	  coreboot table pointer in x0.
 
+config MSM89X7_CLEAR_DISPLAY_BEFORE_PAYLOAD
+	bool "Clear the display console before starting the payload"
+	depends on MSM89X7_DISPLAY_CONSOLE
+	default y
+	help
+	  Stop the display console and blank the panel right before the
+	  payload starts, so the payload begins with an empty screen
+	  instead of the coreboot log. The log is still kept in CBMEM and
+	  ramoops. Disable this to keep the log visible when a payload
+	  hangs early.
+
 config MSM89X7_PAYLOAD_SIMPLEFB
 	bool "Hand the splash framebuffer to the payload as simplefb"
 	depends on MSM89X7_PAYLOAD_LK_DTB

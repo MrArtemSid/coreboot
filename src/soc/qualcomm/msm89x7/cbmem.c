@@ -6,6 +6,7 @@
 #include <commonlib/helpers.h>
 #include <device/mmio.h>
 #include <program_loading.h>
+#include <soc/display_console.h>
 #include <soc/payload_fb.h>
 #include <soc/ramoops.h>
 #include <soc/symbols.h>
@@ -23,6 +24,9 @@ void platform_prog_run(struct prog *prog)
 
 	/* The payload owns the watchdog. */
 	msm89x7_wdt_disable();
+
+	if (CONFIG(MSM89X7_CLEAR_DISPLAY_BEFORE_PAYLOAD))
+		display_console_clear();
 
 	if (CONFIG(MSM89X7_PAYLOAD_LK_DTB)) {
 		void *fdt = (void *)(uintptr_t)read64((void *)_lk_dtb);
