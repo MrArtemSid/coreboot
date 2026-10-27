@@ -103,6 +103,16 @@ config MSM89X7_PAYLOAD_LK_DTB
 	  Leave disabled for libpayload based payloads, which expect the
 	  coreboot table pointer in x0.
 
+config MSM89X7_PAYLOAD_SIMPLEFB
+	bool "Hand the splash framebuffer to the payload as simplefb"
+	depends on MSM89X7_PAYLOAD_LK_DTB
+	default y
+	help
+	  Convert the 24bpp LK splash to XRGB8888 (repack the pixels and
+	  reprogram the MDP5 source pipe), then enable it as
+	  simple-framebuffer in the device tree passed to the payload.
+	  U-Boot and Linux simplefb drivers do not support 24bpp.
+
 config MSM89X7_UART_CONSOLE
 	bool "Serial console on BLSP1 UART2 (GPIO4/GPIO5)"
 	default n

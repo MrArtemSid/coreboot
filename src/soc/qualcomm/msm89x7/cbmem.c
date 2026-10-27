@@ -6,6 +6,7 @@
 #include <commonlib/helpers.h>
 #include <device/mmio.h>
 #include <program_loading.h>
+#include <soc/payload_fb.h>
 #include <soc/ramoops.h>
 #include <soc/symbols.h>
 
@@ -20,11 +21,16 @@ void platform_prog_run(struct prog *prog)
 	if (!ENV_RAMSTAGE || prog_type(prog) != PROG_PAYLOAD)
 		return;
 
-	if (CONFIG(MSM89X7_PAYLOAD_LK_DTB))
-		prog_set_arg(prog, (void *)(uintptr_t)read64((void *)_lk_dtb));
-
 	/* The payload owns the watchdog. */
 	msm89x7_wdt_disable();
+
+	if (CONFIG(MSM89X7_PAYLOAD_LK_DTB)) {
+		void *fdt = (void *)(uintptr_t)read64((void *)_lk_dtb);
+
+		if (CONFIG(MSM89X7_PAYLOAD_SIMPLEFB))
+			fdt = msm89x7_payload_fb_handoff(fdt);
+		prog_set_arg(prog, fdt);
+	}
 
 	/*
 	 * There is no EL3 transition that would turn the MMU off, so the
