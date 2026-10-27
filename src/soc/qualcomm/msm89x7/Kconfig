@@ -81,6 +81,16 @@ config MSM89X7_APPEND_DTB_FILE
 	  for the stock bootloader's selection logic, like the lk2nd
 	  device trees have). Alternative to MSM89X7_QCDT_FILE.
 
+config MSM89X7_PARSE_DT_CARVEOUTS
+	bool "Parse /reserved-memory from DTB and punch holes in DRAM map"
+	default n
+	help
+	  When enabled, read /reserved-memory no-map nodes from the handoff
+	  device tree and unmap them while mapping the entire physical DRAM.
+	  When disabled (default), only coreboot's execution region, DTB,
+	  framebuffer, CBMEM window, and ramoops are explicitly mapped
+	  (whitelist MMU).
+
 config MSM89X7_DISPLAY_CONSOLE
 	bool "Write console logs to the bootloader splash framebuffer"
 	default y
