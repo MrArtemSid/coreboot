@@ -92,6 +92,17 @@ config MSM89X7_PARSE_DT_CARVEOUTS
 	  framebuffer, CBMEM window, and ramoops are explicitly mapped
 	  (whitelist MMU).
 
+config MSM89X7_PAYLOAD_LK_DTB
+	bool "Pass the LK device tree to the payload in x0"
+	default n
+	help
+	  Hand the payload the device tree that LK passed to coreboot,
+	  instead of the coreboot table pointer. This is what payloads
+	  booted the Linux arm64 way expect (e.g. mainline U-Boot for
+	  Qualcomm, which reads the memory map and framebuffer from it).
+	  Leave disabled for libpayload based payloads, which expect the
+	  coreboot table pointer in x0.
+
 config MSM89X7_UART_CONSOLE
 	bool "Serial console on BLSP1 UART2 (GPIO4/GPIO5)"
 	default n

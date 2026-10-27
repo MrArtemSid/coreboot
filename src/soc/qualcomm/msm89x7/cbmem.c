@@ -1,9 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <arch/lib_helpers.h>
+#include <arch/mmu.h>
 #include <cbmem.h>
 #include <commonlib/helpers.h>
+#include <device/mmio.h>
 #include <program_loading.h>
 #include <soc/ramoops.h>
+#include <soc/symbols.h>
 
 uintptr_t cbmem_top_chipset(void)
 {
@@ -13,7 +17,27 @@ uintptr_t cbmem_top_chipset(void)
 
 void platform_prog_run(struct prog *prog)
 {
+	if (!ENV_RAMSTAGE || prog_type(prog) != PROG_PAYLOAD)
+		return;
+
+	if (CONFIG(MSM89X7_PAYLOAD_LK_DTB))
+		prog_set_arg(prog, (void *)(uintptr_t)read64((void *)_lk_dtb));
+
 	/* The payload owns the watchdog. */
-	if (ENV_RAMSTAGE && prog_type(prog) == PROG_PAYLOAD)
-		msm89x7_wdt_disable();
+	msm89x7_wdt_disable();
+
+	/*
+	 * There is no EL3 transition that would turn the MMU off, so the
+	 * payload would otherwise inherit our whitelist page tables and
+	 * fault on the first access outside of them (e.g. U-Boot relocating
+	 * itself to the end of DRAM). Enter it with MMU and D-cache off,
+	 * like on the other arm64 paths.
+	 */
+	mmu_disable();
+
+	/*
+	 * LK leaves the GIC running with interrupts routed to this CPU.
+	 * Payloads (U-Boot, Linux) expect to be entered with DAIF masked.
+	 */
+	raw_write_daif(0x3c0);
 }
