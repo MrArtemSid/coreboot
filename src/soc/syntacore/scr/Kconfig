@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config SOC_SYNTACORE_SCR
+	bool
+	select ARCH_RISCV_RV64
+	select ARCH_RISCV_S
+	select ARCH_RISCV_U
+	select ARCH_RISCV_PMP
+	select ARCH_BOOTBLOCK_RISCV
+	select ARCH_VERSTAGE_RISCV
+	select ARCH_ROMSTAGE_RISCV
+	select ARCH_RAMSTAGE_RISCV
+	select RISCV_USE_ARCH_TIMER
+	select RISCV_HAS_OPENSBI
+	select RISCV_GET_HART_COUNT_AT_RUNTIME
+	select FLATTENED_DEVICE_TREE
+	select RISCV_DTS
+	select DRIVERS_UART_8250MEM_32
+	select UART_OVERRIDE_REFCLK
+	select MISSING_BOARD_RESET
+
+config SEPARATE_ROMSTAGE
+	default n if SOC_SYNTACORE_SCR
+
+if SOC_SYNTACORE_SCR
+
+choice SCR_CPU
+	prompt "SCR CPU"
+	default SCR_CPU_SCR9
+
+config SCR_CPU_SCR9
+	bool "SCR9"
+
+config SCR_CPU_SCR7
+	bool "SCR7"
+
+endchoice
+
+choice SCR_CLUSTER
+	prompt "SCR cluster"
+	default SCR_CLUSTER_L3
+
+config SCR_CLUSTER_L2
+	bool "L2 cluster"
+
+config SCR_CLUSTER_L3
+	bool "L3 cluster"
+
+endchoice
+
+config SCR_HAL_PLATFORM
+	string
+	default "scr9_l3" if SCR_CPU_SCR9 && SCR_CLUSTER_L3
+	default "scr9_l2" if SCR_CPU_SCR9 && SCR_CLUSTER_L2
+	default "scr7_l3" if SCR_CPU_SCR7 && SCR_CLUSTER_L3
+	default "scr7_l2"
+
+config SCR_HAL_DIR
+	string "External SCR-HAL source directory"
+	default ""
+
+config RISCV_ARCH
+	default "rv64imafdc"
+
+config RISCV_ABI
+	default "lp64d"
+
+config RISCV_CODEMODEL
+	default "medany"
+
+config MAX_CPUS
+	default 8
+
+config RISCV_WORKING_HARTID
+	default 0
+
+config MEMLAYOUT_LD_FILE
+	default "src/soc/syntacore/scr/memlayout.ld"
+
+config OPENSBI_PLATFORM
+	default "generic"
+
+config OPENSBI_SOURCE_DIR
+	default "3rdparty/syntacore/opensbi"
+
+config OPENSBI_TEXT_START
+	default 0x404000000 if SCR_CLUSTER_L3
+	default 0x4000000
+
+config CRABEFI_PAYLOAD_BASE
+	default 0x410000000 if SCR_CLUSTER_L3
+	default 0x10000000
+
+config UBOOT_TEXT_BASE
+	default 0x410000000 if SCR_CLUSTER_L3
+	default 0x10000000
+
+config UBOOT_DEFCONFIG
+	default "scr_rv64_l3_cluster_opensbi_defconfig" if SCR_CLUSTER_L3
+	default "scr_rv64_l2_cluster_opensbi_defconfig"
+
+config UBOOT_REPO_URL
+	default "https://github.com/syntacore/u-boot.git"
+
+config UBOOT_BRANCH_OR_TAG
+	default "sc/2026.04"
+
+endif

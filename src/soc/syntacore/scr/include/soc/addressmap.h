@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#ifndef SOC_SYNTACORE_SCR_ADDRESSMAP_H
+#define SOC_SYNTACORE_SCR_ADDRESSMAP_H
+
+#if CONFIG(SCR_CLUSTER_L3)
+#define SCR_DDR_BASE		0x400000000
+#define SCR_UART0_BASE		0x1e140000
+#define SCR_SYSCLK_MHZ		0x0c001000
+#define SCR_MTIMER_BASE		0x04010000
+#define SCR_PLIC_BASE		0x06000000
+#else
+#define SCR_DDR_BASE		0x0
+#define SCR_UART0_BASE		0xffffffffff010000
+#define SCR_SYSCLK_MHZ		0xffffffffff001000
+#define SCR_MTIMER_BASE		0xfffffffff0040000
+#define SCR_PLIC_BASE		0xfffffffffe000000
+#endif
+
+#define SCR_CBFS_BASE		(SCR_DDR_BASE + 0x8000000)
+#define SCR_OPENSBI_BASE		(SCR_DDR_BASE + 0x4000000)
+
+#endif
