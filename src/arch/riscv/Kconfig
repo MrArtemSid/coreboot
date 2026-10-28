@@ -80,6 +80,15 @@ config OPENSBI_BLOB_PATH
 	help
 	  Absolute (or relative to coreboot directory) path to the OpenSBI ELF file.
 
+config OPENSBI_SOURCE_DIR
+	string
+	depends on OPENSBI_SOURCE
+	default "3rdparty/opensbi"
+	help
+	  OpenSBI source tree to build, relative to the coreboot directory.
+	  SoCs that depend on a vendor OpenSBI fork set this to their own
+	  submodule.
+
 config OPENSBI_PLATFORM
 	string
 	help
@@ -156,6 +165,13 @@ config RISCV_GET_HART_COUNT_AT_RUNTIME
 	  This is for example the case for socketed and for emulation systems.
 	  SOC/Mainboards select this option in case the number of harts is not known at
 	  build time. In this case the SOC must have a scheme in place to discover all harts.
+
+config RISCV_FDT_HEADROOM
+	hex
+	default 0x4000
+	help
+	  Free space reserved after the FDT handed to the next stage. OpenSBI
+	  edits the FDT in place and grows it into this space.
 
 config RISCV_DTS
 	bool

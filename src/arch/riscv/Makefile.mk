@@ -52,6 +52,7 @@ all-y += sbi.c
 all-y += mcall.c
 all-y += virtual_memory.c
 all-y += boot.c
+all-y += cache.c
 all-y += smp.c
 all-y += misc.c
 all-$(CONFIG_ARCH_RISCV_PMP) += pmp.c
@@ -157,7 +158,7 @@ endif #CONFIG_ARCH_RAMSTAGE_RISCV
 
 ifeq ($(CONFIG_RISCV_OPENSBI),y)
 
-OPENSBI_SOURCE := $(top)/3rdparty/opensbi
+OPENSBI_SOURCE := $(top)/$(call strip_quotes,$(CONFIG_OPENSBI_SOURCE_DIR))
 OPENSBI_BUILD  := $(abspath $(obj)/3rdparty/opensbi)
 OPENSBI_TARGET := $(OPENSBI_BUILD)/platform/$(CONFIG_OPENSBI_PLATFORM)/firmware/fw_dynamic.elf
 OPENSBI := $(obj)/opensbi.elf
