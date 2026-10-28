@@ -27,6 +27,10 @@ static void setup_fdt(void)
 
 void __noreturn romstage_main(void)
 {
+	/* Let the host load DDR before the first access to it. */
+	if (CONFIG(SCR_WAIT_KEY_ON_FIRST_BOOT))
+		scr_wait_key();
+
 	setup_fdt();
 	cbmem_initialize_empty();
 	run_ramstage();

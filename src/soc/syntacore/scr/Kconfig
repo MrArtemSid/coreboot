@@ -92,6 +92,14 @@ config SCR_OCRAM_SIZE
 	default 0x80000 if SCR_OCRAM_512K
 	default 0x10000
 
+config SCR_WAIT_KEY_ON_FIRST_BOOT
+	bool "Wait for a key after initializing MRT"
+	depends on SCR_CLUSTER_L3
+	default y
+	help
+	  Wait before reading DDR so the host can load the CBFS image.
+	  Only L3 has an MRT.
+
 endif
 
 choice SCR_IPI
