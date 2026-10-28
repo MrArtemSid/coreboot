@@ -106,9 +106,18 @@ static void do_arch_prog_run(struct arch_prog_run_args *args)
 
 void arch_prog_run(struct prog *prog)
 {
-	struct arch_prog_run_args args = {};
+	/*
+	 * The other harts read these after smp_resume() has returned, while the
+	 * working hart may already run the next stage on the same stack. Keep
+	 * them out of the working hart's stack.
+	 */
+	static struct prog next;
+	static struct prog sbi;
+	static struct arch_prog_run_args args;
 
-	args.prog = prog;
+	next = *prog;
+	args.prog = &next;
+	args.opensbi = NULL;
 
 	if (ENV_RAMSTAGE) {
 		int hart_count = CONFIG_MAX_CPUS;
@@ -126,7 +135,7 @@ void arch_prog_run(struct prog *prog)
 
 		/* In case of OpenSBI we have to load it before resuming all HARTs */
 		if (CONFIG(RISCV_OPENSBI)) {
-			struct prog sbi = PROG_INIT(PROG_OPENSBI, CONFIG_CBFS_PREFIX"/opensbi");
+			sbi = (struct prog)PROG_INIT(PROG_OPENSBI, CONFIG_CBFS_PREFIX "/opensbi");
 
 			if (!selfload_check(&sbi, BM_MEM_OPENSBI))
 				die("OpenSBI load failed");
