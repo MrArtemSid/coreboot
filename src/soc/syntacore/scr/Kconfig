@@ -48,6 +48,27 @@ config SCR_CLUSTER_L3
 
 endchoice
 
+choice SCR_IPI
+	prompt "SCR IPI controller"
+	default SCR_IPI_ICCM if SCR_CLUSTER_L2
+	default SCR_IPI_ICCM_L3 if SCR_CLUSTER_L3
+
+config SCR_IPI_IMSIC
+	bool "AIA IMSIC"
+	help
+	  Use machine-level IMSIC interrupt files for inter-hart interrupts.
+	  Requires AIA on every hart and the platform IMSIC memory map.
+
+config SCR_IPI_ICCM
+	bool "CSR ICCM"
+	depends on SCR_CLUSTER_L2
+
+config SCR_IPI_ICCM_L3
+	bool "MMIO ICCM"
+	depends on SCR_CLUSTER_L3
+
+endchoice
+
 config SCR_HAL_PLATFORM
 	string
 	default "scr9_l3" if SCR_CPU_SCR9 && SCR_CLUSTER_L3

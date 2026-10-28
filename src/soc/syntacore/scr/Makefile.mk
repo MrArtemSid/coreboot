@@ -5,6 +5,9 @@ ifeq ($(CONFIG_SOC_SYNTACORE_SCR),y)
 CPPFLAGS_common += -I$(src)/soc/syntacore/scr/include
 
 all-y += uart.c mtime.c rom_media.c cbmem.c smp.c ipi.c cache.c
+all-$(CONFIG_SCR_IPI_IMSIC) += aia/imsic.c
+all-$(CONFIG_SCR_IPI_ICCM) += iccm/iccm.c
+all-$(CONFIG_SCR_IPI_ICCM_L3) += iccm/iccm_l3.c
 romstage-y += romstage.c
 ramstage-y += chip.c
 
@@ -22,8 +25,18 @@ scr_hal_cflags = -march=$(CONFIG_RISCV_ARCH)$(MARCH_SUFFIX) -mabi=$(CONFIG_RISCV
 	-I$(SCR_HAL)/platform/common -I$(obj)
 
 scr_hal_objs := $(obj)/scrhal/cache.o
+scr_ipi_src-$(CONFIG_SCR_IPI_IMSIC) := aia/imsic_hal.c
+scr_ipi_src-$(CONFIG_SCR_IPI_ICCM) := iccm/iccm_hal.c
+scr_ipi_src-$(CONFIG_SCR_IPI_ICCM_L3) := iccm/iccm_l3_hal.c
+ifneq ($(scr_ipi_src-y),)
+scr_hal_objs += $(obj)/scrhal/ipi.o
+endif
 
 $(obj)/scrhal/cache.o: $(SCR_HAL)/src/drivers/cache.c $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+
+$(obj)/scrhal/ipi.o: $(src)/soc/syntacore/scr/$(scr_ipi_src-y) $(obj)/config.h
 	@mkdir -p $(dir $@)
 	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
 

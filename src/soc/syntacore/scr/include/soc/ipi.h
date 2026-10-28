@@ -6,5 +6,9 @@
 void scr_ipi_init(void);
 void scr_ipi_send(unsigned int hart);
 void scr_ipi_clear(void);
+int scr_iccm_send(unsigned int slot);
+int scr_iccm_clear(void);
+void scr_imsic_send(unsigned int hart);
+void scr_imsic_arm(void);
 
 #endif
