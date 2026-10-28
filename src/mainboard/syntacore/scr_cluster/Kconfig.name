@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config BOARD_SYNTACORE_SCR_CLUSTER
+	bool "SCR cluster (VCU118 FPGA / SC-DT QEMU)"

@@ -1,0 +1,60 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/*
+ * Stock kernels need Zicbom so that OpenSBI enables cache-block operations.
+ * SC-DT QEMU implements it only for SCR9. AIA adds Smaia and Ssaia.
+ */
+#if SCR_CPU_SCR9 && SCR_IPI_IMSIC
+#define SCR_QEMU_ISA "rv64imafdc_zicond_zba_zbb_zbc_zbs_sscofpmf_zicbom_smaia_ssaia"
+#elif SCR_CPU_SCR9
+#define SCR_QEMU_ISA "rv64imafdc_zicond_zba_zbb_zbc_zbs_sscofpmf_zicbom"
+#elif SCR_IPI_IMSIC
+#define SCR_QEMU_ISA "rv64imafdc_zba_zbb_zbc_zbs_sscofpmf_smaia_ssaia"
+#endif
+
+#if SCR_CLUSTER_L3
+#define VIRTIO_HI	0x00
+#define VIRTIO_LO	0xff020000
+#define VIRTIO_ORDER	15	/* Exactly 32 KiB for eight transports. */
+#define VIRTIO_IRQ	240
+#else
+#define VIRTIO_HI	0x00ffffff
+#define VIRTIO_LO	0xff100000
+#define VIRTIO_ORDER	16	/* Aligned 64 KiB transport window. */
+#define VIRTIO_IRQ	10
+#endif
+
+#if SCR_CPU_SCR9
+#define SCR_QEMU_EXT_CPU "i", "m", "a", "f", "d", "c", "zicond", \
+	"zba", "zbb", "zbc", "zbs", "sscofpmf", "zicbom"
+#else
+#define SCR_QEMU_EXT_CPU "i", "m", "a", "f", "d", "c", \
+	"zba", "zbb", "zbc", "zbs", "sscofpmf"
+#endif
+
+#if SCR_IPI_IMSIC
+#define SCR_QEMU_EXT SCR_QEMU_EXT_CPU, "smaia", "ssaia"
+#else
+#define SCR_QEMU_EXT SCR_QEMU_EXT_CPU
+#endif
+
+#define SCR_CPU_ISA(n) \
+	&cpu##n { riscv,isa = SCR_QEMU_ISA; riscv,isa-extensions = SCR_QEMU_EXT; };
+
+#define VIRTIO(n, unit)							\
+	virtio_mmio@unit {						\
+		compatible = "virtio,mmio";				\
+		reg = <VIRTIO_HI (VIRTIO_LO + (n) * 0x1000) 0x00 0x1000>; \
+		interrupts-extended = <&plic (VIRTIO_IRQ + (n)) 4>;	\
+	};
+
+#define RW	(SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE | \
+		 SCR_PMP_SUMODE_READ | SCR_PMP_SUMODE_WRITE)
+
+/* OpenSBI domain regions of the interrupt controller. */
+#if SCR_IPI_IMSIC
+#define SCR_QEMU_IRQ_REGIONS \
+	<&imsic_s_reg (RW | SCR_PMA_MMIO)>, <&plic_reg (RW | SCR_PMA_UNC)>
+#else
+#define SCR_QEMU_IRQ_REGIONS <&plic_reg (RW | SCR_PMA_UNC)>
+#endif

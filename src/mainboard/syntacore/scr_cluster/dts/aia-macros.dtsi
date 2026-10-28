@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/* SC-DT QEMU aia=aplic-imsic memory map. */
+#if SCR_CLUSTER_L3
+#define AIA_HI		0
+#define IMSIC_M_LO	0x11000000
+#define IMSIC_S_LO	0x12000000
+#define APLIC_M_LO	0x04030000
+#define APLIC_S_LO	0x04034000
+#else
+#define AIA_HI		0x00ffffff
+#define IMSIC_M_LO	0x24000000
+#define IMSIC_S_LO	0x28000000
+#define APLIC_M_LO	0x0c000000
+#define APLIC_S_LO	0x0d000000
+#endif
+
+#define AIA_NUM_IDS	255
+#define AIA_NUM_SOURCES	287
+
+#if SCR_CLUSTER_L3
+#define IMSIC_M_NODE	interrupt-controller@11000000
+#define IMSIC_S_NODE	interrupt-controller@12000000
+#define APLIC_M_NODE	interrupt-controller@4030000
+#define APLIC_S_NODE	interrupt-controller@4034000
+#else
+#define IMSIC_M_NODE	interrupt-controller@ffffff24000000
+#define IMSIC_S_NODE	interrupt-controller@ffffff28000000
+#define APLIC_M_NODE	interrupt-controller@ffffff0c000000
+#define APLIC_S_NODE	interrupt-controller@ffffff0d000000
+#endif
+
+#define IMSIC_TARGETS(irq) <&cpu0_intc irq &cpu1_intc irq &cpu2_intc irq \
+	&cpu3_intc irq &cpu4_intc irq &cpu5_intc irq &cpu6_intc irq &cpu7_intc irq>

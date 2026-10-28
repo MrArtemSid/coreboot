@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_SYNTACORE
+
+choice
+	prompt "Mainboard model"
+source "src/mainboard/syntacore/*/Kconfig.name"
+endchoice
+
+source "src/mainboard/syntacore/*/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Syntacore"
+
+endif

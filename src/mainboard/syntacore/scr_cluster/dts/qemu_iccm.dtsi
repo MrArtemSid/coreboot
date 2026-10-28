@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/* PLIC in the plic-msi-ver=2 layout; IPIs use the cluster ICCM. */
+
+&plic {
+	compatible = "syntacore,plic", "sifive,plic-1.0.0";
+	riscv,ndev = <287>;
+};

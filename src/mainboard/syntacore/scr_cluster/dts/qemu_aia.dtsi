@@ -1,0 +1,79 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/*
+ * AIA: S-mode APLIC routes peripheral interrupts to S-mode IMSIC, M-mode
+ * IMSIC carries IPIs. The PLIC node is replaced and its label reused.
+ */
+
+#include "aia-macros.dtsi"
+
+/delete-node/ &plic;
+
+/ {
+	soc {
+		imsic_m: IMSIC_M_NODE {
+			compatible = "qemu,imsics", "riscv,imsics";
+			reg = <AIA_HI IMSIC_M_LO 0 0x8000>;
+			interrupt-controller;
+			#interrupt-cells = <0>;
+			msi-controller;
+			#msi-cells = <0>;
+			interrupts-extended = IMSIC_TARGETS(11);
+			riscv,num-ids = <AIA_NUM_IDS>;
+		};
+
+		imsic_s: IMSIC_S_NODE {
+			compatible = "qemu,imsics", "riscv,imsics";
+			reg = <AIA_HI IMSIC_S_LO 0 0x8000>;
+			interrupt-controller;
+			#interrupt-cells = <0>;
+			msi-controller;
+			#msi-cells = <0>;
+			interrupts-extended = IMSIC_TARGETS(9);
+			riscv,num-ids = <AIA_NUM_IDS>;
+		};
+
+		aplic_m: APLIC_M_NODE {
+			compatible = "qemu,aplic", "riscv,aplic";
+			reg = <AIA_HI APLIC_M_LO 0 0x4000>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			riscv,num-sources = <AIA_NUM_SOURCES>;
+			msi-parent = <&imsic_m>;
+			riscv,children = <&plic>;
+			riscv,delegation = <&plic 1 AIA_NUM_SOURCES>;
+		};
+
+		/* Keep inherited peripheral interrupt-parent references valid. */
+		plic: APLIC_S_NODE {
+			compatible = "qemu,aplic", "riscv,aplic";
+			reg = <AIA_HI APLIC_S_LO 0 0x4000>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			riscv,num-sources = <AIA_NUM_SOURCES>;
+			msi-parent = <&imsic_s>;
+		};
+	};
+
+	chosen {
+		opensbi-domains {
+			imsic_s_reg: imsic_s_reg {
+				compatible = "opensbi,domain,memregion";
+				base = <AIA_HI IMSIC_S_LO>;
+				order = <15>;
+				/*
+				 * The AIA FDT fixup checks R/W without SBI_DOMAIN_MMIO.
+				 * Keep PMA in domain flags, but omit the mmio marker.
+				 */
+				devices = <&imsic_s>;
+			};
+		};
+	};
+};
+
+&plic_reg {
+	base = <AIA_HI APLIC_S_LO>;
+	order = <14>;
+	/* OpenSBI's AIA FDT fixup checks R/W without SBI_DOMAIN_MMIO. */
+	/delete-property/ mmio;
+};

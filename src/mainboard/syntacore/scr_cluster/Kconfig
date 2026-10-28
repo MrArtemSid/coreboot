@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+if BOARD_SYNTACORE_SCR_CLUSTER
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select SOC_SYNTACORE_SCR
+	select BOARD_ROMSIZE_KB_16384
+
+config MAINBOARD_DIR
+	default "syntacore/scr_cluster"
+
+config MAINBOARD_PART_NUMBER
+	default "SCR cluster"
+
+config RISCV_DTS_FILE
+	string "Devicetree source file"
+	default "src/mainboard/syntacore/scr_cluster/dts/scr_cluster.dts"
+	help
+	  Path to the .dts file, relative to the coreboot tree or absolute.
+	  The default selects the SCR9/SCR7, L3/L2, QEMU and IPI parts from
+	  the options above. A custom file is passed through the same
+	  preprocessor with the board dts/ and Linux Syntacore directories on
+	  the include path, so it can extend the default with
+	  #include "scr_cluster.dts" or include the Linux .dtsi files.
+
+config SCR_CLUSTER_QEMU
+	bool "Target the SC-DT QEMU machine"
+	default n
+
+endif
