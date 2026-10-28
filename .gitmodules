@@ -79,3 +79,24 @@
 	url = https://github.com/openSIL/openSIL.git
 	branch = turin_poc
 
+[submodule "3rdparty/syntacore/opensbi"]
+	path = 3rdparty/syntacore/opensbi
+	url = https://github.com/syntacore/opensbi.git
+	branch = sc-2026.04
+	update = none
+[submodule "3rdparty/syntacore/u-boot"]
+	path = 3rdparty/syntacore/u-boot
+	url = https://github.com/syntacore/u-boot.git
+	branch = sc/2026.04
+	update = none
+[submodule "3rdparty/syntacore/miniboot"]
+	path = 3rdparty/syntacore/miniboot
+	url = https://github.com/syntacore/miniboot.git
+	branch = sc/2026.04
+	update = none
+[submodule "3rdparty/syntacore/linux"]
+	path = 3rdparty/syntacore/linux
+	url = https://github.com/syntacore/linux.git
+	branch = sc/main-6.12
+	update = none
+	shallow = true
