@@ -42,6 +42,9 @@ _start:
 	csrrw a1, mscratch, zero
 	call hls_init
 
+	# per-hart SoC setup that has to happen before the harts part ways
+	call soc_hart_early_init
+
 	li   a0, CONFIG_RISCV_WORKING_HARTID
 	call smp_pause
 
@@ -59,4 +62,8 @@ _start:
 	// These codes need to be implemented on a specific SoC.
 	.weak cache_as_ram
 cache_as_ram:
+	ret
+
+	.weak soc_hart_early_init
+soc_hart_early_init:
 	ret
