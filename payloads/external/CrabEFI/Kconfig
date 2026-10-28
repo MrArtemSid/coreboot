@@ -4,10 +4,21 @@ if PAYLOAD_CRABEFI
 
 config PAYLOAD_FILE
 	string "CrabEFI ELF binary"
+	default "payloads/external/CrabEFI/CrabEFI/target/riscv64gc-unknown-none-elf/debug/crabefi" if CRABEFI_DEBUG && ARCH_RISCV_RV64
+	default "payloads/external/CrabEFI/CrabEFI/target/riscv64gc-unknown-none-elf/release/crabefi" if ARCH_RISCV_RV64
 	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/debug/crabefi" if CRABEFI_DEBUG
 	default "payloads/external/CrabEFI/CrabEFI/target/x86_64-unknown-none/release/crabefi"
 	help
 	  The path to the CrabEFI ELF binary.
+
+config CRABEFI_PAYLOAD_BASE
+	hex "CrabEFI link address"
+	depends on ARCH_RISCV_RV64
+	default 0x81000000
+	help
+	  CrabEFI is not relocatable on RISC-V and is linked at this
+	  address. The default matches QEMU virt (DRAM + 16 MiB); boards
+	  with a different DRAM base or coreboot layout override it.
 
 choice
 	prompt "CrabEFI version"

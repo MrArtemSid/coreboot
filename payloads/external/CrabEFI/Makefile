@@ -11,7 +11,7 @@ unexport $(COREBOOT_EXPORTS)
 CRABEFI_DIR := $(dir $(lastword $(MAKEFILE_LIST)))CrabEFI
 CRABEFI_REPO ?= https://github.com/ArthurHeymans/CrabEFI
 CRABEFI_TAG_OR_REV ?= origin/master
-CRABEFI_CARGO_TARGET := x86_64-unknown-none
+CRABEFI_CARGO_TARGET ?= x86_64-unknown-none
 CRABEFI_CARGO_PACKAGE := crabefi-coreboot
 
 ifeq ($(CONFIG_CRABEFI_DEBUG),y)
@@ -34,6 +34,10 @@ $(CRABEFI_DIR):
 	git clone "$(CRABEFI_REPO)" "$(CRABEFI_DIR)"
 ifneq ($(CRABEFI_TAG_OR_REV),)
 	git -C "$(CRABEFI_DIR)" checkout $(CRABEFI_TAG_OR_REV)
+endif
+
+ifneq ($(CRABEFI_PAYLOAD_BASE),)
+export PAYLOAD_BASE := $(CRABEFI_PAYLOAD_BASE)
 endif
 
 $(CRABEFI_ELF): $(CRABEFI_DIR)
