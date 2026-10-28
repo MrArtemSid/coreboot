@@ -8,13 +8,14 @@
 #include <mcall.h>
 #include <program_loading.h>
 #include <romstage_common.h>
+#include <soc/hal.h>
 
 static void setup_fdt(void)
 {
 	size_t size;
 	const struct fdt_header *fdt;
 
-	if (fdt_is_valid(HLS()->fdt))
+	if (CONFIG(SCR_BOOT_MINIBOOT) && fdt_is_valid(HLS()->fdt))
 		return;
 
 	fdt = cbfs_ro_map("DTB", &size);

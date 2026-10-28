@@ -48,6 +48,52 @@ config SCR_CLUSTER_L3
 
 endchoice
 
+choice SCR_BOOT_FLOW
+	prompt "SCR boot flow"
+	default SCR_BOOT_MINIBOOT
+
+config SCR_BOOT_MINIBOOT
+	bool "miniboot"
+	help
+	  Preserve the platform configuration initialized by miniboot.
+
+config SCR_BOOT_HAL
+	bool "Reset vector, SCR-HAL initialization"
+	help
+	  Initialize the platform in bootblock using the external SCR-HAL.
+
+endchoice
+
+if SCR_BOOT_HAL
+
+choice SCR_OCRAM_SIZE_SELECT
+	prompt "OCRAM size"
+	help
+	  All pre-RAM code, data and eight hart stacks run from OCRAM. The
+	  64 KiB layout compresses ramstage with LZ4 and disables metadata
+	  caches. SCR9 L3 can use the roomier 512 KiB layout.
+	default SCR_OCRAM_512K if SCR_CPU_SCR9 && SCR_CLUSTER_L3
+	default SCR_OCRAM_64K
+
+config SCR_OCRAM_64K
+	bool "64 KiB"
+	select MB_COMPRESS_RAMSTAGE_LZ4
+	select NO_FMAP_CACHE
+	select NO_CBFS_MCACHE
+
+config SCR_OCRAM_512K
+	bool "512 KiB"
+	depends on SCR_CPU_SCR9 && SCR_CLUSTER_L3
+
+endchoice
+
+config SCR_OCRAM_SIZE
+	hex
+	default 0x80000 if SCR_OCRAM_512K
+	default 0x10000
+
+endif
+
 choice SCR_IPI
 	prompt "SCR IPI controller"
 	default SCR_IPI_ICCM if SCR_CLUSTER_L2
