@@ -4,8 +4,8 @@ if PAYLOAD_UBOOT
 
 config PAYLOAD_SPECIFIC_OPTIONS
 	def_bool y
-	select PAYLOAD_IS_FLAT_BINARY
-	select WANT_LINEAR_FRAMEBUFFER
+	select PAYLOAD_IS_FLAT_BINARY if ARCH_X86
+	select WANT_LINEAR_FRAMEBUFFER if ARCH_X86
 
 config UBOOT_STABLE
 	bool "v2025.07"
@@ -21,6 +21,35 @@ config UBOOT_REPO_URL
 	string "URL to uboot repository"
 	default "http://github.com/u-boot/u-boot/"
 
+config UBOOT_DEFCONFIG
+	string "U-Boot defconfig"
+	default "coreboot_defconfig" if ARCH_X86
+	default "qemu-riscv64_smode_defconfig" if ARCH_RISCV_RV64
+	default "qemu-riscv32_smode_defconfig" if ARCH_RISCV_RV32
+	help
+	  U-Boot defconfig used when no PAYLOAD_CONFIGFILE is given.
+	  Platforms with their own U-Boot board set this.
+
+config UBOOT_TEXT_BASE
+	hex "U-Boot link address"
+	depends on ARCH_RISCV
+	default 0x81000000 if BOARD_EMULATION_QEMU_RISCV
+	help
+	  Overrides CONFIG_TEXT_BASE of the U-Boot build. The RISC-V
+	  defconfigs link U-Boot right above the OpenSBI default region,
+	  which is where coreboot keeps its own stages, so the ELF payload
+	  has to be moved to a free DRAM address.
+
+config UBOOT_CROSS_COMPILE
+	string "U-Boot cross compiler prefix"
+	depends on ARCH_RISCV
+	default ""
+	help
+	  Toolchain prefix for the U-Boot build, e.g. "riscv64-linux-gnu-".
+	  U-Boot links its EFI selftest applications as shared objects,
+	  which bare-metal ELF toolchains cannot do. When empty, the
+	  coreboot RISC-V toolchain is used.
+
 config PAYLOAD_CONFIGFILE
 	string "U-Boot config file"
 	default ""
@@ -33,9 +62,10 @@ config PAYLOAD_CONFIGFILE
 	  from the U-Boot config directory
 
 config PAYLOAD_FILE
-	default "payloads/external/U-Boot/build/u-boot.bin"
+	default "payloads/external/U-Boot/build/u-boot.bin" if ARCH_X86
+	default "payloads/external/U-Boot/build/u-boot"
 
 config PAYLOAD_OPTIONS
-	default "-l 0x1110000 -e 0x1110000"
+	default "-l 0x1110000 -e 0x1110000" if ARCH_X86
 
 endif
