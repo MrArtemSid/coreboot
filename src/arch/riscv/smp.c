@@ -35,6 +35,11 @@ int boot_cpu(void)
 }
 #endif
 
+unsigned long __weak riscv_ipi_mask(void)
+{
+	return MIP_MSIP;
+}
+
 void smp_pause(int working_hartid)
 {
 	int hartid = read_csr(mhartid);
@@ -43,14 +48,16 @@ void smp_pause(int working_hartid)
 	if (hartid != working_hartid) {
 		clear_csr(mstatus, MSTATUS_MIE); // disable all interrupts
 		set_msip(hartid, 0); // clear pending interrupts
-		write_csr(mie, MIP_MSIP); // enable only IPI (for smp_resume)
+		unsigned long ipi_mask = riscv_ipi_mask();
+
+		write_csr(mie, ipi_mask); // enable only IPI (for smp_resume)
 		barrier();
 		atomic_set(&HLS()->entry.sync_a, HART_SLEEPING); // mark the hart as sleeping.
 
 		// pause hart
 		do {
 			__asm__ volatile ("wfi"); // wait for interrupt
-		} while ((read_csr(mip) & MIP_MSIP) == 0);
+		} while ((read_csr(mip) & ipi_mask) == 0);
 
 		atomic_set(&HLS()->entry.sync_a, HART_AWAKE); // mark the hart as awake
 

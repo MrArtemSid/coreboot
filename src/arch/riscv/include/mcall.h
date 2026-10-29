@@ -82,6 +82,9 @@ void mtime_init(void);
  */
 void set_msip(int hartid, int val);
 
+/* IPI wake-up mask for platforms using interrupts other than MSIP, e.g. IMSIC MEIP. */
+unsigned long riscv_ipi_mask(void);
+
 #endif // __ASSEMBLER__
 
 #endif
