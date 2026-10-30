@@ -17,6 +17,18 @@ config CPU_INTEL_GRANTLEY
 
 if CPU_INTEL_GRANTLEY
 
+config GRANTLEY_KBC_EARLY_BEACON
+	bool
+	help
+	  Blink the PS/2 keyboard LEDs from the pre-CAR bootblock assembly,
+	  before SAD verification, microcode and CAR.  For boards whose only
+	  early output channel is the keyboard (no POST display, COM A not
+	  enabled by the vendor firmware): the beacon enables the CNF1/KBC
+	  LPC decodes, brings the Nuvoton KBC up on LDN5 at 0x2e and flashes
+	  all three LEDs three times.  Its absence localizes a dead board to
+	  the reset-vector/SPI-fetch/32-bit-entry span; the later per-stage
+	  beacons then cover everything up to the payload.
+
 config SMM_TSEG_SIZE
 	hex
 	default 0x800000

@@ -292,6 +292,187 @@ visits: .long 0
         self.assertIn('outb %al, $0x80', failure)
         self.assertNotIn('outb', result[result.index('cache_as_ram:'):result.index('$0xff00007f')])
 
+    def test_early_keyboard_beacon_sequence(self):
+        # The pre-CAR beacon must program LPC_EN, bring the KBC up and emit
+        # the full blink sequence even when no keyboard ever answers, then
+        # fall through - a dead keyboard must never stall the boot.
+        source = CAR.read_text()
+        body = source[source.index('#if CONFIG(GRANTLEY_KBC_EARLY_BEACON)'):]
+        body = body[body.index('\n') + 1:body.index('#endif /* GRANTLEY_KBC_EARLY_BEACON */')]
+        for dead_kbc in (False, True):
+            with self.subTest(dead_kbc=dead_kbc):
+                fixture = r"""
+.section .text
+.code32
+.macro outb val, port
+.ifc \port, %dx
+    cmpw $0x2e, %dx
+    jne 51f
+    movzbl \val, %edi
+    movl %edi, sio_index
+    jmp 53f
+51:
+    cmpw $0x2f, %dx
+    jne 52f
+    movl sio_count, %edi
+    movzbl \val, %eax
+    movl %eax, sio_log+4(,%edi,8)
+    movl sio_index, %eax
+    movl %eax, sio_log(,%edi,8)
+    incl sio_count
+    jmp 53f
+52:
+    cmpw $0xcf8, %dx
+    jne 53f
+    movzbl \val, %edi
+    movl %edi, selector
+53:
+.else
+    movzbl \val, %edi
+    movl kbc_count, %esi
+    movl %edi, kbc_log(,%esi,4)
+    incl kbc_count
+.ifc \port, $0x60
+    movl $1, ack_pending
+.endif
+.endif
+.endm
+.macro inb port, reg
+.ifc \port, $0x64
+    movl deadmode, %eax
+    testl %eax, %eax
+    jz 61f
+    movb $0xff, \reg
+    jmp 62f
+61:
+    movl ack_pending, %eax
+    testl %eax, %eax
+    jz 63f
+    movb $1, \reg
+    jmp 62f
+63:
+    movb $0, \reg
+62:
+.else
+    movl deadmode, %eax
+    testl %eax, %eax
+    jz 65f
+    movb $0xff, \reg
+    jmp 66f
+65:
+    movl $0, ack_pending
+    movb $0xfa, \reg
+66:
+.endif
+.endm
+.macro outl val, port
+    cmpw $0xcf8, %dx
+    jne 71f
+    movl \val, selector
+    jmp 73f
+71:
+    cmpw $0xcfc, %dx
+    jne 73f
+    cmpl $0x8000f880, selector
+    jne 73f
+    movl \val, lpc_en
+    movl $1, lpc_en_touched
+73:
+.endm
+.macro inl port, reg
+    movl lpc_en, \reg
+.endm
+.global _start
+_start:
+""" + body + r"""
+    cmpl $1, lpc_en_touched
+    jne fail
+    cmpl $0x14070000, lpc_en
+    jne fail
+    cmpl $7, sio_count
+    jne fail
+    cmpl $0x07, sio_log+0
+    jne fail
+    cmpl $0x05, sio_log+4
+    jne fail
+    cmpl $0x60, sio_log+8
+    jne fail
+    cmpl $0x00, sio_log+12
+    jne fail
+    cmpl $0x61, sio_log+16
+    jne fail
+    cmpl $0x60, sio_log+20
+    jne fail
+    cmpl $0x62, sio_log+24
+    jne fail
+    cmpl $0x00, sio_log+28
+    jne fail
+    cmpl $0x63, sio_log+32
+    jne fail
+    cmpl $0x64, sio_log+36
+    jne fail
+    cmpl $0x70, sio_log+40
+    jne fail
+    cmpl $0x01, sio_log+44
+    jne fail
+    cmpl $0x30, sio_log+48
+    jne fail
+    cmpl $0x01, sio_log+52
+    jne fail
+    cmpl $0xaa, sio_index
+    jne fail
+    cmpl $13, kbc_count
+    jne fail
+    cmpl $0xae, kbc_log+0
+    jne fail
+    cmpl $0xed, kbc_log+4
+    jne fail
+    cmpl $0x07, kbc_log+8
+    jne fail
+    cmpl $0xed, kbc_log+12
+    jne fail
+    cmpl $0x00, kbc_log+16
+    jne fail
+    cmpl $0xed, kbc_log+20
+    jne fail
+    cmpl $0x07, kbc_log+24
+    jne fail
+    cmpl $0xed, kbc_log+28
+    jne fail
+    cmpl $0x00, kbc_log+32
+    jne fail
+    cmpl $0xed, kbc_log+36
+    jne fail
+    cmpl $0x07, kbc_log+40
+    jne fail
+    cmpl $0xed, kbc_log+44
+    jne fail
+    cmpl $0x00, kbc_log+48
+    jne fail
+    xorl %ebx, %ebx
+    jmp exit
+fail:
+    movl $1, %ebx
+exit:
+    movl $1, %eax
+    int $0x80
+.section .data
+sio_index: .long -1
+sio_count: .long 0
+sio_log:   .zero 256
+kbc_count: .long 0
+kbc_log:   .zero 256
+selector:  .long 0
+lpc_en:    .long 0x00070000
+lpc_en_touched: .long 0
+ack_pending: .long 0
+deadmode:  .long """ + ("1" if dead_kbc else "0") + r"""
+.section .note.GNU-stack,"",@progbits
+"""
+                self.assertEqual(self.run_assembly(fixture), 0,
+                                 "Beacon must enable LPC_EN, program LDN5 and blink "
+                                 "NUM|CAPS|SCROLL 3x even without a keyboard")
+
     def test_optional_preram_microcode_hook(self):
         with tempfile.TemporaryDirectory(prefix="grantley-car-hook-",
                                          dir=os.environ.get("TMPDIR")) as tmp:

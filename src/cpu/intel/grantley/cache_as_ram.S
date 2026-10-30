@@ -94,6 +94,96 @@ cache_as_ram:
 #endif
 	post_code(POSTCODE_BOOTBLOCK_CAR)
 
+#if CONFIG(GRANTLEY_KBC_EARLY_BEACON)
+	/* Earliest keyboard beacon: legacy IO routing is up, but SAD
+	 * verification, microcode and CAR are still ahead.  Enable the CNF1
+	 * (0x2e/0x2f) and KBC (0x60/0x64) LPC decodes, minimally bring up the
+	 * Nuvoton KBC on LDN5 and flash all three LEDs three times.  This is
+	 * the first visible sign of life: it proves the reset vector, SPI
+	 * fetch and the 32-bit entry all work, and it depends neither on the
+	 * mainboard SIO table nor on the C environment.  EAX/EBX/ECX/EDX
+	 * only, no stack; every KBC wait is bounded so an absent keyboard
+	 * cannot stall the boot.  The mainboard SIO table replays the same
+	 * LDN5 programming later.
+	 */
+#define GRANTLEY_EARLY_CNF1_LPC_EN (1 << 12)	/* 0x2e/0x2f, lpc_def.h CNF1_LPC_EN */
+#define GRANTLEY_EARLY_KBC_LPC_EN (1 << 10)	/* 0x60/0x64, lpc_def.h KBC_LPC_EN */
+	/* 0:1f.0 + 0x80: LPC_EN occupies the high word of this dword. */
+	movl	$0x8000f880, %eax
+	movw	$0xcf8, %dx
+	outl	%eax, %dx
+	movw	$0xcfc, %dx
+	inl	%dx, %eax
+	orl	$((GRANTLEY_EARLY_CNF1_LPC_EN | GRANTLEY_EARLY_KBC_LPC_EN) << 16), %eax
+	outl	%eax, %dx
+
+	.macro early_pnp index, data
+	movw	$0x2e, %dx
+	movb	\index, %al
+	outb	%al, %dx
+	movw	$0x2f, %dx
+	movb	\data, %al
+	outb	%al, %dx
+	.endm
+	/* Wait until the KBC input buffer is free, draining stale output
+	 * bytes (BAT results, ACKs); give up after the bound. */
+	.macro early_kbc_ready
+	movl	$0x20000, %ecx
+905:
+	inb	$0x64, %al
+	testb	$1, %al
+	jz	906f
+	inb	$0x60, %al
+	jmp	907f
+906:
+	testb	$2, %al
+	jz	908f
+907:
+	decl	%ecx
+	jnz	905b
+908:
+	.endm
+
+	early_pnp $0x07, $0x05		/* LDN 5: keyboard controller */
+	early_pnp $0x60, $0x00		/* data port 0x60 */
+	early_pnp $0x61, $0x60
+	early_pnp $0x62, $0x00		/* command port 0x64 */
+	early_pnp $0x63, $0x64
+	early_pnp $0x70, $0x01		/* IRQ 1 */
+	early_pnp $0x30, $0x01		/* activate */
+	movl	$0x2e, %edx
+	movb	$0xaa, %al
+	outb	%al, %dx		/* leave configuration mode */
+
+	early_kbc_ready
+	movb	$0xae, %al
+	outb	%al, $0x64		/* enable keyboard interface */
+	movb	$3, %bl
+901:
+	early_kbc_ready
+	movb	$0xed, %al
+	outb	%al, $0x60		/* "set LEDs" */
+	early_kbc_ready
+	movb	$0x07, %al
+	outb	%al, $0x60		/* NUM|CAPS|SCROLL on */
+	movl	$0x400000, %ecx
+902:
+	decl	%ecx
+	jnz	902b
+	early_kbc_ready
+	movb	$0xed, %al
+	outb	%al, $0x60
+	early_kbc_ready
+	xorb	%al, %al
+	outb	%al, $0x60		/* all off */
+	movl	$0x400000, %ecx
+903:
+	decl	%ecx
+	jnz	903b
+	decb	%bl
+	jnz	901b
+#endif /* GRANTLEY_KBC_EARLY_BEACON */
+
 #define GRANTLEY_PRE_NEM
 #include "early_startup.inc"
 #undef GRANTLEY_PRE_NEM
