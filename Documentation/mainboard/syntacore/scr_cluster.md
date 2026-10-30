@@ -75,22 +75,37 @@ may prompt again. L2 has no MRT and no such option: load CBFS into DDR
 before releasing reset.
 
 Use `config.syntacore_scr_cluster_scr9_l3_qemu_hal_crabefi` (or `l2`)
-for this flow; select SCR7 or the 64 KiB layout in menuconfig. No miniboot loader is needed. The L3 QEMU command is:
+for this flow; select SCR7 or the 64 KiB layout in menuconfig.
+HAL builds additionally produce `build/coreboot.elf` for SC-DT's `firmware=`
+option. It contains two `PT_LOAD` segments: the final raw bootblock at
+OCRAM + `0x200` (including the L2 reset vector at `0xffffffffffffff00`),
+and the complete ROM at the existing CBFS address (`0x408000000` on L3,
+`0x8000000` on L2). The entry point is OCRAM + `0x200`. OpenSBI and the
+payload remain inside CBFS with their existing load addresses.
+`build/coreboot.rom` is retained for hardware loading; miniboot builds
+are unchanged and do not produce this combined ELF.
+
+No miniboot or separate ROM loader is needed. On L3, wait for
+`SCR: MRT initialized. Load DDR, then Press any key` and press Enter
+when it appears. The L3 QEMU command is:
 
 ```sh
 /path/to/sc-dt/tools/bin/qemu-system-riscv64 \
-    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x80000 -smp 8 -nographic \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x80000,firmware=build/coreboot.elf \
+    -smp 8 -m 4G -nographic \
     -global syntacore-scr9-riscv-cpu.pma=on \
-    -global virtio-mmio.force-legacy=false -bios none \
-    -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0x2000200 \
-    -device loader,file=build/coreboot.rom,addr=0x408000000 \
+    -global virtio-mmio.force-legacy=false \
     -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
     -device virtio-blk-device,drive=hd0
 ```
 
-For L2 use `-M scr9_l2,mrt=on`, omit the PMA global and set the loader
-addresses to `0xffffffffffff0200` and `0x8000000`. With the 64 KiB
-layout on L3 use `ocram-size=0x10000`; SCR7 uses `-M scr7_l3` without the
+Do not combine `firmware=` with `-bios none` or `-bios default`: in the
+SC-DT QEMU version tested, either `-bios` override suppresses loading the
+machine's firmware file and installs the default reset stub instead.
+
+For L2 use `-M scr9_l2,mrt=on,firmware=build/coreboot.elf` and omit the
+PMA global. With the 64 KiB layout on L3 use `ocram-size=0x10000`;
+SCR7 uses `-M scr7_l3,...,firmware=build/coreboot.elf` without the
 PMA global. L3 also supports the QEMU default OCRAM size, a superset of
 both layouts. Do not enable
 PMA enforcement on L2: SC-DT QEMU faults on the reset vector even with
@@ -111,11 +126,11 @@ interrupts through S-mode APLIC to S-mode IMSIC, without guest pages
 For example, in the L3 command above replace the machine argument with:
 
 ```sh
--M scr9_l3,aia=aplic-imsic,aia-guests=0,mrt=on,ocram-size=0x80000
+-M scr9_l3,aia=aplic-imsic,aia-guests=0,mrt=on,ocram-size=0x80000,firmware=build/coreboot.elf
 ```
 
-Use `scr9_l2,aia=aplic-imsic,aia-guests=0,mrt=on` for L2; retain the
-corresponding loader addresses and PMA settings described above.
+Use `scr9_l2,aia=aplic-imsic,aia-guests=0,mrt=on,firmware=build/coreboot.elf`
+for L2; retain the corresponding PMA settings described above.
 
 ## Source layout
 
@@ -203,19 +218,21 @@ For L3:
 
 ```sh
 /path/to/sc-dt/tools/bin/qemu-system-riscv64 \
-    -M scr9_l3,plic-msi-ver=2,mrt=on -smp 8 -nographic \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x200000,firmware=/path/to/miniboot-l3/miniboot.elf \
+    -smp 8 -m 4G -nographic \
     -global syntacore-scr9-riscv-cpu.pma=on \
     -global virtio-mmio.force-legacy=false \
-    -bios none \
-    -device loader,file=/path/to/miniboot-l3/miniboot.elf,cpu-num=0 \
     -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0x400000000 \
     -device loader,file=build/coreboot.rom,addr=0x408000000 \
     -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
     -device virtio-blk-device,drive=hd0
 ```
 
-For L2 use `-M scr9_l2,mrt=on`, omit the PMA global, use the L2 miniboot,
-and set the two loader addresses to `0x0` and `0x8000000` respectively.
+For L2 use `-M scr9_l2,mrt=on,firmware=/path/to/miniboot-l2/miniboot.elf`,
+omit the PMA global, and set the two loader addresses to `0x0` and
+`0x8000000` respectively. The L3 command reserves 2 MiB OCRAM because
+vendor miniboot places its stacks at the top of that region; do not reuse
+the HAL-specific 512 KiB setting for miniboot.
 The QEMU device tree enables modern virtio transports and, on SCR9,
 Zicbom (SC-DT QEMU does not implement it for SCR7). Mainboard
 initialization sets PLIC sources to level-high. L3 requires
@@ -223,3 +240,86 @@ initialization sets PLIC sources to level-high. L3 requires
 L2 omits the first two virtio transports because they overlap cluster
 registers. A GRUB Linux command line should include
 `console=ttyS0,115200 efi=novamap` to retain the serial console.
+
+## Preloaded OpenSBI / U-Boot External Flow
+
+The `SCR_PRELOADED_PAYLOAD` option allows coreboot to hand off execution to
+externally loaded firmware components placed directly into guest memory by
+SC-DT QEMU's machine options (`sbi=`, `uboot=`, `dtb=`, `kernel=`, `initrd=`),
+rather than loading them from CBFS or compiling OpenSBI from source.
+
+### Memory Layout and Constraints
+
+DDR memory layout (relative to `SCR_DDR_BASE`: `0x400000000` on L3, `0x0` on L2):
+
+| Offset | Size | Component | Description |
+| --- | --- | --- | --- |
+| `+0x00000000` | 2 MiB | OpenSBI | Preloaded by `sbi=`. Reserved range in coreboot table (`0x0..0x200000`) protects it from OS clobbering. |
+| `+0x00200000` | 32 MiB | Payload (U-Boot) | Preloaded by `uboot=`. OpenSBI hands off in S-mode to this entry address. |
+| `+0x02200000` | 1 MiB | Devicetree (DTB) | Preloaded by `dtb=`. Validated by coreboot (`fdt_is_valid`, endian-converted `totalsize` check). |
+| `+0x02300000` | 61 MiB | Kernel Image | Preloaded by `kernel=`. Maximum uncompressed size is 61 MiB (`0x2300000..0x6000000`), bounded by ramstage base. |
+| `+0x06000000` | 2 MiB | coreboot ramstage | Relocated to DDR + 96 MiB so kernel Image up to 61 MiB does not collide with ramstage. |
+| `+0x06200000` | 2 MiB | Stacks & Buffers | Per-hart stacks, pre-RAM console, FMAP and CBFS metadata caches. |
+| `+0x08000000` | 16 MiB | CBFS ROM | Coreboot flash image loaded into DDR window (`0x408000000` on L3, `0x8000000` on L2). |
+| `+0x30000000` | Dynamic | Initrd | Preloaded by `initrd=`. Handed over by U-Boot to Linux kernel. |
+
+**Important constraints**:
+1. **Kernel Image Size**: Because the kernel is loaded at `+0x02300000` (35 MiB) and ramstage resides at `+0x06000000` (96 MiB), the maximum kernel Image size is strictly 61 MiB (`SCR_KERNEL_MAX_SIZE`). Kernels larger than 61 MiB would overlap and corrupt coreboot ramstage.
+2. **OpenSBI Build Exclusion**: When `CONFIG_SCR_PRELOADED_PAYLOAD=y`, coreboot excludes OpenSBI from CBFS via `postinclude-hooks` and eliminates the `opensbi.elf` build dependency so OpenSBI source submodules are not compiled.
+3. **Address 0 Support**: On SCR9 L2, `SCR_OPENSBI_BASE` is `0x0`. OpenSBI execution at address 0 is valid and handled properly in identity-mapped M-mode.
+4. **Reserved RAM**: Only the OpenSBI footprint (`SCR_OPENSBI_BASE .. SCR_OPENSBI_BASE + 2M`) is marked as reserved in the coreboot memory table, ensuring Linux has full access to the remainder of system RAM.
+
+### Configuration
+
+Enable preloaded payload support in coreboot:
+
+```ini
+CONFIG_SCR_BOOT_HAL=y
+CONFIG_PAYLOAD_NONE=y
+CONFIG_SCR_PRELOADED_PAYLOAD=y
+CONFIG_SCR_PRELOADED_PAYLOAD_ENTRY=0x400200000  # For L3 (use 0x200000 for L2)
+```
+
+### Running in SC-DT QEMU
+
+Run L3 external preloaded flow:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x80000,\
+firmware=build/cbfs/fallback/bootblock.elf,\
+sbi=/path/to/sbi-l3.bin,\
+uboot=/path/to/uboot-l3.bin,\
+dtb=build/dtb,\
+kernel=/path/to/Image,\
+initrd=/path/to/initrd.img \
+    -smp 8 -m 4G -nographic \
+    -global syntacore-scr9-riscv-cpu.pma=on \
+    -global virtio-mmio.force-legacy=false \
+    -device loader,file=build/coreboot.rom,addr=0x408000000 \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0 \
+    -append "console=ttyS0,115200 root=/dev/vda1 rw rootwait earlycon"
+```
+
+Run L2 external preloaded flow:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l2,mrt=on,\
+firmware=build/cbfs/fallback/bootblock.elf,\
+sbi=/path/to/sbi-l2.bin,\
+uboot=/path/to/uboot-l2.bin,\
+dtb=build/dtb,\
+kernel=/path/to/Image,\
+initrd=/path/to/initrd.img \
+    -smp 8 -m 4G -nographic \
+    -global virtio-mmio.force-legacy=false \
+    -device loader,file=build/coreboot.rom,addr=0x8000000 \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0 \
+    -append "console=ttyS0,115200 root=/dev/vda1 rw rootwait earlycon"
+```
+
+Note: Do not supply `-bios` (e.g. `-bios none`); doing so inhibits QEMU from loading `firmware=` and the preloaded firmware images.
+On L3, when prompted `SCR: MRT initialized. Load DDR, then Press any key`, send a newline on the console to continue. Both L2 and L3 proceed through coreboot bootblock, ramstage, preloaded OpenSBI, U-Boot, and boot Linux to login with all 8 harts online.
