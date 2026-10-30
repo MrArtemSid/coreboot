@@ -159,8 +159,8 @@ config OPENSBI_SOURCE_DIR
 	default "3rdparty/syntacore/opensbi"
 
 config OPENSBI_TEXT_START
-	default 0x404000000 if SCR_CLUSTER_L3
-	default 0x4000000
+	default 0x400000000 if SCR_CLUSTER_L3
+	default 0x0
 
 config CRABEFI_PAYLOAD_BASE
 	default 0x410000000 if SCR_CLUSTER_L3

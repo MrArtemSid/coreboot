@@ -19,7 +19,21 @@
 #define SCR_PLIC_BASE		0xfffffffffe000000
 #endif
 
+/*
+ * Memory layout in DDR (relative to SCR_DDR_BASE):
+ *  +0x00000000 .. +0x00200000 (2 MiB):  OpenSBI (built or preloaded)
+ *  +0x00200000 .. +0x02200000 (32 MiB): Payload / U-Boot (preloaded)
+ *  +0x02200000 .. +0x02300000 (1 MiB):  FDT / board.dtb (preloaded)
+ *  +0x02300000 .. +0x06000000 (61 MiB): Linux Kernel Image (preloaded)
+ *  +0x06000000 .. +0x06200000 (2 MiB):  coreboot ramstage (both flows)
+ *  +0x06200000 .. +0x06400000 (2 MiB):  Stacks, consoles, mcache (both flows)
+ *  +0x08000000 .. +0x09000000 (16 MiB): CBFS flash ROM
+ *  +0x30000000 ..                       Linux initrd
+ */
+#define SCR_OPENSBI_BASE	(SCR_DDR_BASE + 0x0)
+#define SCR_OPENSBI_SIZE	0x200000
+
+#define SCR_RAMSTAGE_BASE	(SCR_DDR_BASE + 0x06000000)
 #define SCR_CBFS_BASE		(SCR_DDR_BASE + 0x8000000)
-#define SCR_OPENSBI_BASE		(SCR_DDR_BASE + 0x4000000)
 
 #endif
