@@ -64,6 +64,27 @@ $(obj)/scrhal/%.o: $(SCR_HAL)/src/sys/%.c $(obj)/config.h
 	$(CC_bootblock) $(scr_hal_cflags) -c -o $@ $<
 
 bootblock-libs += $(scr_hal_init_objs)
+
+# A single SC-DT firmware= image, in addition to the hardware/miniboot ROM.
+# Use the final raw bootblock, including its BSS padding and L2 reset vector.
+$(obj)/scrhal/firmware.o: $(src)/soc/syntacore/scr/hal/firmware.S \
+		$(objcbfs)/bootblock.bin $(obj)/coreboot.rom | files_added
+	@mkdir -p $(dir $@)
+	$(CC_bootblock) $(riscv_asm_flags) -c -o $@ $< \
+		-DSCR_BOOTBLOCK_FILE='"$(abspath $(objcbfs)/bootblock.bin)"' \
+		-DSCR_ROM_FILE='"$(abspath $(obj)/coreboot.rom)"'
+
+$(obj)/scrhal/firmware.ld: $(src)/soc/syntacore/scr/hal/firmware.ld \
+		$(src)/soc/syntacore/scr/include/soc/addressmap.h $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(CPP_riscv) -P -x assembler-with-cpp -I$(obj) -I$(src)/include \
+		-I$(src)/soc/syntacore/scr/include -include $(src)/include/kconfig.h -o $@ $<
+
+$(obj)/coreboot.elf: $(obj)/scrhal/firmware.o $(obj)/scrhal/firmware.ld
+	@printf "    LD         $(notdir $@)\n"
+	$(LD_bootblock) -T $(obj)/scrhal/firmware.ld -o $@ $<
+
+finalised_rom:: $(obj)/coreboot.elf
 endif
 
 $(scr_hal_objs) $(scr_hal_init_objs): $(src)/soc/syntacore/scr/Makefile.mk
