@@ -14,3 +14,8 @@ CPPFLAGS_dts += -DSCR_IPI_IMSIC=$(if $(CONFIG_SCR_IPI_IMSIC),1,0)
 
 $(obj)/preprocessed.dts: $(wildcard $(scr_dts_dir)/*.dtsi) \
 	$(wildcard $(src)/mainboard/syntacore/scr_cluster/dts/*)
+
+ifeq ($(CONFIG_SCR_PRELOADED_PAYLOAD),y)
+postinclude-hooks += $$(eval cbfs-files := $$(foreach f,$$(cbfs-files),$$(if $$(findstring |$$(CONFIG_CBFS_PREFIX)/opensbi|,$$(f)),,$$(f))))
+postinclude-hooks += $$(eval check-ramstage-overlap-files := $$(filter-out $$(CONFIG_CBFS_PREFIX)/opensbi,$$(check-ramstage-overlap-files)))
+endif

@@ -100,6 +100,25 @@ config SCR_WAIT_KEY_ON_FIRST_BOOT
 	  Wait before reading DDR so the host can load the CBFS image.
 	  Only L3 has an MRT.
 
+config SCR_PRELOADED_PAYLOAD
+	bool "Use preloaded OpenSBI and payload"
+	depends on SCR_BOOT_HAL
+	select RISCV_OPENSBI
+	select PAYLOAD_NONE
+	help
+	  Use externally preloaded OpenSBI and payload (such as U-Boot)
+	  already placed in memory at fixed addresses instead of building
+	  them or loading them from CBFS.
+
+config SCR_PRELOADED_PAYLOAD_ENTRY
+	hex "Preloaded payload entry address"
+	depends on SCR_PRELOADED_PAYLOAD
+	default 0x400200000 if SCR_CLUSTER_L3
+	default 0x200000
+	help
+	  Address of the externally preloaded payload (e.g. U-Boot).
+	  Passed to OpenSBI in fw_dynamic_info (or jumped to in fw_jump).
+
 endif
 
 choice SCR_IPI
