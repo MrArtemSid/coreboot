@@ -1,0 +1,4 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config BOARD_MACHENIKE_S15C
+	bool "S15C (V155PNPQ-HMx)"

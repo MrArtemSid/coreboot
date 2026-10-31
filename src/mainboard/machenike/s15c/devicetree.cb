@@ -1,0 +1,112 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+chip soc/intel/alderlake
+	register "common_soc_config" = "{
+		// Touchpad I2C bus
+		.i2c[0] = {
+			.speed = I2C_SPEED_FAST,
+			.rise_time_ns = 80,
+			.fall_time_ns = 110,
+		},
+	}"
+
+	# Enable Enhanced Intel SpeedStep
+	register "eist_enable" = "true"
+
+	# Enable C6 DRAM
+	register "enable_c6dram" = "true"
+
+	device domain 0 on
+		subsystemid 0x1558 0x0155 inherit
+
+		device ref pcie5_0 on
+			# PEG 00:01.0 x8, discrete GPU
+			# TODO: verify clock source/req against schematic
+			register "cpu_pcie_rp[CPU_RP(2)]" = "{
+				.clk_src = 3,
+				.clk_req = 3,
+				.flags = PCIE_RP_LTR,
+			}"
+		end
+		device ref igpu on
+			# DDIA is eDP
+			register "ddi_portA_config" = "1"
+			register "ddi_ports_config" = "{
+				[DDI_PORT_A] = DDI_ENABLE_HPD,
+				[DDI_PORT_B] = DDI_ENABLE_HPD | DDI_ENABLE_DDC,
+			}"
+
+			register "gfx" = "GMA_DEFAULT_PANEL(0)"
+		end
+		device ref pcie4_0 on
+			# PEG 00:06.0 x4, NVMe SSD
+			register "cpu_pcie_rp[CPU_RP(1)]" = "{
+				.clk_src = 0,
+				.clk_req = 0,
+				.flags = PCIE_RP_LTR,
+			}"
+		end
+		device ref tcss_xhci on
+			register "tcss_ports[0]" = "TCSS_PORT_DEFAULT(OC_SKIP)"
+			device ref tcss_root_hub on
+				device ref tcss_usb3_port1 on end
+			end
+		end
+		device ref tcss_dma0 on end
+		device ref shared_sram on end
+		device ref cnvi_wifi on
+			register "cnvi_bt_core" = "true"
+			register "cnvi_bt_audio_offload" = "true"
+			chip drivers/wifi/generic
+				register "wake" = "GPE0_PME_B0"
+				device generic 0 on end
+			end
+		end
+		device ref i2c0 on
+			# Touchpad I2C bus (FTCS1000 I2C-HID, 2808:0101)
+			register "serial_io_i2c_mode[PchSerialIoIndexI2C0]" = "PchSerialIoPci"
+			chip drivers/i2c/hid
+				register "generic.hid" = ""FTCS1000""
+				register "generic.desc" = ""FocalTech Touchpad""
+				register "generic.irq_gpio" = "ACPI_GPIO_IRQ_LEVEL_LOW(GPP_A17)"
+				register "generic.detect" = "1"
+				register "hid_desc_reg_offset" = "0x01"
+				device i2c 38 on end
+			end
+		end
+		device ref i2c1 on
+			register "serial_io_i2c_mode[PchSerialIoIndexI2C1]" = "PchSerialIoPci"
+		end
+		device ref xhci on
+			# TODO: verify Type-A/Type-C port indices against the board
+			register "usb2_ports" = "{
+				[0] = USB2_PORT_TYPE_C(OC_SKIP),	/* Type-C 3.2 */
+				[5] = USB2_PORT_MID(OC_SKIP),		/* Type-A 2.0 */
+				[7] = USB2_PORT_MID(OC_SKIP),		/* Camera */
+				[9] = USB2_PORT_MID(OC_SKIP),		/* Bluetooth */
+			}"
+			register "usb3_ports" = "{
+				[0] = USB3_PORT_DEFAULT(OC_SKIP),	/* Type-C 3.2 */
+				[2] = USB3_PORT_DEFAULT(OC_SKIP),	/* Type-A 3.2 */
+			}"
+		end
+		device ref sata on
+			register "sata_ports_enable[0]" = "1"
+		end
+		device ref pch_espi on
+			register "gen1_dec" = "LPC_IO(0x68, 0x8)"    # EC PM channel
+			register "gen2_dec" = "LPC_IO(0xe00, 0x100)" # AP/EC command
+			register "gen3_dec" = "LPC_IO(0xf00, 0x100)" # AP/EC debug
+		end
+		device ref p2sb on end
+		device ref hda on
+			register "pch_hda_audio_link_hda_enable" = "1"
+			register "pch_hda_sdi_enable[0]" = "true"
+			register "pch_hda_idisp_codec_enable" = "1"
+			register "pch_hda_idisp_link_frequency" = "HDA_LINKFREQ_96MHZ"
+			register "pch_hda_idisp_link_tmode" = "HDA_TMODE_8T"
+		end
+		device ref smbus on end
+		device ref gbe on end
+	end
+end

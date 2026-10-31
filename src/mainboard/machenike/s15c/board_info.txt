@@ -1,0 +1,7 @@
+Board name: S15C (V155PNPQ-HMx)
+Release year: 2022
+Category: laptop
+ROM package: SOIC-8
+ROM protocol: SPI
+ROM socketed: n
+Flashrom support: y (read; write blocked by SMM_BWP under vendor firmware)

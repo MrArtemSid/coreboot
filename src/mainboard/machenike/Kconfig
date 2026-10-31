@@ -1,0 +1,17 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_MACHENIKE
+
+choice
+	prompt "Mainboard model"
+
+source "src/mainboard/machenike/*/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/machenike/*/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Machenike"
+
+endif # VENDOR_MACHENIKE
