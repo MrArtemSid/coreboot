@@ -276,6 +276,13 @@ T440p <lenovo/t440p.md>
 
 T470s/T480/T480s/T580/X280 <lenovo/skylake.md>
 ```
+## Machenike
+
+```{toctree}
+:maxdepth: 1
+
+S15C <machenike/s15c.md>
+```
 ## Libretrend
 
 ```{toctree}
