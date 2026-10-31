@@ -2,8 +2,10 @@
 
 chip northbridge/intel/grantley
 	device domain 0x0 on
+		device pci 01.1 on end # PCIe Root Port 1b (x16 slot bifurcation, empty on this board)
 		chip southbridge/intel/lynxpoint
-			device pci 1c.2 on end # PCIe Port 3 (M.2 NVMe slot on QD4)
+			register "sata_port_map" = "0x30" # Stock maps the drive ports to silicon ports 4/5
+			device pci 1c.2 on end # PCIe Port 3 (Realtek RTL8168 onboard LAN)
 			device pci 1f.0 on # LPC bridge
 				chip superio/nuvoton/nct5539d
 					device pnp 2e.2 on # UART A
