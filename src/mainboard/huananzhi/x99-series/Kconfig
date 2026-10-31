@@ -9,9 +9,6 @@ config BOARD_SPECIFIC_OPTIONS
 	select SUPERIO_NUVOTON_COMMON_PRE_RAM
 	select SUPERIO_NUVOTON_NCT5539D if BOARD_HUANANZHI_X99_QD4
 	select SUPERIO_NUVOTON_NCT6779D if BOARD_HUANANZHI_X99_BD4
-	# Conservative default for the PS/2-only legacy IRQ path; not a verified
-	# stock setting (autoport sets this for every LPT board unconditionally).
-	select SERIRQ_CONTINUOUS_MODE if BOARD_HUANANZHI_X99_QD4
 	select BOARD_ROMSIZE_KB_16384
 	select AZALIA_USE_LEGACY_VERB_TABLE
 	select HAVE_ACPI_TABLES
