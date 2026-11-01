@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 void scr_hart_init(void);
+void scr_wait_key(void);
 extern bool scr_mrt_was_uninitialized;
 
 void scr_hal_early_init(void);

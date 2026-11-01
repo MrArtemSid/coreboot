@@ -9,6 +9,7 @@ all-$(CONFIG_SCR_IPI_IMSIC) += aia/imsic.c
 all-$(CONFIG_SCR_IPI_ICCM) += iccm/iccm.c
 all-$(CONFIG_SCR_IPI_ICCM_L3) += iccm/iccm_l3.c
 bootblock-$(CONFIG_SCR_BOOT_HAL) += hal/hal.c
+romstage-$(CONFIG_SCR_WAIT_KEY_ON_FIRST_BOOT) += hal/wait_key.c
 ifeq ($(CONFIG_SCR_BOOT_HAL)$(CONFIG_SCR_CLUSTER_L2),yy)
 bootblock-y += hal/reset_vector.S
 endif
