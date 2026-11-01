@@ -20,7 +20,7 @@ CFLAGS_bootblock += -Oz
 endif
 endif
 romstage-y += romstage.c
-ramstage-y += chip.c
+ramstage-y += chip.c payload.c
 
 SCR_HAL := $(if $(SC_HAL_PATH),$(SC_HAL_PATH),$(call strip_quotes,$(CONFIG_SCR_HAL_DIR)))
 ifeq ($(wildcard $(SCR_HAL)/include/arch.h),)

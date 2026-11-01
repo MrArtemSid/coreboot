@@ -8,6 +8,7 @@
 #include <mcall.h>
 #include <program_loading.h>
 #include <romstage_common.h>
+#include <soc/addressmap.h>
 #include <soc/hal.h>
 
 static void setup_fdt(void)
@@ -17,6 +18,19 @@ static void setup_fdt(void)
 
 	if (CONFIG(SCR_BOOT_MINIBOOT) && fdt_is_valid(HLS()->fdt))
 		return;
+
+	if (CONFIG(SCR_PRELOADED_PAYLOAD)) {
+		fdt = (const struct fdt_header *)(uintptr_t)SCR_PRELOADED_DTB_BASE;
+		if (!fdt_is_valid(fdt))
+			die("Invalid preloaded DTB header\n");
+
+		uint32_t totalsize = be32_to_cpu(fdt->totalsize);
+		if (totalsize < sizeof(*fdt) || totalsize > SCR_PRELOADED_DTB_MAX_SIZE)
+			die("Preloaded DTB size out of bounds\n");
+
+		HLS()->fdt = (void *)fdt;
+		return;
+	}
 
 	fdt = cbfs_ro_map("DTB", &size);
 	if (!fdt || size < sizeof(*fdt) || be32_to_cpu(fdt->totalsize) > size ||
