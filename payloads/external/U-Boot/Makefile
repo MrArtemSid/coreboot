@@ -6,6 +6,9 @@ project_build_dir=build
 project_config_file=$(project_build_dir)/.config
 
 make_args=-C $(project_dir) O=../build
+ifneq ($(UBOOT_CROSS_COMPILE),)
+make_args+=CROSS_COMPILE=$(UBOOT_CROSS_COMPILE)
+endif
 
 unexport KCONFIG_AUTOHEADER
 unexport KCONFIG_AUTOCONFIG
@@ -40,7 +43,11 @@ ifneq ($(CONFIG_PAYLOAD_CONFIGFILE),)
 	cat $(CONFIG_PAYLOAD_CONFIGFILE) > $(project_config_file)
 	$(MAKE) $(make_args) olddefconfig
 else
-	$(MAKE) $(make_args) coreboot_defconfig
+	$(MAKE) $(make_args) $(CONFIG_UBOOT_DEFCONFIG)
+endif
+ifneq ($(CONFIG_UBOOT_TEXT_BASE),)
+	echo "CONFIG_TEXT_BASE=$(CONFIG_UBOOT_TEXT_BASE)" >> $(project_config_file)
+	$(MAKE) $(make_args) olddefconfig
 endif
 
 build: config

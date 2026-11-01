@@ -316,8 +316,15 @@ $(GRUB_TARGET_PATH): grub2
 
 # U-Boot
 
-payloads/external/U-Boot/build/u-boot.bin u-boot: $(DOTCONFIG)
+ifeq ($(CONFIG_ARCH_RISCV),y)
+UBOOT_CROSS_COMPILE := $(or $(CONFIG_UBOOT_CROSS_COMPILE:"%"=%),$(CROSS_COMPILE_riscv))
+endif
+
+payloads/external/U-Boot/build/u-boot.bin payloads/external/U-Boot/build/u-boot u-boot: $(DOTCONFIG)
 	$(MAKE) -C payloads/external/U-Boot \
+			UBOOT_CROSS_COMPILE=$(UBOOT_CROSS_COMPILE) \
+			CONFIG_UBOOT_DEFCONFIG=$(CONFIG_UBOOT_DEFCONFIG) \
+			CONFIG_UBOOT_TEXT_BASE=$(CONFIG_UBOOT_TEXT_BASE) \
 			STABLE_COMMIT_ID=$(CONFIG_UBOOT_STABLE_COMMIT_ID) \
 			CONFIG_UBOOT_STABLE=$(CONFIG_UBOOT_STABLE) \
 			CONFIG_UBOOT_BRANCH_OR_TAG=$(CONFIG_UBOOT_BRANCH_OR_TAG) \
