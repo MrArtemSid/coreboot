@@ -59,6 +59,14 @@ void smp_pause(int working_hartid)
 			;
 
 		/*
+		 * Acquire: entry.fn and entry.arg were written by the working hart
+		 * and are released to us through sync_b. atomic_read() only keeps
+		 * the compiler from caching the value, it does not order the data
+		 * reads after it, so a hart may otherwise call a stale fn/arg.
+		 */
+		asm volatile ("fence r, rw" ::: "memory");
+
+		/*
 		 * The working hart may have loaded the code we are about to run.
 		 * fence.i only acts on the issuing hart, so every hart needs its own.
 		 */
@@ -107,6 +115,10 @@ void smp_resume(void (*fn)(void *), void *arg)
 
 			OTHER_HLS(i)->entry.fn = fn;
 			OTHER_HLS(i)->entry.arg = arg;
+			/*
+			 * Release: publishes fn/arg before the IPI below and before
+			 * the sync_b handshake the hart spins on.
+			 */
 			barrier();
 			set_msip(i, 1); // wake up hart
 		}
