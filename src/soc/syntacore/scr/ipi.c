@@ -5,6 +5,7 @@
 #include <console/console.h>
 #include <mcall.h>
 #include <soc/ipi.h>
+#include <soc/hal.h>
 
 void __weak scr_ipi_init(void) {}
 void __weak scr_ipi_clear(void) {}
@@ -16,6 +17,10 @@ void __weak scr_ipi_send(unsigned int hart)
 
 void soc_hart_early_init(void)
 {
+	if (CONFIG(SCR_BOOT_HAL)) {
+		scr_hart_init();
+		return;
+	}
 	if (read_csr(mhartid) == CONFIG_RISCV_WORKING_HARTID)
 		scr_ipi_init();
 }
