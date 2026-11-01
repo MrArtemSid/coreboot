@@ -16,4 +16,12 @@ void run_opensbi(const int hart_id,
 		 const void *fdt,
 		 const void *payload,
 		 const int payload_mode);
+
+/*
+ * Optional SoC hook, run by every hart in the bootblock after its stack and
+ * hart-local storage are set up and before the non-working harts are parked
+ * in smp_pause(). Traps are not set up yet. The harts run it concurrently;
+ * any ordering between them is up to the SoC.
+ */
+void soc_hart_early_init(void);
 #endif
