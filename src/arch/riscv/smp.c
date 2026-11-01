@@ -58,6 +58,12 @@ void smp_pause(int working_hartid)
 		while (atomic_read(&HLS()->entry.sync_b) != HART_AWAKE)
 			;
 
+		/*
+		 * The working hart may have loaded the code we are about to run.
+		 * fence.i only acts on the issuing hart, so every hart needs its own.
+		 */
+		asm volatile ("fence.i" ::: "memory");
+
 		HLS()->entry.fn(HLS()->entry.arg);
 	}
 }

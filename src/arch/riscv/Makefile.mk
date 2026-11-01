@@ -52,6 +52,7 @@ all-y += sbi.c
 all-y += mcall.c
 all-y += virtual_memory.c
 all-y += boot.c
+all-y += cache.c
 all-y += smp.c
 all-y += misc.c
 all-$(CONFIG_ARCH_RISCV_PMP) += pmp.c
