@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/dts-v1/;
+
+#define SYSCLK 50000000
+#define CPUCLK 80000000
+#if !SCR_CLUSTER_L3
+#define SCR_OCTA_CORE 1
+#endif
+
+#include SCR_CPU_DTSI
+#include SCR_CLUSTER_DTSI
+
+/ {
+	model = "Syntacore SCR cluster (VCU118)";
+	aliases {
+		serial = &uart0;
+		ethernet = &axi_ethernet_0;
+	};
+	chosen {
+		stdout-path = "serial";
+#if SCR_CLUSTER_L3
+		bootargs = "earlycon=sbi console=ttyS0,115200 efi=novamap initrdmem=0x430000000,512M net.ifnames=0 swiotlb=noforce";
+#else
+		bootargs = "earlycon=sbi console=ttyS0,115200 efi=novamap initrdmem=0x30000000,512M net.ifnames=0 swiotlb=noforce";
+#endif
+	};
+	cpus {
+		timebase-frequency = <1000000>;
+	};
+};
+
+#if SCR_CLUSTER_QEMU
+#include "qemu.dtsi"
+#endif

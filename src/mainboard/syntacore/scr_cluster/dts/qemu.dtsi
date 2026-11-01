@@ -1,0 +1,78 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+/*
+ * SC-DT QEMU additions: CPU ISA, virtio-mmio transports with an OpenSBI
+ * domain region for them, and the interrupt controller for the selected
+ * IPI backend.
+ */
+
+#include "qemu-macros.dtsi"
+
+#ifdef SCR_QEMU_ISA
+SCR_CPU_ISA(0)
+SCR_CPU_ISA(1)
+SCR_CPU_ISA(2)
+SCR_CPU_ISA(3)
+SCR_CPU_ISA(4)
+SCR_CPU_ISA(5)
+SCR_CPU_ISA(6)
+SCR_CPU_ISA(7)
+#endif
+
+/ {
+	chosen {
+		opensbi-domains {
+			virtio_reg: virtio_reg {
+				compatible = "opensbi,domain,memregion";
+				base = <VIRTIO_HI VIRTIO_LO>;
+				order = <VIRTIO_ORDER>;
+				mmio;
+			};
+
+			/* Replaces the cluster dtsi list: the same entries plus virtio_reg. */
+			trusted-domain {
+				regions =
+					<&dma_reg (RW | SCR_PMA_UNC)>,
+					<&dram_reg (RW | SCR_PMP_MMODE_EXECUTE |
+						    SCR_PMP_SUMODE_EXECUTE)>,
+					<&mcfg_reg (SCR_PMP_MMODE_READ | SCR_PMP_MMODE_WRITE |
+						    SCR_PMP_SUMODE_READ | SCR_PMA_MMIO)>,
+#if SCR_CLUSTER_L3
+					<&uart_reg (RW | SCR_PMA_UNC)>,
+					<&axinet_reg (RW | SCR_PMA_UNC)>,
+#else
+					<&mmio_reg (RW | SCR_PMA_UNC)>,
+#endif
+					SCR_QEMU_IRQ_REGIONS,
+					<&virtio_reg (RW | SCR_PMA_MMIO)>;
+			};
+		};
+	};
+
+	soc {
+#if SCR_CLUSTER_L3
+		VIRTIO(0, ff020000)
+		VIRTIO(1, ff021000)
+		VIRTIO(2, ff022000)
+		VIRTIO(3, ff023000)
+		VIRTIO(4, ff024000)
+		VIRTIO(5, ff025000)
+		VIRTIO(6, ff026000)
+		VIRTIO(7, ff027000)
+#else
+		/* The first two transports overlap cluster registers. */
+		VIRTIO(2, ffffffff102000)
+		VIRTIO(3, ffffffff103000)
+		VIRTIO(4, ffffffff104000)
+		VIRTIO(5, ffffffff105000)
+		VIRTIO(6, ffffffff106000)
+		VIRTIO(7, ffffffff107000)
+#endif
+	};
+};
+
+#if SCR_IPI_IMSIC
+#include "qemu_aia.dtsi"
+#else
+#include "qemu_iccm.dtsi"
+#endif
