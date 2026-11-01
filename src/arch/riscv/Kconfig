@@ -57,19 +57,43 @@ config RISCV_OPENSBI
 
 if RISCV_OPENSBI
 
+config RISCV_PRELOADED_OPENSBI
+	bool
+	help
+	  Selected by platforms that place OpenSBI in memory before coreboot
+	  runs and report its entry point through
+	  platform_get_preloaded_opensbi(). It makes OPENSBI_PRELOADED the
+	  default of the OpenSBI source choice below and hides the source and
+	  blob alternatives, so such a platform never builds or packages
+	  OpenSBI itself. No SoC symbol is referenced from this directory.
+
 choice
 	prompt "choose how to get OpenSBI"
+	default OPENSBI_PRELOADED if RISCV_PRELOADED_OPENSBI
 	default OPENSBI_SOURCE
 
 config OPENSBI_SOURCE
 	bool "build OpenSBI from source"
+	depends on !RISCV_PRELOADED_OPENSBI
 
 config OPENSBI_BLOB
 	bool "Include OpenSBI ELF binary blob"
+	depends on !RISCV_PRELOADED_OPENSBI
 	help
 	  If enabled it allows to specify a file path to an already compiled OpenSBI binary.
 	  If disabled the OpenSBI binary will be compiled from upstream OpenSBI repository.
 	  This option is discouraged as compatibility with out-of-tree blobs may break anytime.
+
+config OPENSBI_PRELOADED
+	bool "Use an OpenSBI preloaded by the previous stage"
+	help
+	  Neither build OpenSBI from source nor take it from a blob: the
+	  platform places OpenSBI in memory before coreboot runs and reports
+	  its entry point through platform_get_preloaded_opensbi(). Selecting
+	  this option keeps OpenSBI out of CBFS. RISCV_PRELOADED_OPENSBI makes
+	  it the only remaining choice for platforms that always preload
+	  OpenSBI, so it also wins over a stale OPENSBI_SOURCE/OPENSBI_BLOB
+	  value in an existing .config.
 
 endchoice
 

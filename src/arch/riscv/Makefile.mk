@@ -158,6 +158,13 @@ endif #CONFIG_ARCH_RAMSTAGE_RISCV
 
 ifeq ($(CONFIG_RISCV_OPENSBI),y)
 
+ramstage-y += opensbi.c
+
+# A preloaded OpenSBI is already in memory before coreboot runs: it is neither
+# built from source, copied from a blob, nor added to CBFS. boot.c asks
+# platform_get_preloaded_opensbi() for its entry point instead of loading it.
+ifneq ($(CONFIG_OPENSBI_PRELOADED),y)
+
 OPENSBI_SOURCE := $(top)/$(call strip_quotes,$(CONFIG_OPENSBI_SOURCE_DIR))
 OPENSBI_BUILD  := $(abspath $(obj)/3rdparty/opensbi)
 OPENSBI_TARGET := $(OPENSBI_BUILD)/platform/$(CONFIG_OPENSBI_PLATFORM)/firmware/fw_dynamic.elf
@@ -219,7 +226,7 @@ cbfs-files-y += $(OPENSBI_CBFS)
 
 check-ramstage-overlap-files += $(OPENSBI_CBFS)
 
-ramstage-y += opensbi.c
+endif # CONFIG_OPENSBI_PRELOADED
 
 endif #CONFIG_RISCV_OPENSBI
 

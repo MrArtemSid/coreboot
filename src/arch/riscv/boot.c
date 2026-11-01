@@ -101,6 +101,11 @@ static void do_arch_prog_run(struct arch_prog_run_args *args)
 	die("Failed to run stage");
 }
 
+bool __weak platform_get_preloaded_opensbi(struct prog *sbi)
+{
+	return false;
+}
+
 void arch_prog_run(struct prog *prog)
 {
 	/*
@@ -134,8 +139,12 @@ void arch_prog_run(struct prog *prog)
 		if (CONFIG(RISCV_OPENSBI)) {
 			sbi = (struct prog)PROG_INIT(PROG_OPENSBI, CONFIG_CBFS_PREFIX "/opensbi");
 
-			if (!selfload_check(&sbi, BM_MEM_OPENSBI))
-				die("OpenSBI load failed");
+			if (!platform_get_preloaded_opensbi(&sbi)) {
+				if (CONFIG(OPENSBI_PRELOADED))
+					die("OpenSBI is preloaded but the platform provided no entry point\n");
+				if (!selfload_check(&sbi, BM_MEM_OPENSBI))
+					die("OpenSBI load failed\n");
+			}
 
 			args.opensbi = &sbi;
 		}
