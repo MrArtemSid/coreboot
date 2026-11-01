@@ -49,13 +49,23 @@ static void *add_coreboot_table_to_fdt(void *fdt)
 	printk(BIOS_INFO, "Adding cbtable@%p to fdt\n", coreboot_table);
 	dt_add_u64_prop(chosen_node, "coreboot-table", (uint64_t)(uintptr_t)coreboot_table);
 
+	/*
+	 * OpenSBI grows the FDT in place, so the buffer it receives needs
+	 * headroom after it. The buffer is reserved in arch_write_tables();
+	 * never fall back to the heap, an allocation of the packed size alone
+	 * would let OpenSBI write past its end.
+	 */
 	size_t next_size = dt_flat_size(tree);
-	void *next_fdt = malloc(next_size);
-	if (!next_fdt) {
-		printk(BIOS_ERR, "Failed to allocate memory for next-stage FDT\n");
-		return fdt;
-	}
+	const struct cbmem_entry *entry = cbmem_entry_find(CBMEM_ID_FDT);
 
+	if (!entry)
+		die("No CBMEM buffer reserved for the next-stage FDT\n");
+	if (cbmem_entry_size(entry) < next_size + (size_t)CONFIG_RISCV_FDT_HEADROOM)
+		die("CBMEM buffer for the next-stage FDT is too small: %llu < %zu\n",
+		    cbmem_entry_size(entry),
+		    next_size + (size_t)CONFIG_RISCV_FDT_HEADROOM);
+
+	void *next_fdt = cbmem_entry_start(entry);
 	dt_flatten(tree, next_fdt);
 	return next_fdt;
 }
