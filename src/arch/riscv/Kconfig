@@ -63,7 +63,6 @@ choice
 
 config OPENSBI_SOURCE
 	bool "build OpenSBI from source"
-	depends on COMPILER_LLVM_CLANG
 
 config OPENSBI_BLOB
 	bool "Include OpenSBI ELF binary blob"
@@ -74,11 +73,30 @@ config OPENSBI_BLOB
 
 endchoice
 
+config OPENSBI_GCC_LINKER
+	string "Linker for OpenSBI when built with GCC"
+	depends on OPENSBI_SOURCE && COMPILER_GCC
+	default "ld.lld"
+	help
+	  OpenSBI requires a linker that supports creating PIEs (-pie). Upstream
+	  bare-metal GNU ld.bfd (riscv*-unknown-elf) does not support PIE, whereas
+	  LLVM ld.lld or linux-targeted GNU ld.bfd (riscv*-unknown-linux-gnu-ld)
+	  does. Defaults to ld.lld.
+
 config OPENSBI_BLOB_PATH
 	string "Path to external opensbi.elf"
 	depends on OPENSBI_BLOB
 	help
 	  Absolute (or relative to coreboot directory) path to the OpenSBI ELF file.
+
+config OPENSBI_SOURCE_DIR
+	string
+	depends on OPENSBI_SOURCE
+	default "3rdparty/opensbi"
+	help
+	  OpenSBI source tree to build, relative to the coreboot directory.
+	  SoCs that depend on a vendor OpenSBI fork set this to their own
+	  submodule.
 
 config OPENSBI_PLATFORM
 	string

@@ -157,23 +157,33 @@ endif #CONFIG_ARCH_RAMSTAGE_RISCV
 
 ifeq ($(CONFIG_RISCV_OPENSBI),y)
 
-OPENSBI_SOURCE := $(top)/3rdparty/opensbi
+OPENSBI_SOURCE := $(top)/$(call strip_quotes,$(CONFIG_OPENSBI_SOURCE_DIR))
 OPENSBI_BUILD  := $(abspath $(obj)/3rdparty/opensbi)
 OPENSBI_TARGET := $(OPENSBI_BUILD)/platform/$(CONFIG_OPENSBI_PLATFORM)/firmware/fw_dynamic.elf
 OPENSBI := $(obj)/opensbi.elf
 
-# OpenSBI must be built as a PIE, which only clang + lld support. OPENSBI_SOURCE
-# depends on COMPILER_LLVM_CLANG, so CC_ramstage is clang here. Pass the tools
-# explicitly instead of an LLVM= directory prefix: OpenSBI reconstructs all of
-# its tools from that prefix and needs clang, ld.lld, llvm-ar and llvm-objcopy
-# in one directory, which can't be derived from $(CC_ramstage) directly (it may
-# be ccache-prefixed or a bare "clang" found via PATH). Take the last word to
-# strip a ccache wrapper, and fall back to bare tool names found via PATH when
-# the compiler itself is not an absolute path.
+# OpenSBI must be built as a PIE. Clang uses ld.lld, llvm-ar and llvm-objcopy.
+# Bare-metal GCC uses CC_ramstage, AR_ramstage, OBJCOPY_ramstage, and a
+# PIE-capable linker (configured via CONFIG_OPENSBI_GCC_LINKER, defaulting to
+# ld.lld since upstream bare-metal GNU ld.bfd does not support PIE).
+# Pass the tools explicitly instead of an LLVM= / CROSS_COMPILE= prefix.
+ifeq ($(CONFIG_COMPILER_LLVM_CLANG),y)
 OPENSBI_CC := $(lastword $(CC_ramstage))
 OPENSBI_BIN := $(dir $(OPENSBI_CC))
 ifeq ($(OPENSBI_BIN),./)
 OPENSBI_BIN :=
+endif
+OPENSBI_LD := $(OPENSBI_BIN)ld.lld
+OPENSBI_AR := $(OPENSBI_BIN)llvm-ar
+OPENSBI_OBJCOPY := $(OPENSBI_BIN)llvm-objcopy
+else
+OPENSBI_CC := $(lastword $(CC_ramstage))
+OPENSBI_LD := $(call strip_quotes,$(CONFIG_OPENSBI_GCC_LINKER))
+ifeq ($(OPENSBI_LD),)
+OPENSBI_LD := ld.lld
+endif
+OPENSBI_AR := $(lastword $(AR_ramstage))
+OPENSBI_OBJCOPY := $(lastword $(OBJCOPY_ramstage))
 endif
 
 $(OPENSBI_TARGET): $(obj)/config.h | $(OPENSBI_SOURCE)
@@ -182,9 +192,9 @@ $(OPENSBI_TARGET): $(obj)/config.h | $(OPENSBI_SOURCE)
 	$(MAKE) \
 		-C "$(OPENSBI_SOURCE)" \
 		CC="$(OPENSBI_CC)" \
-		LD="$(OPENSBI_BIN)ld.lld" \
-		AR="$(OPENSBI_BIN)llvm-ar" \
-		OBJCOPY="$(OPENSBI_BIN)llvm-objcopy" \
+		LD="$(OPENSBI_LD)" \
+		AR="$(OPENSBI_AR)" \
+		OBJCOPY="$(OPENSBI_OBJCOPY)" \
 		PLATFORM=$(CONFIG_OPENSBI_PLATFORM) \
 		O="$(OPENSBI_BUILD)" \
 		FW_JUMP=n \
