@@ -5,7 +5,13 @@ if BOARD_SYNTACORE_SCR_CLUSTER
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
 	select SOC_SYNTACORE_SCR
-	select BOARD_ROMSIZE_KB_16384
+
+# Board default ROM size. The shipped configurations set the smallest size
+# that fits their payload (see configs/), so they override this through the
+# ROM chip size choice; menuconfig and custom configurations start at the
+# full 16 MiB CBFS window described in the board documentation.
+config BOARD_ROMSIZE_KB_16384
+	default y
 
 config MAINBOARD_DIR
 	default "syntacore/scr_cluster"

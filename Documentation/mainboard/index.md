@@ -406,6 +406,14 @@ X11 LGA1151 series <supermicro/x11-lga1151-series/x11-lga1151-series.md>
 Flashing using the BMC <supermicro/flashing_on_vendorbmc.md>
 ```
 
+## Syntacore
+
+```{toctree}
+:maxdepth: 1
+
+SCR cluster <syntacore/scr_cluster.md>
+```
+
 ## System76
 
 ```{toctree}

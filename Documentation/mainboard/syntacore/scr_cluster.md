@@ -1,0 +1,362 @@
+# Syntacore SCR cluster
+
+This board supports RV64 SCR9 and SCR7 L2/L3 clusters on the VCU118 FPGA
+and the Syntacore Development Toolkit (SC-DT) QEMU machines. Select either
+miniboot handoff (the default) or direct reset entry with SCR-HAL initialization.
+
+## Boot flow
+
+Miniboot runs from OCRAM and initializes PMP/PMA, caches, MRT, the machine
+timer and per-hart feature CSRs. It transfers all harts to coreboot at the
+DDR base. coreboot preserves that hardware configuration, uses ICCM for
+IPIs, and obtains its device tree from CBFS when miniboot's FDT is invalid.
+The Linux device-tree sources are in `3rdparty/syntacore/linux`.
+
+The memory layout relative to DDR is:
+
+| Offset | Use |
+| --- | --- |
+| `0` | Bootblock (128 KiB), including romstage |
+| `0x20000` | Ramstage (2 MiB) |
+| `0x220000` | Console and metadata caches |
+| `0x300000` | Bootblock per-hart stacks |
+| `0x400000` | Ramstage per-hart stacks |
+| `0x2200000`–`0x2400000` | Unused miniboot FDT window |
+| `0x4000000` | OpenSBI (1 MiB) |
+| `0x8000000` | Read-only CBFS ROM window (configured ROM size) |
+| `0x10000000` | CrabEFI or U-Boot |
+
+DDR starts at `0x400000000` for L3 and zero for L2. OpenSBI is built from
+`3rdparty/syntacore/opensbi`, using its generic platform. coreboot copies
+the next-stage FDT to CBMEM and transfers all harts to OpenSBI.
+
+## Reset-vector flow
+
+`CONFIG_SCR_BOOT_HAL=y` initializes the platform in bootblock on every
+hart, before generic SMP synchronization. The working hart initializes
+shared caches, final memory types, MRT, features, the machine timer and
+ICCM before releasing the other harts. An enabled L2 is never invalidated
+again. Later stages and the miniboot flow do not perform this setup.
+Reset does not supply a valid FDT pointer; this flow always uses CBFS `DTB`.
+
+`CONFIG_SCR_OCRAM_SIZE_SELECT` picks the pre-RAM layout. The 512 KiB
+layout, available on SCR9 L3 only, starts bootblock, including romstage,
+at the configured reset offset (OCRAM + `0x200` by default) with a budget
+ending at 128 KiB; console, FMAP and CBFS metadata occupy offsets
+128–148 KiB, followed by 4 KiB per hart
+of stacks. All pre-RAM data stays in OCRAM: DDR is outside medany reach.
+
+The 64 KiB layout is the default on SCR7 L3 and on L2, and is also
+available on SCR9 L3. All pre-RAM code, data, eight hart stacks and
+console live in OCRAM (`0x2000000` on L3, `0xffffffffffff0000` on L2):
+
+| OCRAM offset | Size | Use |
+| --- | --- | --- |
+| `0` | 512 B | Reserved for the QEMU clock blob |
+| `0x200` | 27.5 KiB | Bootblock, including romstage, data and BSS |
+| `0x7000` | 32 KiB | Eight 4 KiB per-hart stacks, including HLS |
+| `0xf000` | 3840 B | Pre-RAM console |
+| `0xff00` | 256 B | L2 reset vector: a jump at reset PC `0xffffffffffffff00` |
+
+It uses LZ4 ramstage compression, avoiding the LZMA scratch buffer, and
+disables FMAP and CBFS metadata caches. Clang builds bootblock with `-Oz`.
+RAMSTAGE, ramstage stacks, OpenSBI, CBFS and payload offsets remain as
+in the miniboot layout. DDR is first accessed in romstage, after SCR-HAL
+initialization and the optional key wait: for the CBFS DTB, then for
+CBMEM and ramstage. Link-time assertions bound every pre-RAM region and
+the reset vector; the HAL build also rejects a size larger than the
+platform supports.
+
+The OCRAM base address and the reset address are Kconfig values
+(`SCR_OCRAM_BASE`, `SCR_RESET_VECTOR`), because the linker script needs plain
+integers and the SCR-HAL platform headers carry C-suffixed constants. The OCRAM
+base has no prompt: it must match the selected platform. The reset address does
+have one, because L3 resets straight into the bootblock and the bootblock load
+offset follows it; the platform default is OCRAM base + `0x200`. On L2 the
+bootblock keeps its fixed `0x200` offset and the reset address must be the last
+256 bytes of OCRAM. The DRAM base is not repeated either: `hal/mmio_hal.c`
+exports `PLF_MEM_BASE` as an absolute symbol in the existing HAL memory-map
+object. The build reads it and
+generates the `SCR_DDR_BASE` constant that `soc/addressmap.h` hands to both the
+linker scripts and the C code. `hal/hal_init.c` checks the OCRAM values
+against `PLF_OCRAM_BASE` and `PLF_OCRAM_SIZE`; the memory layout asserts that
+the reset address
+is where the cluster really starts: the last 256 bytes of OCRAM on L2, and on
+L3 an address inside OCRAM that still leaves room for the bootblock.
+Peripheral register addresses are not repeated in
+coreboot: `soc/mmio.h` declares accessors that `hal/mmio_hal.c` implements from
+the platform `PLF_*` macros. That indirection is needed because SCR-HAL headers
+redefine coreboot's `encoding.h`, `STRINGIFY` and `<drivers/*>`, so they stay
+confined to the objects built with the SCR-HAL include path. The PLIC accessor
+exists only on platforms whose SCR-HAL header describes a PLIC.
+
+On L3, `CONFIG_SCR_WAIT_KEY_ON_FIRST_BOOT` defaults to enabled. If the
+active MRT catch-all entry was missing, coreboot initializes MRT, prints
+"Press any key", and waits on the coreboot console at the start of
+romstage, before the first DDR access. Load the ROM into DDR before
+continuing on FPGA. QEMU's reset also resets MRT, so a QMP system reset
+may prompt again. L2 has no MRT and no such option: load CBFS into DDR
+before releasing reset.
+
+Use `config.syntacore_scr_cluster_scr9_l3_qemu_hal_crabefi` (or `l2`)
+for this flow; select SCR7 or the 64 KiB layout in menuconfig.
+HAL builds additionally produce `build/coreboot.elf` for SC-DT's `firmware=`
+option. It contains two `PT_LOAD` segments: the final raw bootblock at
+OCRAM + `0x200` on L2 (including its reset vector at `0xffffffffffffff00`),
+or at the configured reset address on L3, and the complete ROM at the
+existing CBFS address (`0x408000000` on L3, `0x8000000` on L2). The entry
+point is the start of the bootblock. OpenSBI and the
+payload remain inside CBFS with their existing load addresses.
+`build/coreboot.rom` is retained for hardware loading; miniboot builds
+are unchanged and do not produce this combined ELF.
+
+No miniboot or separate ROM loader is needed. On L3, wait for
+`SCR: MRT initialized. Load DDR, then Press any key` and press Enter
+when it appears. The L3 QEMU command is:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x80000,firmware=build/coreboot.elf \
+    -smp 8 -m 4G -nographic \
+    -global syntacore-scr9-riscv-cpu.pma=on \
+    -global virtio-mmio.force-legacy=false \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0
+```
+
+Do not combine `firmware=` with `-bios none` or `-bios default`: in the
+SC-DT QEMU version tested, either `-bios` override suppresses loading the
+machine's firmware file and installs the default reset stub instead.
+
+For L2 use `-M scr9_l2,mrt=on,firmware=build/coreboot.elf` and omit the
+PMA global. With the 64 KiB layout on L3 use `ocram-size=0x10000`;
+SCR7 uses `-M scr7_l3,...,firmware=build/coreboot.elf` without the
+PMA global. L3 also supports the QEMU default OCRAM size, a superset of
+both layouts. Do not enable
+PMA enforcement on L2: SC-DT QEMU faults on the reset vector even with
+stock miniboot.
+
+## AIA IPI backend
+
+`CONFIG_SCR_IPI_IMSIC=y` selects machine-level IMSIC IPIs instead of
+ICCM on SCR9/SCR7 L2 and L3. Like ICCM, the controller is driven through
+the SCR-HAL AIA API. The `arch/riscv` wake-up hook is needed because
+IMSIC IPIs arrive as MEIP rather than MSIP. Each sleeping hart enables
+identity 1; the next stage clears it before sleeping again, and OpenSBI
+initializes the controller for the payload. SCR-HAL platform headers do
+not describe AIA yet, so the SC-DT QEMU addresses are used; they have
+not been verified on FPGA. The QEMU overlay connects peripheral
+interrupts through S-mode APLIC to S-mode IMSIC, without guest pages
+(`aia-guests=0`).
+For example, in the L3 command above replace the machine argument with:
+
+```sh
+-M scr9_l3,aia=aplic-imsic,aia-guests=0,mrt=on,ocram-size=0x80000,firmware=build/coreboot.elf
+```
+
+Use `scr9_l2,aia=aplic-imsic,aia-guests=0,mrt=on,firmware=build/coreboot.elf`
+for L2; retain the corresponding PMA settings described above.
+
+## Source layout
+
+`src/soc/syntacore/scr/` contains the code shared by both boot flows.
+`miniboot/` holds the DDR layout of the miniboot flow, `hal/` the reset
+entry, SCR-HAL initialization and OCRAM layouts, and `iccm/` both IPI
+backends with their isolated SCR-HAL accessors. The top-level
+`memlayout.ld` selects the layout for the configured flow.
+
+## Devicetree
+
+`CONFIG_RISCV_DTS_FILE` ("Devicetree source file" in menuconfig) defaults
+to `dts/scr_cluster.dts`. It includes the Linux `scr9.dtsi` or `scr7.dtsi`
+and `vcu118_l3.dtsi` or `vcu118_l2.dtsi`. With `CONFIG_SCR_CLUSTER_QEMU`
+it adds `qemu.dtsi` and either `qemu_iccm.dtsi` or `qemu_aia.dtsi`, with
+values in `qemu-macros.dtsi` and `aia-macros.dtsi`.
+
+A different file may be set as an absolute path or relative to the
+coreboot tree. It is preprocessed with the board `dts/` and Linux
+Syntacore directories on the include path and with the `SCR_*` macros
+defined, so a board variant can extend the default:
+
+```
+#include "scr_cluster.dts"
+
+/ {
+	model = "My SCR board";
+};
+```
+
+## Build
+
+Install SC-DT and export the external SCR-HAL source directory. SCR-HAL is
+not part of coreboot. ICCM accessors and cache maintenance are used in
+both flows; reset entry additionally builds isolated platform initialization
+objects, without linking HAL console, allocation or startup runtime.
+`SC_HAL_PATH` takes precedence over `CONFIG_SCR_HAL_DIR`.
+
+```sh
+source /path/to/sc-dt/env.sh
+export SC_HAL_PATH=/path/to/sc-dt/workspace/scr-hal
+git submodule update --init 3rdparty/syntacore/opensbi \
+    3rdparty/syntacore/linux 3rdparty/syntacore/miniboot
+cp configs/config.syntacore_scr_cluster_scr9_l3_qemu_crabefi .config
+make menuconfig
+make
+```
+
+Select a suitable RISC-V toolchain. Building OpenSBI from source supports
+both Clang (`CONFIG_COMPILER_LLVM_CLANG=y`) and pure GCC (`CONFIG_COMPILER_GCC=y`
+with `CONFIG_OPENSBI_GCC_LINKER`, defaulting to `ld.lld` because upstream
+bare-metal GNU ld.bfd does not support PIEs); external toolchains also require
+`CONFIG_ANY_TOOLCHAIN=y`. CrabEFI requires Rust with the
+`riscv64gc-unknown-none-elf` target and its repository toolchain installed.
+The defconfigs select Clang and source-built OpenSBI and pin CrabEFI to
+`ba37d2755e74`. The graphical UI is disabled for serial-only QEMU boot.
+
+When switching clusters, remove the shared CrabEFI build directory
+`payloads/external/CrabEFI/CrabEFI` before rebuilding: its non-relocatable
+payload link address changes. Use the corresponding `scr9_l2` defconfig
+for L2. FPGA configurations must leave `CONFIG_SCR_CLUSTER_QEMU` disabled.
+
+The defconfigs set the ROM chip size to the smallest power of two that fits
+their natural CBFS payload: 1 MiB for the CrabEFI configurations and 512 KiB
+for the U-Boot ones. A `SCR_PRELOADED_PAYLOAD` configuration (preloaded
+OpenSBI and payload, `PAYLOAD_NONE`) needs 256 KiB. The mainboard keeps the
+16 MiB window as its default for menuconfig and custom configurations.
+The bootblock and FMAP occupy the first 128 KiB + 512 bytes of the image, so
+`cbfstool build/coreboot.rom print` is the authoritative fit check after
+changing a payload.
+
+The `*_uboot` defconfigs build the Syntacore U-Boot fork
+(`sc/2026.04`, `scr_rv64_l{2,3}_cluster_opensbi_defconfig`) as an S-mode
+payload, relinked at the payload address above, with the device tree
+coreboot passes in `a1`. They set `CONFIG_UBOOT_CROSS_COMPILE` to the
+SC-DT `riscv64-unknown-linux-gnu-` toolchain, which must be in `PATH`.
+The fork's configuration has no virtio, block device or EFI support; it
+boots a kernel loaded into memory or over TFTP with `booti`.
+
+Build miniboot from the same SC-DT environment (substitute `l2` for `l3`
+when needed):
+
+```sh
+cmake -S 3rdparty/syntacore/miniboot -B /path/to/miniboot-l3 \
+    -DPLATFORM=rv64_pmp_l3 \
+    -DTOOLCHAIN_FILE="$SC_CMAKE_TOOLCHAINS/riscv64-elf-gcc.cmake" \
+    -DINSTANT_BOOT=ON -DJUMP_NEXT_STAGE=ON
+make -C /path/to/miniboot-l3
+```
+
+## SC-DT QEMU
+
+Load bootblock separately at DDR and the complete ROM at the CBFS window.
+Use a writable snapshot of a test disk, not a writable pristine image.
+For L3:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x200000,firmware=/path/to/miniboot-l3/miniboot.elf \
+    -smp 8 -m 4G -nographic \
+    -global syntacore-scr9-riscv-cpu.pma=on \
+    -global virtio-mmio.force-legacy=false \
+    -device loader,file=build/cbfs/fallback/bootblock.bin,addr=0x400000000 \
+    -device loader,file=build/coreboot.rom,addr=0x408000000 \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0
+```
+
+For L2 use `-M scr9_l2,mrt=on,firmware=/path/to/miniboot-l2/miniboot.elf`,
+omit the PMA global, and set the two loader addresses to `0x0` and
+`0x8000000` respectively. The L3 command reserves 2 MiB OCRAM because
+vendor miniboot places its stacks at the top of that region; do not reuse
+the HAL-specific 512 KiB setting for miniboot.
+The QEMU device tree enables modern virtio transports and, on SCR9,
+Zicbom (SC-DT QEMU does not implement it for SCR7). Mainboard
+initialization sets PLIC sources to level-high. L3 requires
+`plic-msi-ver=2` for the register layout expected by stock Linux.
+L2 omits the first two virtio transports because they overlap cluster
+registers. A GRUB Linux command line should include
+`console=ttyS0,115200 efi=novamap` to retain the serial console.
+
+## Preloaded OpenSBI / U-Boot External Flow
+
+The `SCR_PRELOADED_PAYLOAD` option allows coreboot to hand off execution to
+externally loaded firmware components placed directly into guest memory by
+SC-DT QEMU's machine options (`sbi=`, `uboot=`, `dtb=`, `kernel=`, `initrd=`),
+rather than loading them from CBFS or compiling OpenSBI from source.
+
+### Memory Layout and Constraints
+
+DDR memory layout (relative to `SCR_DDR_BASE`, generated from the platform
+`PLF_MEM_BASE`: `0x400000000` on L3, `0x0` on L2):
+
+| Offset | Size | Component | Description |
+| --- | --- | --- | --- |
+| `+0x00000000` | 2 MiB | OpenSBI | Preloaded by `sbi=`. Reserved range in coreboot table (`0x0..0x200000`) protects it from OS clobbering. |
+| `+0x00200000` | 32 MiB | Payload (U-Boot) | Preloaded by `uboot=`. OpenSBI hands off in S-mode to this entry address. |
+| `+0x02200000` | 1 MiB | Devicetree (DTB) | Preloaded by `dtb=`. Validated by coreboot (`fdt_is_valid`, endian-converted `totalsize` check). |
+| `+0x02300000` | 61 MiB | Kernel Image | Preloaded by `kernel=`. Maximum uncompressed size is 61 MiB (`0x2300000..0x6000000`), bounded by ramstage base. |
+| `+0x06000000` | 2 MiB | coreboot ramstage | Relocated to DDR + 96 MiB so kernel Image up to 61 MiB does not collide with ramstage. |
+| `+0x06200000` | 2 MiB | Stacks & Buffers | Per-hart stacks, pre-RAM console, FMAP and CBFS metadata caches. |
+| `+0x08000000` | Configured | CBFS ROM | Coreboot flash image loaded into DDR window (`0x408000000` on L3, `0x8000000` on L2). 16 MiB board default. |
+| `+0x30000000` | Dynamic | Initrd | Preloaded by `initrd=`. Handed over by U-Boot to Linux kernel. |
+
+**Important constraints**:
+1. **Kernel Image Size**: Because the kernel is loaded at `+0x02300000` (35 MiB) and ramstage resides at `+0x06000000` (96 MiB), the maximum kernel Image size is strictly 61 MiB (`SCR_KERNEL_MAX_SIZE`). Kernels larger than 61 MiB would overlap and corrupt coreboot ramstage.
+2. **OpenSBI Build Exclusion**: `CONFIG_SCR_PRELOADED_PAYLOAD=y` selects the arch capability `RISCV_PRELOADED_OPENSBI`, which makes `OPENSBI_PRELOADED` the default of `arch/riscv`'s "choose how to get OpenSBI" choice and hides the `OPENSBI_SOURCE` and `OPENSBI_BLOB` alternatives. OpenSBI is then neither built from source nor added to CBFS, and `arch/riscv/boot.c` takes its entry point from `platform_get_preloaded_opensbi()` instead of loading it. Normal flows keep `OPENSBI_SOURCE` as the choice default and are unaffected.
+3. **Address 0 Support**: On SCR9 L2, `SCR_OPENSBI_BASE` is `0x0`. OpenSBI execution at address 0 is valid and handled properly in identity-mapped M-mode.
+4. **Reserved RAM**: Only the OpenSBI footprint (`SCR_OPENSBI_BASE .. SCR_OPENSBI_BASE + 2M`) is marked as reserved in the coreboot memory table, ensuring Linux has full access to the remainder of system RAM.
+
+### Configuration
+
+Enable preloaded payload support in coreboot:
+
+```ini
+CONFIG_SCR_BOOT_HAL=y
+CONFIG_PAYLOAD_NONE=y
+CONFIG_SCR_PRELOADED_PAYLOAD=y
+CONFIG_SCR_PRELOADED_PAYLOAD_ENTRY=0x400200000  # For L3 (use 0x200000 for L2)
+```
+
+### Running in SC-DT QEMU
+
+Run L3 external preloaded flow:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l3,plic-msi-ver=2,mrt=on,ocram-size=0x80000,\
+firmware=build/cbfs/fallback/bootblock.elf,\
+sbi=/path/to/sbi-l3.bin,\
+uboot=/path/to/uboot-l3.bin,\
+dtb=build/dtb,\
+kernel=/path/to/Image,\
+initrd=/path/to/initrd.img \
+    -smp 8 -m 4G -nographic \
+    -global syntacore-scr9-riscv-cpu.pma=on \
+    -global virtio-mmio.force-legacy=false \
+    -device loader,file=build/coreboot.rom,addr=0x408000000 \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0 \
+    -append "console=ttyS0,115200 root=/dev/vda1 rw rootwait earlycon"
+```
+
+Run L2 external preloaded flow:
+
+```sh
+/path/to/sc-dt/tools/bin/qemu-system-riscv64 \
+    -M scr9_l2,mrt=on,\
+firmware=build/cbfs/fallback/bootblock.elf,\
+sbi=/path/to/sbi-l2.bin,\
+uboot=/path/to/uboot-l2.bin,\
+dtb=build/dtb,\
+kernel=/path/to/Image,\
+initrd=/path/to/initrd.img \
+    -smp 8 -m 4G -nographic \
+    -global virtio-mmio.force-legacy=false \
+    -device loader,file=build/coreboot.rom,addr=0x8000000 \
+    -drive file=/path/to/test.img,format=raw,if=none,id=hd0,snapshot=on \
+    -device virtio-blk-device,drive=hd0 \
+    -append "console=ttyS0,115200 root=/dev/vda1 rw rootwait earlycon"
+```
+
+Note: Do not supply `-bios` (e.g. `-bios none`); doing so inhibits QEMU from loading `firmware=` and the preloaded firmware images.
+On L3, when prompted `SCR: MRT initialized. Load DDR, then Press any key`, send a newline on the console to continue. Both L2 and L3 proceed through coreboot bootblock, ramstage, preloaded OpenSBI, U-Boot, and boot Linux to login with all 8 harts online.
