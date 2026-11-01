@@ -5,6 +5,9 @@ ifeq ($(CONFIG_SOC_SYNTACORE_SCR),y)
 CPPFLAGS_common += -I$(src)/soc/syntacore/scr/include
 
 all-y += uart.c mtime.c rom_media.c cbmem.c smp.c ipi.c cache.c
+all-$(CONFIG_SCR_IPI_IMSIC) += aia/imsic.c
+all-$(CONFIG_SCR_IPI_ICCM) += iccm/iccm.c
+all-$(CONFIG_SCR_IPI_ICCM_L3) += iccm/iccm_l3.c
 romstage-y += romstage.c
 ramstage-y += chip.c
 
@@ -27,6 +30,19 @@ scr_hal_cflags = -march=$(CONFIG_RISCV_ARCH)$(MARCH_SUFFIX) -mabi=$(CONFIG_RISCV
 	$(CPPFLAGS_riscv)
 
 scr_hal_objs := $(obj)/scrhal/cache.o $(obj)/scrhal/mmio.o
+scr_ipi_src-$(CONFIG_SCR_IPI_IMSIC) := aia/imsic_hal.c
+scr_ipi_src-$(CONFIG_SCR_IPI_ICCM) := iccm/iccm_hal.c
+scr_ipi_src-$(CONFIG_SCR_IPI_ICCM_L3) := iccm/iccm_l3_hal.c
+ifneq ($(scr_ipi_src-y),)
+scr_hal_objs += $(obj)/scrhal/ipi.o
+endif
+
+# Try the IMSIC guest-index API first, then fall back to the older signature.
+scr_ipi_recipe = $(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+ifeq ($(CONFIG_SCR_IPI_IMSIC),y)
+scr_ipi_recipe = $(CC_ramstage) $(scr_hal_cflags) -DSCR_IMSIC_HAS_GUEST -c -o $@ $< 2>/dev/null || \
+	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+endif
 
 $(obj)/scrhal/cache.o: $(SCR_HAL)/src/drivers/cache.c $(obj)/config.h
 	@mkdir -p $(dir $@)
@@ -35,6 +51,10 @@ $(obj)/scrhal/cache.o: $(SCR_HAL)/src/drivers/cache.c $(obj)/config.h
 $(obj)/scrhal/mmio.o: $(src)/soc/syntacore/scr/hal/mmio_hal.c $(obj)/config.h
 	@mkdir -p $(dir $@)
 	$(CC_ramstage) $(scr_hal_cflags) -c -o $@ $<
+
+$(obj)/scrhal/ipi.o: $(src)/soc/syntacore/scr/$(scr_ipi_src-y) $(obj)/config.h
+	@mkdir -p $(dir $@)
+	$(scr_ipi_recipe)
 
 # Read PLF_MEM_BASE from the existing HAL memory-map object. The linker
 # scripts need a plain number rather than the platform header's C suffixes.
