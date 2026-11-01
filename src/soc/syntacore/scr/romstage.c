@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#include <cbfs.h>
+#include <cbmem.h>
+#include <commonlib/device_tree.h>
+#include <console/console.h>
+#include <endian.h>
+#include <mcall.h>
+#include <program_loading.h>
+#include <romstage_common.h>
+
+static void setup_fdt(void)
+{
+	size_t size;
+	const struct fdt_header *fdt;
+
+	if (fdt_is_valid(HLS()->fdt))
+		return;
+
+	fdt = cbfs_ro_map("DTB", &size);
+	if (!fdt || size < sizeof(*fdt) || be32_to_cpu(fdt->totalsize) > size ||
+	    be32_to_cpu(fdt->totalsize) < sizeof(*fdt) || !fdt_is_valid(fdt))
+		die("Invalid CBFS DTB");
+	HLS()->fdt = (void *)fdt;
+}
+
+void __noreturn romstage_main(void)
+{
+	setup_fdt();
+	cbmem_initialize_empty();
+	run_ramstage();
+}
