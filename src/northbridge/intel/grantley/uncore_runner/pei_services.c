@@ -333,17 +333,20 @@ EFI_STATUS grantley_pei_set_memory_window(struct grantley_uncore_state *state,
 
 /* InstallPeiMemory() policy.
  *
- * This runner does not implement the vendor contract.  The stock PEI core
- * records the region and raises SwitchStackSignal; the dispatcher then creates
- * a Stack HOB, migrates the HOB heap and the stack into the region, rewrites
- * the PHIT and switches stacks.  None of that exists here (no dispatcher, no
- * stack migration, no PHIT rewrite), and the region the blob passes is a
- * runtime HOB field, not a value that can be proven before entry.
+ * This runner does not implement the generic PEI-core contract: the stock PEI
+ * core records the region and raises SwitchStackSignal, after which the
+ * dispatcher creates a Stack HOB, migrates the HOB heap and the stack into the
+ * region, rewrites the PHIT and switches stacks.  None of that exists here
+ * (no dispatcher, no stack migration, no PHIT rewrite).
  *
- * The service therefore refuses instead of creating a bump window and
- * returning EFI_SUCCESS that the PEIM ignores.  On the target the refusal is
- * fatal before any memory is handed out; under ENV_TEST it is recorded and
- * returned so the tests can observe it.
+ * What it does instead: once the MRC has trained DRAM, the backing window is
+ * pinned from the TOLM read back from hardware, and a claim is accepted only
+ * when it fits that window; the accepted claim becomes the arena the service
+ * hands out.  A malformed claim, or one that cannot be backed by a decoded
+ * trained TOLM, is refused.  Refusal is fatal on the target because the PEIM
+ * does not test the status: the arena is zeroed, post 0xe7 is issued and die()
+ * is called, so no unvalidated memory is ever handed out.  Under ENV_TEST the
+ * refusal is returned so the tests can observe it.
  */
 void grantley_pei_set_smram(struct grantley_uncore_state *state,
 			    uint64_t base, uint64_t size)
