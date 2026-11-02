@@ -1,0 +1,38 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config CPU_INTEL_GRANTLEY
+	bool
+	select ARCH_X86
+	select SSE2
+	select UDELAY_TSC
+	select TSC_MONOTONIC_TIMER
+	select TSC_SYNC_MFENCE
+	select CPU_INTEL_COMMON
+	select CPU_INTEL_COMMON_TIMEBASE
+	select SUPPORT_CPU_UCODE_IN_CBFS
+	select MICROCODE_UPDATE_PRE_RAM
+	# Port I/O requires SAD routing, installed by the CPU CAR entry.
+	select NO_EARLY_BOOTBLOCK_POSTCODES
+	select CPU_INTEL_FIRMWARE_INTERFACE_TABLE
+
+if CPU_INTEL_GRANTLEY
+
+config SMM_TSEG_SIZE
+	hex
+	default 0x800000
+
+config IED_REGION_SIZE
+	hex
+	default 0x400000
+
+config SMM_RESERVED_SIZE
+	hex
+	default 0x100000
+
+config MAX_CPUS
+	int
+	default 44
+	help
+	  Supports up to 22-core / 44-thread Xeon E5 v3 and v4 processors.
+
+endif
