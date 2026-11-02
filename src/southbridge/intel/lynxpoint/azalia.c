@@ -159,6 +159,7 @@ static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_H_AUDIO_9,
 	PCI_DID_INTEL_LPT_LP_AUDIO,
 	PCI_DID_INTEL_WPT_LP_AUDIO,
+	PCI_DID_INTEL_WBG_AUDIO,
 	0
 };
 
