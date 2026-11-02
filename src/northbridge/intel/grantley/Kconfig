@@ -1,0 +1,138 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config NORTHBRIDGE_INTEL_GRANTLEY
+	bool
+	select CPU_INTEL_GRANTLEY
+	select SEPARATE_ROMSTAGE
+	select NO_ECAM_MMCONF_SUPPORT
+	select ACPI_S1_NOT_SUPPORTED
+	select ACPI_CUSTOM_MCFG
+	select DRAM_SUPPORT_DDR4
+	select UDK_2017_BINDING
+	select DRIVERS_EFI_VARIABLE_STORE
+	select DRIVERS_INTEL_OC_MAILBOX
+
+if NORTHBRIDGE_INTEL_GRANTLEY
+
+config DCACHE_RAM_BASE
+	hex
+	default 0xfe100000
+
+config DCACHE_RAM_SIZE
+	hex
+	default 0x100000
+
+config HAVE_INTEL_UNCORE_BIN
+	bool "Add Intel Grantley Uncore binary (UncoreInitPeim)"
+	default n
+	help
+	  Select this option to add Intel Grantley Uncore reference code
+	  (UncoreInitPeim) to CBFS for DDR4 memory and uncore initialization.
+
+config INTEL_UNCORE_BIN_FILE
+	string "Intel Grantley Uncore binary path and filename"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/uncore.bin"
+	help
+	  The path and filename of the UncoreInitPeim binary to add to CBFS.
+
+config GRANTLEY_UNCORE_PCD_MMCFG_BASE
+	hex "MMCFG/ECAM base expected by the board's native contract"
+	depends on HAVE_INTEL_UNCORE_BIN
+	depends on GRANTLEY_NATIVE_CONTRACT_QD4 || GRANTLEY_NATIVE_CONTRACT_D4M4
+	default 0x80000000
+	help
+	  The PCIe ECAM base the board's native contract requires, not a free
+	  constant.  Both supported boards program 0x80000000, but the value
+	  reaches the module differently:
+
+	  * X99-QD4: UncoreInitPeim calls PCD_PPI->Get64(1) at entry and uses
+	    the returned value as the ECAM base.  base+0xF8040/+0xF8044 are
+	    PCI config 00:1F.0 PMBASE/ACPI_CNTL (the PEIM enables ACPI decode
+	    there) and base+(bus<<20)+0xF308C is the MMCFG mapping.
+	  * X99D4M4: the module does not call the getter; the same base is a
+	    qword inside the pinned blob (PE offset 0x106B8) and the runner
+	    verifies those bytes before entry.
+
+	  The contract rejects any value that does not EQUAL this base: an
+	  aligned-but-different constant (for example the earlier 0x40100000
+	  inference) would silently retarget the PEIM's writes into uncore CSR
+	  space.  romstage refuses to build a path where this setting and the
+	  board's contract disagree.  Never set this to a guess.
+
+config GRANTLEY_NATIVE_CONTRACT_QD4
+	bool
+	default y if BOARD_HUANANZHI_X99_QD4
+	help
+	  Selects the Huananzhi X99-QD4 native-entry contract: blob pin
+	  (605408 bytes, sha256 f07c6904...), PE ImageBase 0xFFDCF9B8, runtime
+	  PCD token 1 = 0x80000000.  Set only by the board Kconfig.
+
+config GRANTLEY_NATIVE_CONTRACT_D4M4
+	bool
+	default y if BOARD_ENVINDA_X99D4M4
+	help
+	  Selects the Envinda X99D4M4 native-entry contract: blob pin
+	  (766368 bytes, sha256 35b74537...), PE ImageBase 0xFFDCE8E0, MMCFG
+	  base compiled into the blob at PE+0x106B8.  Set only by the board
+	  Kconfig.
+
+config GRANTLEY_UNCORE_NATIVE_ENTRY
+	bool "Enter UncoreInitPeim with the native PCD/DEPEX contract (experimental)"
+	depends on HAVE_INTEL_UNCORE_BIN
+	depends on GRANTLEY_NATIVE_CONTRACT_QD4 || GRANTLEY_NATIVE_CONTRACT_D4M4
+	default n
+	help
+	  Opt in to the native entry slice: romstage supplies the board's PCD
+	  policy so the runner can satisfy the vendor PEIM's runtime contract,
+	  its PEI_DEPEX set and the SHA-256 image pin before the entry point.
+
+	  With this symbol off, no PCD value is supplied and the runner refuses
+	  before entry instead of entering with an unverified environment.
+	  Entry, memory handoff and the post-PEIM map have no hardware
+	  observation on either board; X99D4M4 TOLM/TSEG/InstallPeiMemory
+	  timing is unmeasured, so do not read this option as a boot claim.
+
+config GRANTLEY_INTELSETUP_STOCK_QD4
+	bool "Serve the QD4 stock IntelSetup payload to UncoreInitPeim"
+	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
+	depends on GRANTLEY_NATIVE_CONTRACT_QD4
+	default n
+	help
+	  The 6091-byte IntelSetup factory default in pei_intelsetup_stock.h was
+	  extracted from the X99-QD4 BIOS.  It is board data, not a portable
+	  structure, so it is served only when this option is enabled.  With it
+	  off, GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM uses
+	  its own ZeroMem(0x17CB) + IIO default path (EccSupport = 0/DIS, every
+	  other policy field zero).
+
+config GRANTLEY_INTELSETUP_STOCK_D4M4
+	bool "Serve the X99D4M4 stock IntelSetup payload to UncoreInitPeim"
+	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
+	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
+	default n
+	help
+	  The 6090-byte IntelSetup factory default in pei_intelsetup_d4m4.h was
+	  extracted from the X99D4M4 BIOS image.  It is that board's own data,
+	  not QD4's and not a portable structure, so it is served only when this
+	  option is enabled for this board.  With it off,
+	  GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM uses its
+	  own ZeroMem(0x17CA) + IIO default path.
+
+config DCACHE_BSP_STACK_SIZE
+	hex
+	default 0x10000
+	help
+	  Stack for coreboot's own romstage code; the vendor PEIM runs on
+	  the descending stack the romstage reserves for it.
+
+config FIXED_MCHBAR_MMIO_BASE
+	default 0xfed10000
+
+config FIXED_DMIBAR_MMIO_BASE
+	default 0xfed18000
+
+config FIXED_EPBAR_MMIO_BASE
+	default 0xfed19000
+
+endif

@@ -1,0 +1,61 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+ifeq ($(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY),y)
+ifeq ($(CONFIG_HAVE_INTEL_UNCORE_BIN),)
+# Reject image builds if uncore reference blob is not configured.
+ifeq ($(strip $(MAKECMDGOALS)),)
+$(error Grantley DRAM initialization is not implemented; build diagnostic ELF targets only)
+endif
+ifneq ($(filter all coreboot coreboot.rom %/coreboot.rom %/coreboot.pre,$(MAKECMDGOALS)),)
+$(error Grantley DRAM initialization is not implemented; build diagnostic ELF targets only)
+endif
+endif
+
+bootblock-y += platform.c
+bootblock-y += bootblock.c
+romstage-y += platform.c
+ramstage-y += platform.c
+romstage-y += romstage.c
+romstage-y += memmap.c
+romstage-y += native_raminit/spd.c
+romstage-y += uncore_runner/pei_services.c
+romstage-y += uncore_runner/pei_pcd.c
+# Board descriptor: the approved blob pin, PCD policy and IntelSetup payload
+# for the selected board.  Always linked because pei_services consults it; the
+# payload itself is compiled only when that board's policy option is enabled.
+romstage-y += uncore_runner/native_contract.c
+# PE image verification, the board SHA-256 pin and the vboot hash provider are
+# part of the opt-in native entry contract only.  Release/non-native images
+# keep the pre-candidate structure-only path, so no board digest or IntelSetup
+# payload is linked into them.
+romstage-$(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY) += uncore_runner/pei_image.c
+romstage-$(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY) += uncore_runner/pei_sha256.c
+romstage-y += uncore_runner/pei_hobs.c
+ifeq ($(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY),y)
+# SHA-256 for the UncoreInitPeim pin comes from the vboot reference library.
+romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/include
+romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib/include
+romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib
+endif
+
+postcar-y += memmap.c
+ramstage-y += memmap.c
+ramstage-y += northbridge.c
+
+cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
+uncore_bin_file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
+uncore.bin-file := $(uncore_bin_file)
+uncore.bin-type := raw
+uncore.bin-position := $(if $(wildcard $(uncore_bin_file)),\
+	$(shell $(PYTHON3) util/grantley/pe_image_base.py \
+		$(uncore_bin_file)))
+
+# There is deliberately no ramstage/resource map or memory-init substitute.
+ifeq ($(CONFIG_HAVE_INTEL_UNCORE_BIN),)
+.PHONY: grantley-no-raminit
+grantley-no-raminit:
+	$(error Grantley DRAM initialization is not implemented; build bootblock/romstage diagnostic ELF targets only)
+
+$(obj)/coreboot.rom: grantley-no-raminit
+endif
+endif
