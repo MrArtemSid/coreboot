@@ -2,25 +2,7 @@
 
 config SOC_SYNTACORE_SCR
 	bool
-	select ARCH_RISCV_RV64
-	select ARCH_RISCV_S
-	select ARCH_RISCV_U
-	select ARCH_RISCV_PMP
-	select ARCH_BOOTBLOCK_RISCV
-	select ARCH_VERSTAGE_RISCV
-	select ARCH_ROMSTAGE_RISCV
-	select ARCH_RAMSTAGE_RISCV
-	select RISCV_USE_ARCH_TIMER
-	select RISCV_HAS_OPENSBI
-	select RISCV_GET_HART_COUNT_AT_RUNTIME
-	select FLATTENED_DEVICE_TREE
-	select RISCV_DTS
-	select DRIVERS_UART_8250MEM_32
-	select UART_OVERRIDE_REFCLK
-	select MISSING_BOARD_RESET
-
-config SEPARATE_ROMSTAGE
-	default n if SOC_SYNTACORE_SCR
+	select SOC_SYNTACORE_COMMON
 
 if SOC_SYNTACORE_SCR
 
@@ -52,119 +34,6 @@ config SCR7_L3
 	bool "SCR7 L3"
 	select SCR_CPU_SCR7
 	select SCR_CLUSTER_L3
-
-endchoice
-
-# Derived from the SCR_PLATFORM choice. They stay ordinary booleans because
-# the C code, devicetree macros and Makefiles test these exact names.
-config SCR_CPU_SCR9
-	bool
-
-config SCR_CPU_SCR7
-	bool
-
-config SCR_CLUSTER_L2
-	bool
-
-config SCR_CLUSTER_L3
-	bool
-
-choice SCR_BOOT_FLOW
-	prompt "SCR boot flow"
-	default SCR_BOOT_MINIBOOT
-
-config SCR_BOOT_MINIBOOT
-	bool "miniboot"
-	help
-	  Preserve the platform configuration initialized by miniboot.
-
-config SCR_BOOT_HAL
-	bool "Reset vector, SCR-HAL initialization"
-	help
-	  Initialize the platform in bootblock using the external SCR-HAL.
-
-endchoice
-
-if SCR_BOOT_HAL
-
-choice SCR_OCRAM_SIZE_SELECT
-	prompt "OCRAM size"
-	help
-	  All pre-RAM code, data and eight hart stacks run from OCRAM. The
-	  64 KiB layout compresses ramstage with LZ4 and disables metadata
-	  caches. SCR9 L3 can use the roomier 512 KiB layout.
-	default SCR_OCRAM_512K if SCR_CPU_SCR9 && SCR_CLUSTER_L3
-	default SCR_OCRAM_64K
-
-config SCR_OCRAM_64K
-	bool "64 KiB"
-	select MB_COMPRESS_RAMSTAGE_LZ4
-	select NO_FMAP_CACHE
-	select NO_CBFS_MCACHE
-
-config SCR_OCRAM_512K
-	bool "512 KiB"
-	depends on SCR_CPU_SCR9 && SCR_CLUSTER_L3
-
-endchoice
-
-config SCR_OCRAM_SIZE
-	hex
-	default 0x80000 if SCR_OCRAM_512K
-	default 0x10000
-
-config SCR_WAIT_KEY_ON_FIRST_BOOT
-	bool "Wait for a key after initializing MRT"
-	depends on SCR_CLUSTER_L3
-	default y
-	help
-	  Wait before reading DDR so the host can load the CBFS image.
-	  Only L3 has an MRT.
-
-config SCR_PRELOADED_PAYLOAD
-	bool "Use preloaded OpenSBI and payload"
-	depends on SCR_BOOT_HAL
-	select RISCV_OPENSBI
-	select RISCV_PRELOADED_OPENSBI
-	select PAYLOAD_NONE
-	help
-	  Use externally preloaded OpenSBI and payload (such as U-Boot)
-	  already placed in memory at fixed addresses instead of building
-	  them or loading them from CBFS.
-	  RISCV_PRELOADED_OPENSBI selects the arch/riscv OPENSBI_PRELOADED
-	  choice and hides the source/blob alternatives, so no OpenSBI is
-	  built or added to CBFS even for a .config that still carries
-	  CONFIG_OPENSBI_SOURCE=y.
-
-config SCR_PRELOADED_PAYLOAD_ENTRY
-	hex "Preloaded payload entry address"
-	depends on SCR_PRELOADED_PAYLOAD
-	default 0x400200000 if SCR_CLUSTER_L3
-	default 0x200000
-	help
-	  Address of the externally preloaded payload (e.g. U-Boot).
-	  Passed to OpenSBI in fw_dynamic_info (or jumped to in fw_jump).
-
-endif
-
-choice SCR_IPI
-	prompt "SCR IPI controller"
-	default SCR_IPI_ICCM if SCR_CLUSTER_L2
-	default SCR_IPI_ICCM_L3 if SCR_CLUSTER_L3
-
-config SCR_IPI_IMSIC
-	bool "AIA IMSIC"
-	help
-	  Use machine-level IMSIC interrupt files for inter-hart interrupts.
-	  Requires AIA on every hart and the platform IMSIC memory map.
-
-config SCR_IPI_ICCM
-	bool "CSR ICCM"
-	depends on SCR_CLUSTER_L2
-
-config SCR_IPI_ICCM_L3
-	bool "MMIO ICCM"
-	depends on SCR_CLUSTER_L3
 
 endchoice
 
@@ -205,56 +74,9 @@ config SCR_HAL_PLATFORM
 	  value has to name a platform of the SCR-HAL tree; an unknown name
 	  fails the build on its missing plf.h.
 
-config SCR_HAL_DIR
-	string "External SCR-HAL source directory"
-	default ""
-
 config RISCV_ARCH
 	string "RISC-V ISA"
 	default "rv64gc_sscofpmf_zfhmin_zihintpause_zba_zbb_zbc_zbs" if SCR_CPU_SCR9 && SCR_CLUSTER_L3
 	default "rv64gc_zba_zbb_zbc_zbs"
-
-config RISCV_ABI
-	default "lp64d"
-
-config RISCV_CODEMODEL
-	default "medany"
-
-config MAX_CPUS
-	default 8
-
-config RISCV_WORKING_HARTID
-	default 0
-
-config MEMLAYOUT_LD_FILE
-	default "src/soc/syntacore/scr/memlayout.ld"
-
-config OPENSBI_PLATFORM
-	default "generic"
-
-config OPENSBI_SOURCE_DIR
-	default "3rdparty/syntacore/opensbi"
-
-config OPENSBI_TEXT_START
-	default 0x400000000 if SCR_CLUSTER_L3
-	default 0x0
-
-config CRABEFI_PAYLOAD_BASE
-	default 0x410000000 if SCR_CLUSTER_L3
-	default 0x10000000
-
-config UBOOT_TEXT_BASE
-	default 0x410000000 if SCR_CLUSTER_L3
-	default 0x10000000
-
-config UBOOT_DEFCONFIG
-	default "scr_rv64_l3_cluster_opensbi_defconfig" if SCR_CLUSTER_L3
-	default "scr_rv64_l2_cluster_opensbi_defconfig"
-
-config UBOOT_REPO_URL
-	default "https://github.com/syntacore/u-boot.git"
-
-config UBOOT_BRANCH_OR_TAG
-	default "sc/2026.04"
 
 endif

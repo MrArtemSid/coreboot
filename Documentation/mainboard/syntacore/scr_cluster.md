@@ -159,11 +159,13 @@ for L2; retain the corresponding PMA settings described above.
 
 ## Source layout
 
-`src/soc/syntacore/scr/` contains the code shared by both boot flows.
-`miniboot/` holds the DDR layout of the miniboot flow, `hal/` the reset
-entry, SCR-HAL initialization and OCRAM layouts, and `iccm/` both IPI
-backends with their isolated SCR-HAL accessors. The top-level
-`memlayout.ld` selects the layout for the configured flow.
+`src/soc/syntacore/common/` contains everything shared by Syntacore SoCs
+and both boot flows: `miniboot/` holds the DDR layout of the miniboot flow,
+`hal/` the reset entry, SCR-HAL initialization and OCRAM layouts, and
+`iccm/` both IPI backends with their isolated SCR-HAL accessors. The
+top-level `memlayout.ld` selects the layout for the configured flow.
+`src/soc/syntacore/scr/` adds the SCR9/SCR7 platform profile and the
+chip_operations entry.
 
 ## Devicetree
 
