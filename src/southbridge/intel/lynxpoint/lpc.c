@@ -724,7 +724,7 @@ static void pch_lpc_add_io_resources(struct device *dev)
 	pch_lpc_add_io_resource(dev, get_gpiobase(), DEFAULT_GPIOSIZE, GPIOBASE);
 
 	/* PMBASE */
-	pch_lpc_add_io_resource(dev, get_pmbase(), 256, PMBASE);
+	pch_lpc_add_io_resource(dev, get_pmbase(), DEFAULT_PMBASE_SIZE, PMBASE);
 
 	/* LPC Generic IO Decode range. */
 	if (dev->chip_info) {
