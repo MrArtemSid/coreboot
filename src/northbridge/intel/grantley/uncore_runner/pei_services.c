@@ -1753,11 +1753,27 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	}
 
 	entry_point = (grantley_peim_entry_t)(exec_addr + image.entry_rva);
+#elif CONFIG(GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT)
+	/* This board declares that the packaged PEIM may only be executed
+	 * through its native contract, and no contract is selected in this
+	 * build.  Refuse before the parse: the pre-native path below would
+	 * call the entry point with no PCD provider, no PEI_DEPEX check and no
+	 * image pin, and the vendor module does not test LocatePpi's status
+	 * before its first Get64(1).  A named refusal is the only defined
+	 * outcome; it is not a degraded entry.
+	 */
+	printk(BIOS_ERR, "PEIM: this board requires its native contract and "
+	       "none is selected, not dispatching\n");
+	(void)exec_addr;	/* not inspected: the refusal precedes the image */
+	state->stop_reason = GRANTLEY_STOP_CONTRACT;
+	return EFI_UNSUPPORTED;
 #else
 	/* Pre-native runtime path: structure and ImageBase only.  The QD4 SHA
-	 * pin, DEPEX set and PCD token-1 gate are compiled out, so BD4/XD4/D4M4
-	 * release images keep their previous behaviour instead of being
-	 * rejected as a "security violation" by a foreign board's digest.
+	 * pin, DEPEX set and PCD token-1 gate are compiled out, so builds that
+	 * keep this path on purpose keep their previous behaviour instead of
+	 * being rejected as a "security violation" by a foreign board's
+	 * digest.  Boards that must not enter without a contract select
+	 * GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT and are handled above.
 	 */
 	const uint8_t *bytes = pe_base;
 	if (pe_size < 0x40)

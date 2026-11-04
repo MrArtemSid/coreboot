@@ -188,7 +188,17 @@ void __noreturn romstage_main(void)
 					    mem_params.ecc_en);
 
 		post_code(0x35);
+#if CONFIG(GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT) && \
+	!CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
+		/* The runner refuses in this configuration; do not print a
+		 * "launching ... memory training" line for an entry that will
+		 * not happen.
+		 */
+		printk(BIOS_ERR, "Grantley: this board requires its native entry "
+		       "contract; UncoreInitPeim will not be entered\n");
+#else
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");
+#endif
 
 		status = grantley_run_uncore_peim(uncore_bin, uncore_size,
 						  &uncore_state);
