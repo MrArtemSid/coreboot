@@ -23,7 +23,7 @@
  *
  * Both supported builds are different in a way that matters:
  *
- *   x99-common (QD4)  the module calls PCD_PPI->Get64(1) at entry and uses the
+ *   x99-series (QD4)  the module calls PCD_PPI->Get64(1) at entry and uses the
  *                     returned value as the MMCFG base.  The value must be
  *                     supplied at runtime and must EQUAL the base the port
  *                     programs (reports/reverse-pcd-value.md).

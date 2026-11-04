@@ -13,7 +13,7 @@
 #if CONFIG(GRANTLEY_NATIVE_CONTRACT_QD4)
 
 /*
- * X99-QD4 (huananzhi/x99-common variant qd4).
+ * X99-QD4 (huananzhi/x99-series variant qd4).
  *
  * Get64(1) is called at 0xFFDE8F91.  The stock PcdPeim database answers
  * 0x80000000 at slot db+0x40, which is also GRANTLEY_ECAM_BASE; a merely
@@ -23,7 +23,7 @@
  * Blob: 605408 bytes, sha256 f07c6904...4693, PE ImageBase 0xFFDCF9B8.
  */
 static const struct grantley_native_contract contract_qd4 = {
-	.board = "huananzhi/x99-common (X99-QD4)",
+	.board = "huananzhi/x99-series (X99-QD4)",
 	.blob_size = 0x93ce0,
 	.blob_sha256 = {
 		0xf0, 0x7c, 0x69, 0x04, 0xe6, 0x00, 0x4b, 0xc7,
