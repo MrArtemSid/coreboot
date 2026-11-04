@@ -1,0 +1,95 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+# Angxun X99-XD4: Haswell-EP/EP (CPUID 306f2) on a Grantley uncore with a
+# Lynx Point-family PCH.  Only the devices this port needs so far are enabled;
+# the rest of the PCH is left out until its wiring is known.
+#
+# SATA: 1f.2 is enabled as an AHCI controller and sata_port_map declares the
+# six PCH ports implemented (0x3f).  The field is the controller's port
+# capability: sata_init() programs it into 0x92, into the AHCI PI register
+# (ABAR + 0x0c) and into the 0x94 port-disable bits, and 0x3f is also the
+# non-LP SATA_PORT_MASK of src/southbridge/intel/lynxpoint/sata.c.  It does
+# not establish that six SATA connectors are routed on this board - the
+# routing is not recovered.  Zero is not a neutral "unknown" here: it tells
+# the controller that no port is implemented, which is why the config struct
+# must carry 0x3f instead of being left zero-initialized.
+#
+# Still absent because the stock image has not been reversed for them: no 14.0
+# xHCI, 1a.0 EHCI, 16.0 MEI, 1b.0 HDA or 1c.x PCIe function (their enables and
+# strap values are unknown, so they keep their reset state), no HD-audio verb
+# table (hda_verb.c carries the tree-wide zero-length tables because
+# src/device/azalia_device.c links against the verb symbols unconditionally),
+# no gen1_dec/gen4_dec decode window, and no PCH GPIO table.
+#
+# Super I/O: the part is a NCT5532D, established from the board's own stock
+# NCT5532DPeiInit PEIM.  That PEIM's 61-record stream selects only LDN 5, 6 and
+# 0x0a plus chip-global registers; it does not describe the rest of the
+# NCT5532D map.  This port uses the existing NCT5539D driver as an explicit
+# register-compatibility choice - the three observed LDNs use that numbering -
+# and not as a claim about the silicon.  Every LDN that driver knows is listed
+# below, because pnp_enable_devices() creates an unlisted driver LDN with
+# enabled=1 and ramstage then writes its CR30 enable; listing them makes the
+# enable state an explicit decision.  An "off" node is still an active CR30 bit
+# clear at the ramstage scan, not a no-op.  Only LDN 5 (KBC) is on, with the
+# resources the stock stream programs for it.
+
+chip northbridge/intel/grantley
+	device domain 0x0 on
+		chip cpu/intel/grantley
+			device cpu_cluster 0x0 on
+				ops grantley_cpu_bus_ops
+			end
+		end
+
+		# IIO PCI Express root ports of the server uncore
+		device pci 00.0 on end # IIO host bridge
+		device pci 01.0 on end # IIO root port 1
+		device pci 02.0 on end # IIO root port 2
+		device pci 03.0 on end # IIO root port 3
+		device pci 05.0 on end # IIO system management / MMCFG
+		device pci 05.1 on end # IIO hot plug
+		device pci 05.2 on end # IIO RAS / error status
+		device pci 05.4 on end # IIO I/O APIC
+
+		chip southbridge/intel/lynxpoint
+			# Six PCH ports implemented; see the SATA note above.
+			register "sata_port_map" = "0x3f"
+
+			device pci 1f.0 on # LPC bridge
+				chip superio/nuvoton/nct5539d
+					# NCT5532D compatibility mapping; see the Super I/O note above.
+					device pnp 2e.2 off end  # UART A: never selected by the stock stream
+					device pnp 2e.5 on       # KBC: the only LDN the stock stream enables
+						io  0x60 = 0x60
+						io  0x62 = 0x64
+						irq 0x70 = 1
+						irq 0x72 = 12
+					end
+					device pnp 2e.6 off end  # CIR: the stock stream disables it
+					device pnp 2e.8 off end  # WDT1 (virtual, bit 0 of LDN 8)
+					device pnp 2e.9 off end  # GPIO 2 (virtual, bit 0 of LDN 9)
+					device pnp 2e.a off end  # ACPI: stock writes CRe4/CRe7, resources unknown
+					device pnp 2e.b off end  # HWM/FLED: base not recovered, no base guess
+					device pnp 2e.d off end  # WDT2
+					device pnp 2e.e off end  # CIR wake-up
+					device pnp 2e.f off end  # GPIO push-pull / open-drain
+					device pnp 2e.11 off end # GPIO / RI PSOUT wake-up status
+					device pnp 2e.12 off end # SW error control
+					device pnp 2e.15 off end # Fading LED
+					device pnp 2e.16 off end # Deep sleep (virtual, bit 0 of LDN 0x16)
+					device pnp 2e.107 off end # GPIO 7 (virtual)
+					device pnp 2e.108 off end # GPIO 0 (virtual)
+					device pnp 2e.109 off end # GPIO 3 (virtual)
+					device pnp 2e.207 off end # GPIO 8 (virtual)
+					device pnp 2e.209 off end # GPIO 4 (virtual)
+					device pnp 2e.308 off end # GPIO base (virtual)
+					device pnp 2e.309 off end # GPIO 5 (virtual)
+					device pnp 2e.408 off end # WDT3 (virtual)
+					device pnp 2e.116 off end # Deep sleep, DS3 (virtual)
+				end
+			end
+			device pci 1f.2 on end # SATA (AHCI)
+			device pci 1f.3 on end # SMBus (DIMM SPD path)
+		end
+	end
+end

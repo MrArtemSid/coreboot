@@ -1,0 +1,60 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if BOARD_ANGXUN_X99_XD4
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select NORTHBRIDGE_INTEL_GRANTLEY
+	select SOUTHBRIDGE_INTEL_LYNXPOINT
+	select SUPERIO_NUVOTON_COMMON_PRE_RAM
+	# The stock PEIM identifies a NCT5532D and its stream selects only LDN 5,
+	# 6 and 0x0a.  The existing NCT5539D driver is used as a register
+	# compatibility mapping for those LDNs, not as an identity claim: the
+	# devicetree lists every LDN that driver knows and enables only the KBC.
+	select SUPERIO_NUVOTON_NCT5539D
+	select BOARD_ROMSIZE_KB_16384
+	# Not an audio claim: no 1b.0 device is declared, so the Azalia driver
+	# never runs.  src/device/azalia_device.c links against
+	# cim_verb_data/pc_beep_verbs unconditionally, and this select is what
+	# declares their sizes; hda_verb.c provides zero-length tables.
+	select AZALIA_USE_LEGACY_VERB_TABLE
+	select HAVE_ACPI_TABLES
+	# XD4 packages its UncoreInitPeim for a build-only image; without a
+	# native contract the runner must refuse instead of entering it.
+	select GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT
+
+config MAINBOARD_DIR
+	default "angxun/x99-xd4"
+
+config MAINBOARD_PART_NUMBER
+	default "X99-XD4"
+
+config BOOTBLOCK_CONSOLE
+	default y
+
+config XD4_ASSUMED_UART_A_LDN2
+	bool "Enable UART A as LDN 2 at 0x3f8 (unproven assumption)"
+	depends on SUPERIO_NUVOTON_COMMON_PRE_RAM
+	default n
+	help
+	  The board's own stock Super I/O PEIM (NCT5532DPeiInit,
+	  GUID 9029F23E-E1EE-40D1-9382-36DD61A63EAA, in the BIOS region of
+	  X9XD4006.bin) programs the multi-function pin mux, KBC on LDN 5 and
+	  a register pair on LDN 0x0a.  It never selects LDN 2, so the stock
+	  firmware does not establish a UART A logical device number or base.
+
+	  Enabling this option programs LDN 2 as a 0x3f8 UART and turns it on,
+	  which gives the bootblock console a place to write.  That mapping is
+	  a legacy assumption inherited from the pre-rewrite XD4 source and
+	  from the sibling NCT5539D driver, not a recovered fact.  Leave it off
+	  until a hardware readback confirms it; with it off the bootblock
+	  performs no Super I/O register write at all, and the stock PEIM's
+	  register stream is not replayed.
+
+	  The option is a pre-ramstage console assumption only.  devicetree.cb
+	  cannot make a node conditional on this symbol (sconfig does not run
+	  the preprocessor), so LDN 2 is declared off there and the ramstage
+	  device scan clears its CR30 enable bit again even when this option is
+	  set.  Do not read a set option as a ramstage-consistent UART.
+
+endif # BOARD_ANGXUN_X99_XD4
