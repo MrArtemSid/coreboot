@@ -129,4 +129,7 @@ config RCBA_LENGTH
 config FIXED_SMBUS_IO_BASE
 	hex
 	depends on SOUTHBRIDGE_INTEL_COMMON_SMBUS
+	# The ACPI/PM block of a Grantley platform starts at 0x400, so the SMBus
+	# window has to stay clear of it.
+	default 0x580 if NORTHBRIDGE_INTEL_GRANTLEY
 	default 0x400

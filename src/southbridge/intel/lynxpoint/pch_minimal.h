@@ -12,7 +12,17 @@
 #define DEFAULT_GPIOBASE	0x1400
 #define DEFAULT_GPIOSIZE	0x400
 #else
+/*
+ * Grantley platforms use the server reference I/O map, where the 128-byte
+ * ACPI/PM block starts at 0x400.  The SMBus BAR of such a platform sits at
+ * 0x580 (see FIXED_SMBUS_IO_BASE) so the two LPC windows do not overlap:
+ * PM1_TMR is at PMBASE + 8 and the TCO block at PMBASE + 0x60.
+ */
+#if CONFIG(NORTHBRIDGE_INTEL_GRANTLEY)
+#define DEFAULT_PMBASE		0x400
+#else
 #define DEFAULT_PMBASE		0x500
+#endif
 #define DEFAULT_GPIOBASE	0x480
 #define DEFAULT_GPIOSIZE	0x80
 #endif
