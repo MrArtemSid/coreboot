@@ -1,43 +1,61 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-if BOARD_HUANANZHI_X99_QD4
+if BOARD_HUANANZHI_X99_QD4 || BOARD_HUANANZHI_X99_BD4
 
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
 	select NORTHBRIDGE_INTEL_GRANTLEY
 	select SOUTHBRIDGE_INTEL_LYNXPOINT
 	select SUPERIO_NUVOTON_COMMON_PRE_RAM
-	select SUPERIO_NUVOTON_NCT5539D
+	# A real X99-BD4 V1.33 capture (staging1 BD4/logs/superiotool.log at
+	# a2793571, local copy evidence/bd4-hardware-logs/raw/logs/) reads
+	# silicon ID 0xc562 and superiotool decodes it as NCT6779D, with the
+	# parallel LDN 0x01, UART B LDN 0x03 and port-80 UART LDN 0x14 that
+	# nct5539d.h does not define.  The stock firmware's "NCT5532D" strings
+	# are a PEIM module name and an NVRAM variable name, not a silicon ID
+	# read, so the register map -- not the name -- selects the driver.
+	# QD4 keeps the NCT5539D map it was built with; nothing about QD4's
+	# capture backs changing it here.
+	select SUPERIO_NUVOTON_NCT5539D if BOARD_HUANANZHI_X99_QD4
+	select SUPERIO_NUVOTON_NCT6779D if BOARD_HUANANZHI_X99_BD4
 	select BOARD_ROMSIZE_KB_16384
 	select AZALIA_USE_LEGACY_VERB_TABLE
 	select HAVE_ACPI_TABLES
+	# BD4 packages its UncoreInitPeim for a build-only image; without a
+	# native contract the runner must refuse instead of entering it.
+	select GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT if BOARD_HUANANZHI_X99_BD4
 
 config MAINBOARD_DIR
 	default "huananzhi/x99-series"
 
 config VARIANT_DIR
-	default "qd4"
+	default "qd4" if BOARD_HUANANZHI_X99_QD4
+	default "bd4" if BOARD_HUANANZHI_X99_BD4
 
 config IFD_BIN_PATH
 	string
 	depends on HAVE_IFD_BIN
-	default "3rdparty/blobs/mainboard/huananzhi/x99-series/descriptor.bin"
+	default "3rdparty/blobs/mainboard/huananzhi/x99-series/descriptor.bin" if BOARD_HUANANZHI_X99_QD4
+	default "3rdparty/blobs/mainboard/huananzhi/x99-bd4/descriptor.bin" if BOARD_HUANANZHI_X99_BD4
 
 config ME_BIN_PATH
 	string
 	depends on HAVE_ME_BIN && !STITCH_ME_BIN
-	default "3rdparty/blobs/mainboard/huananzhi/x99-series/me.bin"
+	default "3rdparty/blobs/mainboard/huananzhi/x99-series/me.bin" if BOARD_HUANANZHI_X99_QD4
+	default "3rdparty/blobs/mainboard/huananzhi/x99-bd4/me.bin" if BOARD_HUANANZHI_X99_BD4
 
 config INTEL_UNCORE_BIN_FILE
 	string
 	depends on HAVE_INTEL_UNCORE_BIN
-	default "3rdparty/blobs/mainboard/huananzhi/x99-series/uncore.bin"
+	default "3rdparty/blobs/mainboard/huananzhi/x99-series/uncore.bin" if BOARD_HUANANZHI_X99_QD4
+	default "3rdparty/blobs/mainboard/huananzhi/x99-bd4/uncore.bin" if BOARD_HUANANZHI_X99_BD4
 
 config OVERRIDE_DEVICETREE
 	default "variants/\$(CONFIG_VARIANT_DIR)/overridetree.cb"
 
 config MAINBOARD_PART_NUMBER
-	default "X99-QD4"
+	default "X99-QD4" if BOARD_HUANANZHI_X99_QD4
+	default "X99-BD4" if BOARD_HUANANZHI_X99_BD4
 
 config BOOTBLOCK_CONSOLE
 	default y

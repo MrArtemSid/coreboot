@@ -1,4 +1,10 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+# Both symbols are members of the "Mainboard model" choice in
+# src/mainboard/huananzhi/Kconfig, so exactly one variant is selected; the
+# per-variant gpio.c files would otherwise define mainboard_gpio_map twice.
 config BOARD_HUANANZHI_X99_QD4
 	bool "X99-QD4"
+
+config BOARD_HUANANZHI_X99_BD4
+	bool "X99-BD4"
