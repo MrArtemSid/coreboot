@@ -179,6 +179,14 @@ EliteBook Folio 9480m <hp/folio_9480m.md>
 EliteBook 820 G2 <hp/elitebook_820_g2.md>
 ```
 
+## Envinda
+
+```{toctree}
+:maxdepth: 1
+
+X99-D4M4 <envinda/x99d4m4.md>
+```
+
 ## Intel
 
 ```{toctree}
