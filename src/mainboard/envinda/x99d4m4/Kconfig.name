@@ -1,0 +1,4 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config BOARD_ENVINDA_X99D4M4
+	bool "X99D4M4"

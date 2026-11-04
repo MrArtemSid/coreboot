@@ -1,0 +1,17 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if VENDOR_ENVINDA
+
+choice
+	prompt "Mainboard model"
+
+source "src/mainboard/envinda/*/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/envinda/*/Kconfig"
+
+config MAINBOARD_VENDOR
+	default "Envinda"
+
+endif # VENDOR_ENVINDA
