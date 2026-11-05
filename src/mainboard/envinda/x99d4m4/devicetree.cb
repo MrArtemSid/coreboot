@@ -1,6 +1,11 @@
 ## SPDX-License-Identifier: GPL-2.0-or-later
 
 chip northbridge/intel/grantley
+	register "start_iio_links" = "true"
+	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou2_bifurcation" = "IIO_BIFURCATE_X8"
+
 	device domain 0x0 on
 		ops grantley_pci_domain_ops
 		chip cpu/intel/grantley
