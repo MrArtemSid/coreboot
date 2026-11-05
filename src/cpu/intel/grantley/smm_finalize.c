@@ -8,7 +8,7 @@
 #include "grantley.h"
 #include "grantley_routing.h"
 
-#define UBOX_DFX_DEV PCI_DEV(GRANTLEY_UNCORE_BUS, 16, 6)
+#define UBOX_DFX_DEV PCI_DEV(grantley_uncore_bus(), 16, 6)
 #define SMM_FEATURE_CONTROL 0x58
 #define SMM_FEATURE_LOCK (1 << 0)
 #define SMM_CODE_CHECK (1 << 2)
