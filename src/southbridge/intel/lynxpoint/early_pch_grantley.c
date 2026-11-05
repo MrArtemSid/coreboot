@@ -5,33 +5,20 @@
 #include <device/pci_ops.h>
 #include <device/pci_def.h>
 #include <device/pci_ids.h>
+#include <northbridge/intel/grantley/platform.h>
 #include <pc80/mc146818rtc.h>
 
 #include "pch.h"
 
 #define GCS_ALTERNATE_ACCESS BIT(4)
 
-/* Wellsburg RTC state-machine recovery must precede memory initialization. */
+/* RTC state-machine recovery must precede memory initialization. */
 void early_pch_init_grantley(void)
 {
 	const u32 id = pci_read_config32(PCH_LPC_DEV, PCI_VENDOR_ID);
 
-	if ((id & 0xffff) != PCI_VID_INTEL)
-		return;
-
-	/* The recovery applies to every PCH family that can sit under
-	 * Grantley, not only Wellsburg: HEDT boards ship recycled client
-	 * Lynx Point (X99-QD4 carries a Q87, X99-BD4 a B85), and the stock
-	 * firmware runs the same BWG 19.3 sequence for them in PchInitPeim
-	 * before Uncore.  DID families recovered from the stock firmware's LPC dispatch:
-	 * Lynx Point-H 0x8c40-0x8c5f, Wildcat Point-H 0x8cc0-0x8ccf,
-	 * Wellsburg 0x8d40-0x8d5f.  Lynx Point-LP is excluded; it never
-	 * pairs with LGA2011-3.
-	 */
-	const u16 device = id >> 16;
-	if (!(device >= 0x8c40 && device <= 0x8c5f) &&
-	    !(device >= 0x8cc0 && device <= 0x8ccf) &&
-	    !(device >= 0x8d40 && device <= 0x8d5f))
+	/* Also needed for client Lynx Point PCHs on HEDT boards (QD4: Q87). */
+	if (!grantley_pch_is_supported(id & 0xffff, id >> 16))
 		return;
 
 	if (pci_read_config8(PCH_LPC_DEV, GEN_PMCON_3) & RTC_BATTERY_DEAD) {
