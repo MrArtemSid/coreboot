@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <PiPei.h>
 #include <Ppi/CpuIo.h>
+#include <Ppi/Pcd.h>
 #include <Ppi/PciCfg2.h>
 #include <Ppi/ReadOnlyVariable2.h>
 
@@ -69,7 +70,6 @@ struct grantley_uncore_state {
 	/* Why grantley_run_uncore_peim() refused to enter the module. */
 	enum grantley_uncore_stop {
 		GRANTLEY_STOP_NONE = 0,
-		GRANTLEY_STOP_PCD,
 		GRANTLEY_STOP_IMAGE,
 	} stop_reason;
 
@@ -179,16 +179,7 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 	uint32_t tolm, uint32_t tohm_lo, uint32_t tohm_hi,
 	struct grantley_memory_map *map);
 
-/* Execute UncoreInitPeim in place.
- *
- * pe_base/pe_size describe the mapped image; the image is verified and then
- * executed only at its own PE ImageBase.  CBFS placement already satisfies
- * that (data_off 0x38 puts the payload at 0xFFDCF9B8); this port has no
- * loader/relocator, so a mapping at another address is refused.
- *
- * Before the entry point the runner also requires the PCD provider to be able
- * to answer Get64(1) with the routed ECAM base.
- */
+/* Execute UncoreInitPeim in place at its PE ImageBase. */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 				    struct grantley_uncore_state *state);
 

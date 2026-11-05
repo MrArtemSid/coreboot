@@ -12,7 +12,6 @@
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
 #include <northbridge/intel/grantley/native_raminit/spd.h>
-#include <northbridge/intel/grantley/uncore_runner/pei_pcd.h>
 #include <northbridge/intel/grantley/uncore_runner/pei_services.h>
 #include <post.h>
 #include <romstage_common.h>
@@ -96,12 +95,6 @@ void __noreturn romstage_main(void)
 			       (unsigned long)status);
 			post_code(0xef);
 			die("Grantley: PEI services init failure\n");
-		}
-
-		if (grantley_pcd_set_mmcfg_base(CONFIG_ECAM_MMCONF_BASE_ADDRESS,
-						GRANTLEY_ECAM_BASE) != 0) {
-			post_code(0xe6);
-			die("Grantley: ECAM base does not match the routed MMCFG\n");
 		}
 
 		size_t setup_size = 0;

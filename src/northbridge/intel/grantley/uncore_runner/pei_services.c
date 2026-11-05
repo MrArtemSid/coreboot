@@ -25,7 +25,6 @@ static inline void outl(uint32_t val, uint16_t port) { }
 #undef NULL
 #include "pei_services.h"
 #include "pei_image.h"
-#include "pei_pcd.h"
 #include "../memmap.h"
 
 static struct grantley_uncore_state *g_state;
@@ -1372,19 +1371,6 @@ typedef EFI_STATUS (*grantley_peim_entry_t)(
 	void *file_handle,
 	const struct _EFI_PEI_SERVICES **services);
 
-/* PCD provider interfaces, both installed by this runner (the stock PcdPeim
- * installs both as well): the native value-returning PCD_PPI the module calls
- * at entry, and the PI 1.2 EFI_PEI_PCD_PPI its PEI_DEPEX names.
- */
-static EFI_GUID g_pcd_guid = {
-	0x06e81c58, 0x4ad7, 0x44bc,
-	{ 0x83, 0x90, 0xf1, 0x02, 0x65, 0xf7, 0x24, 0x80 }
-};
-static EFI_GUID g_efi_pei_pcd_guid = {
-	0x01f34d25, 0x4de2, 0x23ad,
-	{ 0x3f, 0xf3, 0x36, 0x35, 0x3f, 0xf3, 0x23, 0xf1 }
-};
-
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 				    struct grantley_uncore_state *state)
 {
@@ -1402,39 +1388,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	if (status != EFI_SUCCESS) {
 		state->stop_reason = GRANTLEY_STOP_IMAGE;
 		return status;
-	}
-
-	/* The module calls LocatePpi(06E81C58) at entry and does not check the
-	 * status; the provider must be present and answer with a value.  It also
-	 * must be this provider, not a placeholder installed by someone else.
-	 */
-	void *pcd_ppi = (void *)0;
-	void *pcd_ex_ppi = (void *)0;
-	if (grantley_locate_ppi(&state->services_ptr, &g_pcd_guid, 0, (void *)0,
-				&pcd_ppi) != EFI_SUCCESS ||
-	    pcd_ppi != (void *)&grantley_pcd_ppi ||
-	    grantley_locate_ppi(&state->services_ptr, &g_efi_pei_pcd_guid, 0,
-				(void *)0, &pcd_ex_ppi) != EFI_SUCCESS) {
-		printk(BIOS_ERR, "PEIM: PCD provider PPI missing or not the runner's "
-		       "provider, not dispatching\n");
-		state->stop_reason = GRANTLEY_STOP_PCD;
-		return EFI_UNSUPPORTED;
-	}
-
-	/* Fail closed BEFORE the entry point: a value-returning getter cannot
-	 * report "unknown", so the decision has to happen here.  Token 1 is the
-	 * CSR MMIO base the module dereferences unconditionally.
-	 */
-	const char *block = grantley_pcd_blocking_reason();
-	if (block) {
-		printk(BIOS_ERR, "PEIM: not entering: %s\n", block);
-		printk(BIOS_ERR, "PEIM: PCD token 1 value=0x%llx fault=%s "
-		       "(token %u)\n",
-		       (unsigned long long)grantley_pcd_mmcfg_base(),
-		       grantley_pcd_fault_string(grantley_pcd_fault()),
-		       grantley_pcd_fault_token());
-		state->stop_reason = GRANTLEY_STOP_PCD;
-		return EFI_UNSUPPORTED;
 	}
 
 	/* EFI ImageBase is a 32-bit PE field.  On the IA-32 target this is the
@@ -1516,6 +1469,24 @@ static EFI_STATUS EFIAPI grantley_ffs_stub(void)
 {
 	return EFI_NOT_FOUND;
 }
+
+/* The module only reads PCD token 1, the ECAM base. */
+static UINT64 EFIAPI grantley_pcd_get64(UINTN token)
+{
+	if (token == 1)
+		return CONFIG_ECAM_MMCONF_BASE_ADDRESS;
+	printk(BIOS_ERR, "PEIM: unsupported PCD token %lu\n", (unsigned long)token);
+	return 0;
+}
+
+static UINTN EFIAPI grantley_pcd_unsupported(void)
+{
+	printk(BIOS_ERR, "PEIM: unsupported PCD service\n");
+	return 0;
+}
+
+static PCD_PPI g_pcd;
+static EFI_GUID g_pcd_guid = PCD_PPI_GUID;
 
 static EFI_GUID g_pci_cfg_guid = {
 	0x57a449a, 0x1fdc, 0x4c06,
@@ -1646,12 +1617,8 @@ static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	  (void *)&g_memory_test },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_size_guid,
 	  (void *)&g_memory_size },
-	/* Both PCD interfaces are real value-returning tables; the provider
-	 * refuses to enter the PEIM until token 1 has a byte-proven value.
-	 */
-	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_pcd_guid, (void *)&grantley_pcd_ppi },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
-	  &g_efi_pei_pcd_guid, (void *)&grantley_efi_pei_pcd_ppi },
+	  &g_pcd_guid, &g_pcd },
 };
 
 static const EFI_PEI_SERVICES g_pei_services_template = {
@@ -1801,10 +1768,10 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 
 	state->boot_mode = BOOT_WITH_FULL_CONFIGURATION;
 	state->stop_reason = GRANTLEY_STOP_NONE;
-	/* A new services instance starts with an unconfigured PCD provider; the
-	 * platform supplies the token value (if it has a proven one) afterwards.
-	 */
-	grantley_pcd_reset();
+	UINTN (EFIAPI **pcd_slot)(void) = (void *)&g_pcd;
+	for (size_t i = 0; i < sizeof(g_pcd) / sizeof(*pcd_slot); i++)
+		pcd_slot[i] = grantley_pcd_unsupported;
+	g_pcd.Get64 = grantley_pcd_get64;
 	state->pool_base = (UINT8 *)pool_buf;
 	state->pool_size = pool_size;
 	state->hob_list = hob_buf;
