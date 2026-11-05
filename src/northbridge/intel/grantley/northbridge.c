@@ -126,10 +126,16 @@ static void grantley_domain_set_resources(struct device *dev)
 _Static_assert(CONFIG_ECAM_MMCONF_BASE_ADDRESS == GRANTLEY_ECAM_BASE,
 	       "ECAM base must match the bootblock route");
 
+static const char *grantley_domain_acpi_name(const struct device *dev)
+{
+	return dev->path.type == DEVICE_PATH_DOMAIN ? "PCI0" : NULL;
+}
+
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
 	.set_resources    = grantley_domain_set_resources,
 	.scan_bus         = pci_host_bridge_scan_bus,
+	.acpi_name        = grantley_domain_acpi_name,
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
