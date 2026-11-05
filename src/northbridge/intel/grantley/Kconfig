@@ -97,12 +97,20 @@ config GRANTLEY_INTELSETUP_FILE
 config GRANTLEY_UNCORE_RC_SERIAL
 	bool "Enable UncoreInitPeim serial debug output"
 	depends on HAVE_INTEL_UNCORE_BIN
-	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
 	default y
 	help
 	  Set serialDebugMsgLvl in the IntelSetup payload to 1 so the
-	  Uncore reference code prints its own messages on COM1. The stock
-	  payload has it at 0.
+	  Uncore reference code prints its own messages on COM1. Has no
+	  effect when the board does not set
+	  GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET.
+
+config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
+	hex
+	depends on HAVE_INTEL_UNCORE_BIN
+	default 0x0
+	help
+	  Offset of serialDebugMsgLvl in the board's IntelSetup payload,
+	  or 0 when it is not known.
 
 config DCACHE_BSP_STACK_SIZE
 	hex

@@ -21,4 +21,7 @@ config MAINBOARD_PART_NUMBER
 config BOOTBLOCK_CONSOLE
 	default y
 
+config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
+	default 0x2d6
+
 endif

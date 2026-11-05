@@ -1313,6 +1313,8 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	void *data)
 {
 	static const EFI_GUID setup_guid = GRANTLEY_INTELSETUP_VENDOR_GUID;
+	const size_t serial_level_offset =
+		CONFIG_GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET;
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
 	if (!state || !this || !variable_name || !vendor_guid || !data_size)
@@ -1328,11 +1330,9 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	}
 
 	memcpy(data, state->setup, state->setup_size);
-#if CONFIG(GRANTLEY_UNCORE_RC_SERIAL)
-	if (GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL < state->setup_size)
-		((uint8_t *)data)[GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL] =
-			GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN;
-#endif
+	if (CONFIG(GRANTLEY_UNCORE_RC_SERIAL) && serial_level_offset &&
+	    serial_level_offset < state->setup_size)
+		((uint8_t *)data)[serial_level_offset] = GRANTLEY_RC_SERIAL_SDBG_MIN;
 
 	*data_size = state->setup_size;
 	if (attributes)
