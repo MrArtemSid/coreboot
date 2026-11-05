@@ -35,7 +35,6 @@
 
 /* Intel suggested C-state exit latency in units of 1024 ns. */
 #define C_STATE_LATENCY_CONTROL_0_LIMIT	0x42
-#define C_STATE_LATENCY_CONTROL_2_LIMIT	0x91
 #define C_STATE_LATENCY_MICRO_SECONDS(limit)	(((1 << 5) * (limit)) / 1000)
 
 #define MWAIT_RES(state, sub_state) {					\
@@ -53,16 +52,15 @@ static const acpi_cstate_t cstate_map[] = {
 		.resource = MWAIT_RES(0, 0),
 	},
 	{
-		.ctype = 2,
-		.latency = C_STATE_LATENCY_MICRO_SECONDS(C_STATE_LATENCY_CONTROL_0_LIMIT),
-		.power = 900,
-		.resource = MWAIT_RES(1, 0),
+		.ctype = 2,	/* C1E */
+		.power = 1000,
+		.resource = MWAIT_RES(0, 1),
 	},
 	{
 		.ctype = 3,
-		.latency = C_STATE_LATENCY_MICRO_SECONDS(C_STATE_LATENCY_CONTROL_2_LIMIT),
-		.power = 800,
-		.resource = MWAIT_RES(2, 1),
+		.latency = C_STATE_LATENCY_MICRO_SECONDS(C_STATE_LATENCY_CONTROL_0_LIMIT),
+		.power = 900,
+		.resource = MWAIT_RES(1, 0),
 	},
 };
 
@@ -129,7 +127,10 @@ static void generate_p_state_entries(int core)
 	msr = rdmsr(MSR_PKG_POWER_SKU_UNIT);
 	power_unit = msr.lo & 0xf;
 	msr = rdmsr(MSR_PKG_POWER_SKU);
-	power_max = (int)(msr.lo & 0x7fff) * 1000 / (2 << (power_unit - 1));
+	if (power_unit)
+		power_max = (int)(msr.lo & 0x7fff) * 1000 / (2 << (power_unit - 1));
+	else
+		power_max = 0;
 
 	if (!core) {
 		msr = rdmsr(MSR_PERF_STATUS);
@@ -213,11 +214,8 @@ static void generate_c_state_entries(void)
 	acpigen_write_CST_package(cstate_map, ARRAY_SIZE(cstate_map));
 }
 
-static void generate_t_state_entries(int core, int cores_per_package)
+static void generate_t_state_entries(void)
 {
-	/* Indicate SW_ALL coordination for T-states */
-	acpigen_write_TSD_package(core, cores_per_package, SW_ALL);
-
 	/* Indicate FFixedHW so the OS uses the MSR */
 	acpigen_write_empty_PTC();
 
@@ -246,7 +244,7 @@ void grantley_cpu_fill_ssdt(const struct device *dev)
 		acpigen_write_processor(i, 0, 0);
 		generate_p_state_entries(i);
 		generate_c_state_entries();
-		generate_t_state_entries(i, 1);
+		generate_t_state_entries();
 		acpigen_pop_len();
 	}
 	acpigen_write_processor_package("PPKG", 0, count);
