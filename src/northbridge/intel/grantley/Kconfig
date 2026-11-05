@@ -44,47 +44,6 @@ config INTEL_UNCORE_BIN_FILE
 	help
 	  The path and filename of the UncoreInitPeim binary to add to CBFS.
 
-config GRANTLEY_UNCORE_PCD_MMCFG_BASE
-	hex "MMCFG/ECAM base expected by the board's native contract"
-	depends on HAVE_INTEL_UNCORE_BIN
-	depends on GRANTLEY_NATIVE_CONTRACT_QD4 || GRANTLEY_NATIVE_CONTRACT_D4M4
-	default 0x80000000
-	help
-	  The PCIe ECAM base the board's native contract requires, not a free
-	  constant.  Both supported boards program 0x80000000, but the value
-	  reaches the module differently:
-
-	  * X99-QD4: UncoreInitPeim calls PCD_PPI->Get64(1) at entry and uses
-	    the returned value as the ECAM base.  base+0xF8040/+0xF8044 are
-	    PCI config 00:1F.0 PMBASE/ACPI_CNTL (the PEIM enables ACPI decode
-	    there) and base+(bus<<20)+0xF308C is the MMCFG mapping.
-	  * X99D4M4: the module does not call the getter; the same base is a
-	    qword inside the pinned blob (PE offset 0x106B8) and the runner
-	    verifies those bytes before entry.
-
-	  The contract rejects any value that does not EQUAL this base: an
-	  aligned-but-different constant (for example the earlier 0x40100000
-	  inference) would silently retarget the PEIM's writes into uncore CSR
-	  space.  romstage refuses to build a path where this setting and the
-	  board's contract disagree.  Never set this to a guess.
-
-config GRANTLEY_NATIVE_CONTRACT_QD4
-	bool
-	default y if BOARD_HUANANZHI_X99_QD4
-	help
-	  Selects the Huananzhi X99-QD4 native-entry contract: blob pin
-	  (605408 bytes, sha256 f07c6904...), PE ImageBase 0xFFDCF9B8, runtime
-	  PCD token 1 = 0x80000000.  Set only by the board Kconfig.
-
-config GRANTLEY_NATIVE_CONTRACT_D4M4
-	bool
-	default y if BOARD_ENVINDA_X99D4M4
-	help
-	  Selects the Envinda X99D4M4 native-entry contract: blob pin
-	  (766368 bytes, sha256 35b74537...), PE ImageBase 0xFFDCE8E0, MMCFG
-	  base compiled into the blob at PE+0x106B8.  Set only by the board
-	  Kconfig.
-
 config GRANTLEY_INTELSETUP_FILE
 	string "IntelSetup default variable path and filename"
 	depends on HAVE_INTEL_UNCORE_BIN

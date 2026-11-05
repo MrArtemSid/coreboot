@@ -1,9 +1,8 @@
 # Full-ROM build for the Huananzhi X99-BD4 (Grantley uncore, Lynx Point PCH).
 #
-# Build-only: no native Uncore contract exists for this board yet, so
-# romstage stops before UncoreInitPeim is entered (post code 0xe6). The
-# provenance of the pinned x99-bd4 blob set against the stock image is
-# unverified.
+# Build-only: UncoreInitPeim from this board's blob directory has not been
+# run on hardware. The provenance of the x99-bd4 blob set against the stock
+# image is unverified.
 CONFIG_ANY_TOOLCHAIN=y
 CONFIG_VENDOR_HUANANZHI=y
 CONFIG_BOARD_HUANANZHI_X99_BD4=y

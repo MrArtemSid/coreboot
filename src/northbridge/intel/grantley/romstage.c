@@ -12,7 +12,6 @@
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
 #include <northbridge/intel/grantley/native_raminit/spd.h>
-#include <northbridge/intel/grantley/uncore_runner/native_contract.h>
 #include <northbridge/intel/grantley/uncore_runner/pei_pcd.h>
 #include <northbridge/intel/grantley/uncore_runner/pei_services.h>
 #include <post.h>
@@ -99,50 +98,10 @@ void __noreturn romstage_main(void)
 			die("Grantley: PEI services init failure\n");
 		}
 
-		/* The board contract is the only source of the PCD base policy.
-		 * QD4's module calls Get64(1): the value must be supplied and
-		 * must EQUAL the base this port programs below.  X99D4M4's
-		 * module carries the same base as a compiled-in constant and
-		 * never calls the getter; the runner checks those bytes
-		 * instead, so no runtime token is required there.
-		 */
-		const struct grantley_native_contract *contract =
-			grantley_native_contract();
-
-		if (!contract) {
+		if (grantley_pcd_set_mmcfg_base(CONFIG_ECAM_MMCONF_BASE_ADDRESS,
+						GRANTLEY_ECAM_BASE) != 0) {
 			post_code(0xe6);
-			die("Grantley: no native contract is configured for this board\n");
-		}
-		if (contract->pcd_mode == GRANTLEY_NATIVE_PCD_RUNTIME_TOKEN1) {
-			if (CONFIG_GRANTLEY_UNCORE_PCD_MMCFG_BASE !=
-			    contract->pcd_token1) {
-				post_code(0xe6);
-				die("Grantley: PCD token 1 config 0x%llx does not "
-				    "match the %s contract value 0x%llx\n",
-				    (unsigned long long)CONFIG_GRANTLEY_UNCORE_PCD_MMCFG_BASE,
-				    contract->board,
-				    (unsigned long long)contract->pcd_token1);
-			}
-			if (grantley_pcd_set_mmcfg_base(
-			    contract->pcd_token1, GRANTLEY_ECAM_BASE) != 0) {
-				post_code(0xe6);
-				printk(BIOS_ERR, "Grantley: PCD token 1 value 0x%llx "
-				       "rejected; it must equal GRANTLEY_ECAM_BASE "
-				       "0x%llx\n",
-				       (unsigned long long)contract->pcd_token1,
-				       (unsigned long long)GRANTLEY_ECAM_BASE);
-			}
-		} else {
-			if (CONFIG_GRANTLEY_UNCORE_PCD_MMCFG_BASE !=
-			    contract->pcd_ecam_value) {
-				post_code(0xe6);
-				die("Grantley: MMCFG base config 0x%llx does not "
-				    "match the %s contract constant 0x%llx\n",
-				    (unsigned long long)CONFIG_GRANTLEY_UNCORE_PCD_MMCFG_BASE,
-				    contract->board,
-				    (unsigned long long)contract->pcd_ecam_value);
-			}
-			grantley_pcd_set_token1_required(false);
+			die("Grantley: ECAM base does not match the routed MMCFG\n");
 		}
 
 		size_t setup_size = 0;

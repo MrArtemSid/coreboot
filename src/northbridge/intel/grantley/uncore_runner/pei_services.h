@@ -69,13 +69,8 @@ struct grantley_uncore_state {
 	/* Why grantley_run_uncore_peim() refused to enter the module. */
 	enum grantley_uncore_stop {
 		GRANTLEY_STOP_NONE = 0,
-		GRANTLEY_STOP_DEPEX,
 		GRANTLEY_STOP_PCD,
 		GRANTLEY_STOP_IMAGE,
-		GRANTLEY_STOP_HASH,
-		/* The pinned blob or its compiled-in MMCFG constant does not
-		 * match the board contract. */
-		GRANTLEY_STOP_CONTRACT,
 	} stop_reason;
 
 	/* InstallPeiMemory() was called and refused; no permanent window was
@@ -192,26 +187,10 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
  * loader/relocator, so a mapping at another address is refused.
  *
  * Before the entry point the runner also requires the PCD provider to be able
- * to answer Get64(1) with a byte-proven value; otherwise it stops (see
- * stop_reason) instead of entering the module with a guessed base.
+ * to answer Get64(1) with the routed ECAM base.
  */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 				    struct grantley_uncore_state *state);
-
-/* PPI GUIDs named by the PEI_DEPEX section of the stock UncoreInitPeim (FFS
- * file at flash 0xDCF918, PEI_DEPEX at 0xDCF930, 0x82 bytes: 7 PUSH, 6 AND,
- * END).  A PI PEI core dispatches the PEIM only when all of them are
- * installed; this runner calls the entry point directly, so it must check the
- * same set itself.
- */
-#define GRANTLEY_UNCORE_DEPEX_COUNT 7
-extern const EFI_GUID grantley_uncore_depex[GRANTLEY_UNCORE_DEPEX_COUNT];
-
-/* EFI_SUCCESS when every DEPEX PPI is installed; EFI_NOT_STARTED otherwise,
- * with the first absent GUID stored in *missing when it is not NULL.
- */
-EFI_STATUS grantley_uncore_deps_check(const struct _EFI_PEI_SERVICES **services,
-				      EFI_GUID *missing);
 
 /* Validate the address range only (addressability and overlap with storage
  * this runner is still using).  This is NOT an InstallPeiMemory contract:

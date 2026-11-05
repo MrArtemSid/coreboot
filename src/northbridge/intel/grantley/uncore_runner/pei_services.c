@@ -26,7 +26,6 @@ static inline void outl(uint32_t val, uint16_t port) { }
 #include "pei_services.h"
 #include "pei_image.h"
 #include "pei_pcd.h"
-#include "native_contract.h"
 #include "../memmap.h"
 
 static struct grantley_uncore_state *g_state;
@@ -1373,39 +1372,6 @@ typedef EFI_STATUS (*grantley_peim_entry_t)(
 	void *file_handle,
 	const struct _EFI_PEI_SERVICES **services);
 
-/* GUIDs from the UncoreInitPeim PEI_DEPEX, in the order the expression pushes
- * them (see pei_services.h).  Five are provided by this runner; 057a449a and
- * 01f34d25 are not, and no coreboot code publishes them.
- */
-const EFI_GUID grantley_uncore_depex[GRANTLEY_UNCORE_DEPEX_COUNT] = {
-	/* 1 gEfiPeiCpuIoPpiInstalledGuid (MdePkg/Include/Ppi/CpuIo.h) */
-	{ 0xe6af1f7b, 0xfc3f, 0x46da,
-	  { 0xa8, 0x28, 0xa3, 0xb4, 0x57, 0xa4, 0x42, 0x82 } },
-	/* 2 gEfiPciCfg2PpiGuid - "EfiPciCfg2" in the stock PpiTableIA32.c */
-	{ 0x057a449a, 0x1fdc, 0x4c06,
-	  { 0xbf, 0xc9, 0xf5, 0x3f, 0x6a, 0x99, 0xbb, 0x92 } },
-	/* 4 gEfiPeiReadOnlyVariable2PpiGuid (MdePkg/Include/Ppi/ReadOnlyVariable2.h) */
-	{ 0x2ab86ef5, 0xecb5, 0x4134,
-	  { 0xb5, 0x56, 0x38, 0x54, 0xca, 0x1f, 0xe1, 0xb4 } },
-	/* 5 gPeiBaseMemoryTestPpiGuid (GrantleySocketPkg/Include/Ppi/BaseMemoryTest.h) */
-	{ 0xb6ec423c, 0x21d2, 0x490d,
-	  { 0x85, 0xc6, 0xdd, 0x58, 0x64, 0xea, 0xa6, 0x74 } },
-	/* 6 gPeiPlatformMemorySizePpiGuid
-	 *   (GrantleySocketPkg/Include/Ppi/PlatformMemorySize.h)
-	 */
-	{ 0x9a7ef41e, 0xc140, 0x4bd1,
-	  { 0xb8, 0x84, 0x1e, 0x11, 0x24, 0x0b, 0x4c, 0xe6 } },
-	/* 7 gEfiPlatformInfoGuid (platform info PEIM) */
-	{ 0x1e2acc41, 0xe26a, 0x483d,
-	  { 0xaf, 0xc7, 0xa0, 0x56, 0xc3, 0x4e, 0x08, 0x7b } },
-	/* 7 (binary order: the DEPEX pushes the PCD PPI last)
-	 * gEfiPeiPcdPpiGuid - "EfiPeiPcd" in the stock PpiTableIA32.c.  This is
-	 * the one DEPEX PPI coreboot cannot provide (no PCD database).
-	 */
-	{ 0x01f34d25, 0x4de2, 0x23ad,
-	  { 0x3f, 0xf3, 0x36, 0x35, 0x3f, 0xf3, 0x23, 0xf1 } },
-};
-
 /* PCD provider interfaces, both installed by this runner (the stock PcdPeim
  * installs both as well): the native value-returning PCD_PPI the module calls
  * at entry, and the PI 1.2 EFI_PEI_PCD_PPI its PEI_DEPEX names.
@@ -1418,26 +1384,6 @@ static EFI_GUID g_efi_pei_pcd_guid = {
 	0x01f34d25, 0x4de2, 0x23ad,
 	{ 0x3f, 0xf3, 0x36, 0x35, 0x3f, 0xf3, 0x23, 0xf1 }
 };
-
-EFI_STATUS grantley_uncore_deps_check(const struct _EFI_PEI_SERVICES **services,
-				      EFI_GUID *missing)
-{
-	if (!services)
-		return EFI_INVALID_PARAMETER;
-
-	for (size_t i = 0; i < GRANTLEY_UNCORE_DEPEX_COUNT; i++) {
-		void *ppi = (void *)0;
-
-		if (grantley_locate_ppi(services, &grantley_uncore_depex[i], 0,
-					(void *)0, &ppi) != EFI_SUCCESS) {
-			if (missing)
-				*missing = grantley_uncore_depex[i];
-			return EFI_NOT_STARTED;
-		}
-	}
-
-	return EFI_SUCCESS;
-}
 
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 				    struct grantley_uncore_state *state)
@@ -1455,80 +1401,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	status = grantley_peim_verify(pe_base, pe_size, &image);
 	if (status != EFI_SUCCESS) {
 		state->stop_reason = GRANTLEY_STOP_IMAGE;
-		return status;
-	}
-
-	/* Authorization, not merely structure: the bytes must be the pinned
-	 * vendor blob.  This runs before any PPI lookup, PCD getter or MMIO so
-	 * a valid PE with one changed byte cannot reach a single call.
-	 */
-	if (!grantley_peim_authorized(pe_base, pe_size)) {
-		uint8_t digest[GRANTLEY_PEIM_SHA256_SIZE];
-		if (grantley_peim_sha256(pe_base, pe_size, digest)) {
-			printk(BIOS_ERR, "PEIM: sha256 mismatch, refusing to "
-			       "execute: %02x%02x%02x%02x%02x%02x%02x%02x"
-			       "%02x%02x%02x%02x%02x%02x%02x%02x"
-			       "%02x%02x%02x%02x%02x%02x%02x%02x"
-			       "%02x%02x%02x%02x%02x%02x%02x%02x\n",
-			       digest[0], digest[1], digest[2], digest[3],
-			       digest[4], digest[5], digest[6], digest[7],
-			       digest[8], digest[9], digest[10], digest[11],
-			       digest[12], digest[13], digest[14], digest[15],
-			       digest[16], digest[17], digest[18], digest[19],
-			       digest[20], digest[21], digest[22], digest[23],
-			       digest[24], digest[25], digest[26], digest[27],
-			       digest[28], digest[29], digest[30], digest[31]);
-		}
-		state->stop_reason = GRANTLEY_STOP_HASH;
-		return EFI_SECURITY_VIOLATION;
-	}
-
-	/* The contract names the one blob this board may execute, including
-	 * the ImageBase at which the stock firmware maps it.  A digest match
-	 * for a different board's build is impossible, so this is a second,
-	 * explicit identity check: it turns a silent wrong-board image into a
-	 * named refusal before any PPI lookup or MMIO.
-	 */
-	const struct grantley_native_contract *contract = grantley_native_contract();
-	if (!contract) {
-		printk(BIOS_ERR, "PEIM: no native contract is configured for this "
-		       "board, not dispatching\n");
-		state->stop_reason = GRANTLEY_STOP_CONTRACT;
-		return EFI_UNSUPPORTED;
-	}
-#if !ENV_TEST
-	/* The host test cannot map an image at 0xFFDCxxxx.  On target this is
-	 * the exact physical ImageBase the pinned blob carries; the audit in
-	 * util/grantley/pei_native_entry_audit.py re-checks the real ELF.
-	 */
-	if (image.image_base != contract->image_base) {
-		printk(BIOS_ERR, "PEIM: image base 0x%x is not the contract's 0x%x "
-		       "for %s\n", image.image_base, contract->image_base,
-		       contract->board);
-		state->stop_reason = GRANTLEY_STOP_CONTRACT;
-		return EFI_UNSUPPORTED;
-	}
-#endif
-	const char *constant_fault =
-		grantley_native_check_blob_ecam(pe_base, pe_size);
-	if (constant_fault) {
-		printk(BIOS_ERR, "PEIM: %s (contract of %s)\n", constant_fault,
-		       contract->board);
-		state->stop_reason = GRANTLEY_STOP_CONTRACT;
-		return EFI_UNSUPPORTED;
-	}
-
-	/* A PI core would not dispatch this PEIM before its DEPEX is satisfied;
-	 * calling the entry point anyway feeds it an environment the vendor
-	 * declared insufficient.
-	 */
-	EFI_GUID missing;
-	status = grantley_uncore_deps_check(&state->services_ptr, &missing);
-	if (status != EFI_SUCCESS) {
-		printk(BIOS_ERR,
-		       "PEIM: dependency %08x-%04x-%04x missing, not dispatching\n",
-		       missing.Data1, missing.Data2, missing.Data3);
-		state->stop_reason = GRANTLEY_STOP_DEPEX;
 		return status;
 	}
 

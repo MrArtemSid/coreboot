@@ -1,9 +1,8 @@
 # Native-entry image for the Envinda X99D4M4 (Grantley uncore, Lynx Point PCH).
 #
-# Enables the board's own native contract: the pinned UncoreInitPeim from
-# 3rdparty/blobs/mainboard/envinda/x99d4m4, its PE ImageBase (CBFS position),
-# and the compiled-in MMCFG datum check. The IntelSetup default comes from
-# intelsetup.bin in the same blob directory.
+# UncoreInitPeim and the IntelSetup default come from
+# 3rdparty/blobs/mainboard/envinda/x99d4m4; CBFS places the module at its PE
+# ImageBase.
 #
 # Every input is this board's own file: descriptor, ME and uncore come from
 # 3rdparty/blobs/mainboard/envinda/x99d4m4.  No QD4 blob or policy is used.

@@ -1,9 +1,8 @@
 # Native-entry image for the Huananzhi X99-QD4 (Grantley uncore, Q87 PCH).
 #
-# Enables the board's own native contract: the pinned UncoreInitPeim from
-# 3rdparty/blobs/mainboard/huananzhi/x99-series, its PE ImageBase (CBFS
-# position) and the runtime PCD token 1 value 0x80000000 the module asks for.
-# The IntelSetup default comes from intelsetup.bin in the same blob directory.
+# UncoreInitPeim and the IntelSetup default come from
+# 3rdparty/blobs/mainboard/huananzhi/x99-series; CBFS places the module at its
+# PE ImageBase and PCD token 1 returns the ECAM base 0x80000000.
 #
 # Every input is this board's own file: descriptor, ME and uncore come from
 # 3rdparty/blobs/mainboard/huananzhi/x99-series.  QD4 is the regression

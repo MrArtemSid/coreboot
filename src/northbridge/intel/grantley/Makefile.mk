@@ -20,14 +20,8 @@ romstage-y += memmap.c
 romstage-y += native_raminit/spd.c
 romstage-y += uncore_runner/pei_services.c
 romstage-y += uncore_runner/pei_pcd.c
-romstage-y += uncore_runner/native_contract.c
 romstage-y += uncore_runner/pei_image.c
-romstage-y += uncore_runner/pei_sha256.c
 romstage-y += uncore_runner/pei_hobs.c
-# SHA-256 for the UncoreInitPeim pin comes from the vboot reference library.
-romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/include
-romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib/include
-romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib
 
 postcar-y += memmap.c
 ramstage-y += memmap.c

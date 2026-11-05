@@ -1,7 +1,7 @@
 # Reference build for the Angxun X99-XD4 (Grantley uncore, Lynx Point PCH).
 #
-# Build-only: no native Uncore contract exists for this board yet, so
-# romstage stops before UncoreInitPeim is entered (post code 0xe6).
+# Build-only: UncoreInitPeim from this board's blob directory has not been
+# run on hardware.
 #
 # Inputs come from 3rdparty/blobs/mainboard/angxun/x99-xd4, which is outside
 # the pinned blob tree. A fresh clone cannot build this fragment until they

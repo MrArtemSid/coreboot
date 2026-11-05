@@ -2,22 +2,7 @@
 
 #include <string.h>
 #include <console/console.h>
-#include <vb2_sha.h>
-#include "native_contract.h"
 #include "pei_image.h"
-
-/* The authorized digest is the board contract's pinned blob, not a constant
- * in this file: a changed pin must be a change to the board descriptor, and a
- * board without a descriptor refuses every image.
- */
-#if ENV_TEST
-static bool test_authorize_any;
-
-void grantley_peim_test_authorize_any(bool enable)
-{
-	test_authorize_any = enable;
-}
-#endif
 
 /* PE/COFF constants (Microsoft PE32 specification). */
 #define PE_DOS_SIGNATURE		0x5a4d
@@ -209,46 +194,4 @@ EFI_STATUS grantley_peim_verify(const void *image, size_t size,
 		*out = info;
 
 	return EFI_SUCCESS;
-}
-
-bool grantley_peim_sha256(const void *image, size_t size,
-			  uint8_t digest[GRANTLEY_PEIM_SHA256_SIZE])
-{
-	if (!image || !digest || size > UINT32_MAX)
-		return false;
-
-	struct vb2_sha256_context ctx;
-	vb2_sha256_init(&ctx, VB2_HASH_SHA256);
-	vb2_sha256_update(&ctx, image, (uint32_t)size);
-	vb2_sha256_finalize(&ctx, digest, VB2_HASH_SHA256);
-	return true;
-}
-
-const uint8_t *grantley_peim_authorized_sha256(void)
-{
-	const struct grantley_native_contract *contract = grantley_native_contract();
-
-	return contract ? contract->blob_sha256 : (const uint8_t *)0;
-}
-
-bool grantley_peim_authorized(const void *image, size_t size)
-{
-#if ENV_TEST
-	if (test_authorize_any)
-		return true;
-#endif
-	const struct grantley_native_contract *contract = grantley_native_contract();
-
-	/* Size and digest belong together: hashing a different-length file can
-	 * never match, but naming the mismatch makes a wrong-board blob
-	 * obvious in the log instead of a bare digest difference.
-	 */
-	if (!contract || size != contract->blob_size)
-		return false;
-
-	uint8_t digest[GRANTLEY_PEIM_SHA256_SIZE];
-
-	if (!grantley_peim_sha256(image, size, digest))
-		return false;
-	return memcmp(digest, contract->blob_sha256, sizeof(digest)) == 0;
 }

@@ -95,17 +95,6 @@ int grantley_pcd_set_mmcfg_base(uint64_t base, uint64_t platform_mmcfg_base);
 /* Configured value (0 when none). */
 uint64_t grantley_pcd_mmcfg_base(void);
 
-/* Whether this board's contract requires Get64(1) to be answerable.
- *
- * Default true, which is the QD4 contract: the module calls Get64(1) at entry
- * and the value must be supplied before entry.  A board whose pinned build
- * does not call the getter (its MMCFG base is a compiled-in constant checked
- * against the blob bytes instead) calls this with false so an unrelated
- * token-1 gate cannot refuse an otherwise proven entry.  The PPI itself stays
- * installed either way because the PEI_DEPEX names it.
- */
-void grantley_pcd_set_token1_required(bool required);
-
 /* NULL when the provider can answer the PEIM's Get64(1); otherwise a static
  * description of the reason the entry must not happen.
  *

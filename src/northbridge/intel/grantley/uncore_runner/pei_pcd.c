@@ -13,10 +13,6 @@ static uint64_t platform_mmcfg_base;
 static enum grantley_pcd_fault fault;
 static uint32_t fault_token;
 static uint32_t sku_id;
-/* QD4's contract: entry needs a value.  A board whose pinned module reads a
- * compiled-in base instead clears this (see grantley_pcd_set_token1_required).
- */
-static bool token1_required = true;
 
 void grantley_pcd_reset(void)
 {
@@ -66,11 +62,6 @@ int grantley_pcd_set_mmcfg_base(uint64_t base, uint64_t platform_base)
 uint64_t grantley_pcd_mmcfg_base(void)
 {
 	return mmcfg_base;
-}
-
-void grantley_pcd_set_token1_required(bool required)
-{
-	token1_required = required;
 }
 
 enum grantley_pcd_fault grantley_pcd_fault(void)
@@ -504,7 +495,7 @@ const char *grantley_pcd_blocking_reason(void)
 		       "port does not support";
 	if (fault == GRANTLEY_PCD_FAULT_UNKNOWN_TOKEN)
 		return "the PEIM asked for a PCD token that is not in this build's database";
-	if (mmcfg_base == 0 && token1_required)
+	if (mmcfg_base == 0)
 		return "PCD token 1 (MMCFG/ECAM base) has no supplied value: refusing to "
 		       "enter the PEIM with a guessed or zero base";
 	return (const char *)0;
