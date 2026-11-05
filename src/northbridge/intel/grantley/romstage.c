@@ -10,8 +10,6 @@
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
-#include <device/smbus_host.h>
-#include <northbridge/intel/grantley/native_raminit/spd.h>
 #include <northbridge/intel/grantley/uncore_runner/pei_services.h>
 #include <post.h>
 #include <romstage_common.h>
@@ -49,17 +47,6 @@ void __noreturn romstage_main(void)
 		printk(BIOS_WARNING, "Grantley: unrecognized PCH %04x:%04x, "
 		       "continuing with unvalidated early setup\n",
 		       pch & 0xffff, pch >> 16);
-
-	/* Probe SMBus SPD on standard DIMM addresses (0x50..0x57) */
-	enable_smbus();
-	for (uint8_t addr = 0x50; addr <= 0x57; addr++) {
-		struct dimm_attr_ddr4_st dimm;
-		enum grantley_spd_status st = grantley_read_spd(smbus_base(), addr, &dimm);
-		if (st == GRANTLEY_SPD_OK) {
-			printk(BIOS_INFO, "DIMM at 0x%02x: %u MB, %u ranks, type %u, part %s\n",
-			       addr, dimm.size_mb, dimm.ranks, dimm.dimm_type, dimm.part_number);
-		}
-	}
 
 	/* Check for Intel Grantley Uncore reference blob (UncoreInitPeim) */
 	if (CONFIG(HAVE_INTEL_UNCORE_BIN)) {
