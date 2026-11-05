@@ -61,6 +61,9 @@ chip northbridge/intel/grantley
 						end
 					end
 				end
+				chip drivers/pc80/tpm
+					device pnp 0c31.0 on end # TPM on the JLPC1 header
+				end
 			end
 			device pci 1f.2 on end # SATA Controller (AHCI)
 			device pci 1f.3 on end # SMBus Controller
