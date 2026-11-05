@@ -51,17 +51,18 @@ static bool memory_map_valid(const struct grantley_memory_map *map)
 	 * (EdkMemoryQpiInit.c:2170-2235), so the TSEG can be smaller than
 	 * CONFIG_SMM_TSEG_SIZE. It only has to hold coreboot's SMM handler. */
 	if (!map || !map->count || map->count > GRANTLEY_MAX_MEMORY_RANGES ||
-	    map->smram_base < MiB || map->smram_base >= 0x100000000ULL ||
+	    map->smram_base < MiB || map->smram_base >= 4ULL * GiB ||
 	    map->smram_size < CONFIG_SMM_RESERVED_SIZE || !map->smram_size ||
-	    map->smram_size > 0x100000000ULL - map->smram_base ||
-	    ((map->smram_base | map->smram_size) & 0xfff))
+	    map->smram_size > 4ULL * GiB - map->smram_base ||
+	    !IS_ALIGNED(map->smram_base | map->smram_size, 4 * KiB))
 		return false;
 	reserved_end = map->smram_base;
 	for (unsigned int i = 0; i < map->count; i++) {
 		const struct grantley_memory_range *range = &map->ranges[i];
 
 		if (!range->size || range->size > UINT64_MAX - range->base ||
-		    range->base < previous_end || ((range->base | range->size) & 0xfff) ||
+		    range->base < previous_end ||
+		    !IS_ALIGNED(range->base | range->size, 4 * KiB) ||
 		    (range->type != GRANTLEY_MEMORY_RAM &&
 		     range->type != GRANTLEY_MEMORY_RESERVED_RAM))
 			return false;
