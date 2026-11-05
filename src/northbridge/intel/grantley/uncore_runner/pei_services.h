@@ -54,7 +54,6 @@ struct grantley_uncore_state {
 	EFI_PHYSICAL_ADDRESS dram_base;
 	UINT64 dram_size;
 	BOOLEAN dram_initialized;
-	BOOLEAN memory_test_failed;
 };
 
 /* Serve this payload as the IntelSetup variable; NULL means none. */

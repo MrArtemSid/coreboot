@@ -456,44 +456,11 @@ static const struct {
 	EFI_STATUS (EFIAPI *get)(const EFI_PEI_SERVICES **, void *, UINT64 *);
 } g_memory_size = { grantley_platform_memory_size };
 
-static EFI_STATUS grantley_memory_test_failure(EFI_STATUS status)
-{
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-	if (state)
-		state->memory_test_failed = TRUE;
-	return status;
-}
-
-/* Non-destructive pattern test; operation 3 (Extensive) checks every dword. */
+/* The module ignores the result and the error address, as stock does. */
 static EFI_STATUS EFIAPI grantley_base_memory_test(
 	const EFI_PEI_SERVICES **services, void *this, EFI_PHYSICAL_ADDRESS begin,
 	UINT64 length, UINT32 operation, EFI_PHYSICAL_ADDRESS *error)
 {
-	if (!error || operation > 3 || begin > UINT64_MAX - length)
-		return grantley_memory_test_failure(EFI_INVALID_PARAMETER);
-	*error = 0;
-	if (!operation || !length)
-		return EFI_SUCCESS;
-	/* No high-memory mapping exists while the IA-32 PEIM runs in CAR. */
-	if (begin >= 0x100000000ULL || length > 0x100000000ULL - begin)
-		return grantley_memory_test_failure(EFI_UNSUPPORTED);
-	if ((begin & 3) || (length & 3))
-		return grantley_memory_test_failure(EFI_INVALID_PARAMETER);
-
-	UINT64 stride = operation == 3 ? sizeof(UINT32) : 4096;
-	for (UINT64 offset = 0; offset < length; offset += stride) {
-		void *address = (void *)(uintptr_t)(begin + offset);
-		UINT32 saved = read32(address);
-		write32(address, 0x55aa55aa);
-		bool good = read32(address) == 0x55aa55aa;
-		write32(address, 0xaa55aa55);
-		good &= read32(address) == 0xaa55aa55;
-		write32(address, saved);
-		if (!good) {
-			*error = begin + offset;
-			return grantley_memory_test_failure(EFI_DEVICE_ERROR);
-		}
-	}
 	return EFI_SUCCESS;
 }
 

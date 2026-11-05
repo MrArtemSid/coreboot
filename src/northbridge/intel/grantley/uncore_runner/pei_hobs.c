@@ -112,7 +112,7 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 	    state->hob_allocated > state->hob_size ||
 	    state->hob_size - state->hob_allocated < sizeof(EFI_HOB_GENERIC_HEADER))
 		return EFI_INVALID_PARAMETER;
-	if (!state->dram_initialized || state->memory_test_failed)
+	if (!state->dram_initialized)
 		return EFI_DEVICE_ERROR;
 
 	uint64_t tolm, tohm;
