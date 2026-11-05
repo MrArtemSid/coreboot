@@ -1,6 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-if BOARD_ANGXUN_X99_XD4
+if BOARD_MACHINIST_X99_B9
 
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
@@ -15,10 +15,10 @@ config BOARD_SPECIFIC_OPTIONS
 	select HAVE_ACPI_TABLES
 
 config MAINBOARD_DIR
-	default "angxun/x99-xd4"
+	default "machinist/x99-b9"
 
 config MAINBOARD_PART_NUMBER
-	default "X99-XD4"
+	default "X99 B9"
 
 config BOOTBLOCK_CONSOLE
 	default y
@@ -26,4 +26,4 @@ config BOOTBLOCK_CONSOLE
 config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
 	default 0x2d6
 
-endif # BOARD_ANGXUN_X99_XD4
+endif # BOARD_MACHINIST_X99_B9

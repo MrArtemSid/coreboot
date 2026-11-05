@@ -4,7 +4,7 @@
 
 /*
  * Generic Grantley + Lynx Point desktop DSDT.  No board-specific device is
- * described here: the X99-XD4 thermal and fan ACPI surfaces have not been
+ * described here: the X99 B9 thermal and fan ACPI surfaces have not been
  * recovered.  The Super I/O LDNs are emitted by the driver's own SSDT
  * generator for the nodes the devicetree declares (only LDN 5 is enabled),
  * so nothing is added for it here.

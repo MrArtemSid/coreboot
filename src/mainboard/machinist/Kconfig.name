@@ -1,4 +1,4 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-config VENDOR_ANGXUN
-	bool "Angxun"
+config VENDOR_MACHINIST
+	bool "Machinist"

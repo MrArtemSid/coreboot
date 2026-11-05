@@ -1,0 +1,14 @@
+Vendor name: Machinist
+Board name: X99 B9
+Category: desktop
+ROM protocol: SPI
+ROM socketed: n
+Flashrom support: y
+
+Notes:
+The board owner identified this board as Machinist X99 B9. The earlier
+Angxun X99-XD4 identification was incorrect. Firmware filenames and
+BIOS ID strings from that earlier identification do not establish the
+physical board model. Existing hardware settings are unchanged by this
+naming correction and need separate validation against this board.
+Board sources and stock logs: https://github.com/MrArtemSid/coreboot_machinist_x99-b9

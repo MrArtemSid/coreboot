@@ -1,0 +1,15 @@
+# Native-entry configuration for the Machinist X99 B9.
+# Grantley uncore and Lynx Point PCH; existing hardware settings retained.
+#
+# Expected local inputs: 3rdparty/blobs/mainboard/machinist/x99-b9.
+# The name correction does not revalidate firmware input provenance or
+# TOLM/TSEG/InstallPeiMemory timing. These inputs must be supplied locally.
+# Board sources and stock logs: https://github.com/MrArtemSid/coreboot_machinist_x99-b9
+CONFIG_ANY_TOOLCHAIN=y
+CONFIG_VENDOR_MACHINIST=y
+CONFIG_BOARD_MACHINIST_X99_B9=y
+CONFIG_CBFS_SIZE=0x800000
+CONFIG_HAVE_IFD_BIN=y
+CONFIG_HAVE_ME_BIN=y
+CONFIG_HAVE_INTEL_UNCORE_BIN=y
+CONFIG_ON_DEVICE_ROM_LOAD=y
