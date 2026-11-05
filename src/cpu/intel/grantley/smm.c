@@ -99,13 +99,9 @@ void grantley_smm_relocation_handler(int cpu, uintptr_t current_smbase,
 
 void grantley_cpu_finalize(struct device *dev)
 {
-	/* Lock trusted IIO memory-map registers after PCI resource assignment.
-	 * This is package scoped; the current port supports socket 0 only. */
-	msr_t control = rdmsr(GRANTLEY_MSR_LT_CONTROL);
-	control.lo |= 1;
-	wrmsr(GRANTLEY_MSR_LT_CONTROL, control);
+	/* Lock the IIO memory map like the vendor IioInit: write 1, no RMW. */
 	if (!(rdmsr(GRANTLEY_MSR_LT_CONTROL).lo & 1))
-		die("Grantley: failed to lock memory configuration\n");
+		msr_write(GRANTLEY_MSR_LT_CONTROL, 0x1);
 }
 
 void grantley_smm_lock(void)
