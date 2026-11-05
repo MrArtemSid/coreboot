@@ -91,12 +91,6 @@ void __noreturn romstage_main(void)
 			printk(BIOS_INFO, "Grantley: IntelSetup %zu bytes from CBFS\n",
 			       setup_size);
 
-		status = grantley_pei_set_mmcfg(CONFIG_ECAM_MMCONF_BASE_ADDRESS);
-		if (status != EFI_SUCCESS) {
-			post_code(0xee);
-			die("Grantley: uncore configuration routing failed\n");
-		}
-
 		struct grantley_board_identity identity = { 0 };
 		if (mainboard_get_board_identity(&identity)) {
 			status = grantley_pei_set_board_identity(&uncore_state,

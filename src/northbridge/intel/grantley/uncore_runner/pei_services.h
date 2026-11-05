@@ -65,9 +65,6 @@ struct grantley_uncore_state {
 	BOOLEAN memory_test_failed;
 };
 
-/* Check, or establish, the Uncore ECAM route at mmcfg_base. */
-EFI_STATUS grantley_pei_set_mmcfg(uintptr_t mmcfg_base);
-
 /* Serve this payload as the IntelSetup variable; NULL means none. */
 void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,
 				 const void *data, size_t size);
