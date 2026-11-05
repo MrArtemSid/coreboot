@@ -3,7 +3,6 @@
 #ifndef NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H
 #define NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H
 
-#include <rules.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <PiPei.h>
@@ -40,12 +39,6 @@ struct grantley_uncore_state {
 	UINTN ppi_count;
 	EFI_PEI_PPI_DESCRIPTOR platform_info_ppi;
 
-	/* Why grantley_run_uncore_peim() refused to enter the module. */
-	enum grantley_uncore_stop {
-		GRANTLEY_STOP_NONE = 0,
-		GRANTLEY_STOP_IMAGE,
-	} stop_reason;
-
 	/* IntelSetup default variable served to the PEIM, or NULL. */
 	const void *setup;
 	size_t setup_size;
@@ -71,16 +64,6 @@ struct grantley_uncore_state {
 	BOOLEAN dram_initialized;
 	BOOLEAN memory_test_failed;
 };
-
-/* Global or context accessor for PEI services */
-#if ENV_SEPARATE_ROMSTAGE || ENV_TEST
-struct grantley_uncore_state *grantley_get_uncore_state(void);
-#else
-static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
-{
-	return ((void *)0);
-}
-#endif
 
 /* Check, or establish, the Uncore ECAM route at mmcfg_base. */
 EFI_STATUS grantley_pei_set_mmcfg(uintptr_t mmcfg_base);

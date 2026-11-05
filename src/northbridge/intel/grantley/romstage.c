@@ -124,9 +124,8 @@ void __noreturn romstage_main(void)
 		status = grantley_run_uncore_peim(uncore_bin, uncore_size,
 						  &uncore_state);
 		if (status != EFI_SUCCESS) {
-			printk(BIOS_ERR, "Grantley: uncore PEIM not run: 0x%lx "
-			       "(stop %d)\n", (unsigned long)status,
-			       uncore_state.stop_reason);
+			printk(BIOS_ERR, "Grantley: uncore PEIM failed: 0x%lx\n",
+			       (unsigned long)status);
 			post_code(0xe4);
 			die("Grantley: uncore memory initialization failed!\n");
 		}

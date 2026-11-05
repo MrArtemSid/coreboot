@@ -7,20 +7,9 @@
 #include <device/mmio.h>
 #include <post.h>
 #include <console/console.h>
-/* Forward declaration of I/O and PCI operations */
-#if !defined(__TESTS__)
 #include <arch/io.h>
 #include <cpu/cpu.h>
 #include <device/pci_ops.h>
-#else
-/* Test stubs or mock declarations for unit testing */
-static inline uint8_t inb(uint16_t port) { return 0xff; }
-static inline uint16_t inw(uint16_t port) { return 0xffff; }
-static inline uint32_t inl(uint16_t port) { return 0xffffffff; }
-static inline void outb(uint8_t val, uint16_t port) { }
-static inline void outw(uint16_t val, uint16_t port) { }
-static inline void outl(uint32_t val, uint16_t port) { }
-#endif
 #undef NULL
 #include "pei_services.h"
 #include "pei_image.h"
@@ -28,7 +17,7 @@ static inline void outl(uint32_t val, uint16_t port) { }
 
 static struct grantley_uncore_state *g_state;
 
-struct grantley_uncore_state *grantley_get_uncore_state(void)
+static struct grantley_uncore_state *grantley_get_uncore_state(void)
 {
 	return g_state;
 }
@@ -258,14 +247,6 @@ static EFI_STATUS EFIAPI grantley_report_status_code(
 	return EFI_SUCCESS;
 }
 
-#if ENV_TEST
-uint32_t grantley_test_route_read32(uint32_t dev, uint16_t reg, uintptr_t base);
-void grantley_test_route_write32(uint32_t dev, uint16_t reg, uintptr_t base, uint32_t value);
-uint32_t grantley_test_route_cpuid(void);
-#define route_read32 grantley_test_route_read32
-#define route_write32 grantley_test_route_write32
-#define route_cpuid grantley_test_route_cpuid
-#else
 static uint32_t route_read32(pci_devfn_t dev, uint16_t reg, uintptr_t base)
 {
 	if (base)
@@ -285,7 +266,6 @@ static uint32_t route_cpuid(void)
 {
 	return cpuid_eax(1);
 }
-#endif
 
 EFI_STATUS grantley_pei_set_mmcfg(uintptr_t base)
 {
@@ -695,7 +675,6 @@ static EFI_STATUS EFIAPI grantley_get_next_variable_name(
 }
 
 /* IA-32 implicit PEI services pointer: the dword before IDTR.base is PeiServices **. */
-#if !ENV_TEST
 struct grantley_peim_idtr {
 	uint16_t limit;
 	uint32_t base;
@@ -712,7 +691,6 @@ _Static_assert(sizeof(struct grantley_peim_idtr) == 6, "IA-32 IDTR size");
 _Static_assert(offsetof(__typeof__(peim_idt), gates) -
 	       offsetof(__typeof__(peim_idt), services) == 4,
 	       "PEI services double pointer immediately precedes IDT");
-#endif
 
 typedef EFI_STATUS (*grantley_peim_entry_t)(
 	void *file_handle,
@@ -724,34 +702,25 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	if (!pe_base || !state)
 		return EFI_INVALID_PARAMETER;
 
-	state->stop_reason = GRANTLEY_STOP_NONE;
-
 	uintptr_t exec_addr = (uintptr_t)pe_base;
 	EFI_STATUS status = EFI_SUCCESS;
 	grantley_peim_entry_t entry_point;
 
 	struct grantley_peim_image image;
 	status = grantley_peim_verify(pe_base, pe_size, &image);
-	if (status != EFI_SUCCESS) {
-		state->stop_reason = GRANTLEY_STOP_IMAGE;
+	if (status != EFI_SUCCESS)
 		return status;
-	}
 
-	/* EFI ImageBase is a 32-bit PE field.  On the IA-32 target this is the
-	 * real in-place contract; the 64-bit host test binary cannot be mapped
-	 * below 4 GiB, so there the low 32 bits are compared.
-	 */
-	if ((uint32_t)exec_addr != image.image_base) {
+	/* There is no loader: the image runs in place at its ImageBase. */
+	if (exec_addr != image.image_base) {
 		printk(BIOS_ERR, "PEIM: image base 0x%x, mapped at 0x%lx; this port "
 		       "executes the image in place and has no loader\n",
 		       image.image_base, (unsigned long)exec_addr);
-		state->stop_reason = GRANTLEY_STOP_IMAGE;
 		return EFI_UNSUPPORTED;
 	}
 	if (!image.xip_compatible) {
 		printk(BIOS_ERR, "PEIM: image sections are not laid out for in-place "
 		       "execution\n");
-		state->stop_reason = GRANTLEY_STOP_IMAGE;
 		return EFI_UNSUPPORTED;
 	}
 
@@ -767,13 +736,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 		CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64;
 	const void *services_arg = &state->services_ptr;
 
-#if ENV_TEST
-	/* Host tests cannot execute an IA-32 PEIM or switch to firmware CAR. */
-	(void)car_stack_top;
-	(void)services_arg;
-	(void)entry_point;
-	status = EFI_UNSUPPORTED;
-#else
 	struct grantley_peim_idtr saved_idtr;
 	struct grantley_peim_idtr peim_idtr = {
 		.limit = sizeof(peim_idt.gates) - 1,
@@ -807,7 +769,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	);
 	/* Restore even when the PEIM returns an EFI error. */
 	__asm__ __volatile__("lidt %0" : : "m"(saved_idtr) : "memory");
-#endif
 
 	return status;
 }
@@ -1094,21 +1055,6 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 {
 	if (!state || !pool_buf || !hob_buf)
 		return EFI_INVALID_PARAMETER;
-	uintptr_t pool_start = (uintptr_t)pool_buf;
-	uintptr_t hob_start = (uintptr_t)hob_buf;
-	uintptr_t state_start = (uintptr_t)state;
-	if ((pool_start & 7) || (hob_start & 7) ||
-	    pool_size > UINTPTR_MAX - pool_start || hob_size > UINTPTR_MAX - hob_start ||
-	    sizeof(*state) > UINTPTR_MAX - state_start)
-		return EFI_INVALID_PARAMETER;
-	uintptr_t pool_end = pool_start + pool_size;
-	uintptr_t hob_end = hob_start + hob_size;
-	uintptr_t state_end = state_start + sizeof(*state);
-	if ((pool_start < hob_end && hob_start < pool_end) ||
-	    (pool_start < state_end && state_start < pool_end) ||
-	    (hob_start < state_end && state_start < hob_end))
-		return EFI_INVALID_PARAMETER;
-
 	if (hob_size < sizeof(EFI_HOB_HANDOFF_INFO_TABLE) + sizeof(EFI_HOB_GUID_TYPE) +
 	    256 + sizeof(EFI_HOB_GENERIC_HEADER))
 		return EFI_BUFFER_TOO_SMALL;
@@ -1122,7 +1068,6 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	state->services.PciCfg = (EFI_PEI_PCI_CFG2_PPI *)&g_pci_cfg;
 
 	state->boot_mode = BOOT_WITH_FULL_CONFIGURATION;
-	state->stop_reason = GRANTLEY_STOP_NONE;
 	UINTN (EFIAPI **pcd_slot)(void) = (void *)&g_pcd;
 	for (size_t i = 0; i < sizeof(g_pcd) / sizeof(*pcd_slot); i++)
 		pcd_slot[i] = grantley_pcd_unsupported;
