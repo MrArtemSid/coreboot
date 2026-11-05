@@ -9,6 +9,7 @@
 #include <cpu/intel/grantley/grantley.h>
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <acpi/acpi.h>
+#include <acpi/acpigen_pci.h>
 #include <cpu/intel/microcode.h>
 #include <cpu/x86/msr.h>
 #include <cpu/x86/smm.h>
@@ -18,6 +19,10 @@
 #include "chip.h"
 #include "platform.h"
 #include "memmap.h"
+
+#define GRANTLEY_MMIOL_END		0xfc000000ULL
+#define GRANTLEY_MMIOH_BASE		0x380000000000ULL
+#define GRANTLEY_MMIOH_END		0x384000000000ULL
 
 #define OC_MBOX_PLANE_CORE		0
 #define OC_MBOX_PLANE_CACHE		2
@@ -81,14 +86,11 @@ static void grantley_domain_read_resources(struct device *dev)
 	const struct grantley_memory_map *map = grantley_get_memory_map();
 	int idx = 10;
 
-	pci_domain_read_resources(dev);
-	/* PCI BAR allocation must not land inside the ECAM aperture that the
-	 * bootblock routed and the MCFG reports to the OS. The IIO limit
-	 * register (0xa8/0xac path, early_startup.inc:97-99) stores address bits
-	 * 31:26, so its decoding covers through the end of that 64 MiB block, not
-	 * up to the encoded value: the last decoded byte is 0x8fffffff. That makes
-	 * the segment 0x10000000 bytes for 256 buses, and mmio_from_to() takes an
-	 * exclusive end, so the reserved window is [BASE, END) = 256 MiB. */
+	/* The windows the Uncore RC programs into the IIO for socket 0. */
+	domain_io_window_from_to(dev, 0, 0, 0x10000);
+	domain_mem_window_from_to(dev, 1, GRANTLEY_ECAM_END, GRANTLEY_MMIOL_END);
+	domain_mem_window_from_to(dev, 2, GRANTLEY_MMIOH_BASE, GRANTLEY_MMIOH_END);
+	/* Report ECAM as reserved; the MMIOL window starts right above it. */
 	mmio_from_to(dev, idx++, GRANTLEY_ECAM_BASE, GRANTLEY_ECAM_END);
 	mmio_from_to(dev, idx++, 0xa0000, 0xc0000);
 
@@ -126,6 +128,13 @@ static void grantley_domain_set_resources(struct device *dev)
 _Static_assert(CONFIG_ECAM_MMCONF_BASE_ADDRESS == GRANTLEY_ECAM_BASE,
 	       "ECAM base must match the bootblock route");
 
+static void grantley_domain_scan_bus(struct device *dev)
+{
+	/* Bus 0xff carries the socket 0 uncore devices, as on stock firmware. */
+	dev->downstream->max_subordinate = GRANTLEY_WARM_UNCORE_BUS - 1;
+	pci_host_bridge_scan_bus(dev);
+}
+
 static const char *grantley_domain_acpi_name(const struct device *dev)
 {
 	return dev->path.type == DEVICE_PATH_DOMAIN ? "PCI0" : NULL;
@@ -134,8 +143,9 @@ static const char *grantley_domain_acpi_name(const struct device *dev)
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
 	.set_resources    = grantley_domain_set_resources,
-	.scan_bus         = pci_host_bridge_scan_bus,
+	.scan_bus         = grantley_domain_scan_bus,
 	.acpi_name        = grantley_domain_acpi_name,
+	.acpi_fill_ssdt   = pci_domain_fill_ssdt,
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
