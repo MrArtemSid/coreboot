@@ -6,12 +6,15 @@
 # TOLM/TSEG/InstallPeiMemory timing. These inputs must be supplied locally.
 # Board sources and stock logs: https://github.com/MrArtemSid/coreboot_machinist_x99-b9
 #
-# Existing input hashes are identifiers, not proof of board ownership:
-#   descriptor.bin   4096      sha256 9ee9d284bfec565e49bf5934e1d3800f8d57351844d7460bd09d281d44af9d4d
-#   me.bin           8384512   sha256 04b63494d57ac598c026bff9fe7bb392e5129c5800ec5779dd247e57aec8f414
-#   uncore.bin       605504    sha256 2b1709e0e0a5b22dcaf207b797bbfb65a4ff89cc6ff2633e3b5d314c23b0d81c
+# Inputs from MrArtemSid/coreboot_blobs commit 3f45017910ac3933f12a13132a6601df30a804f8.
+# Hashes identify these inputs; they do not prove board ownership:
+#   descriptor.bin   4096      sha256 eb656911ee73a1c2fe947517b178e687bee60430f97cc08b66f7947fd3b83477
+#   intelsetup.bin   6090      sha256 3b56c84926ec75df36ac936224dd251add5aee08b9e2c000bf526e0d9c65a495
+#   me.bin           8384512   sha256 bb7bf87470a0d2810875732684730930fce34580c628350b5e111dc33be03069
+#   uncore.bin       766272    sha256 1bdcdbbc5ed2d38b80f89e677502ebe73dd358907c435a5a3967be433fe07673
 CONFIG_ANY_TOOLCHAIN=y
 CONFIG_VENDOR_MACHINIST=y
 CONFIG_BOARD_MACHINIST_X99_B9=y
+CONFIG_TPM2=y
 CONFIG_CBFS_SIZE=0x800000
 CONFIG_HAVE_INTEL_UNCORE_BIN=y
