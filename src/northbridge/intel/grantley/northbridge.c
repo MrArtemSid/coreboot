@@ -81,7 +81,7 @@ static void grantley_domain_read_resources(struct device *dev)
 
 	pci_domain_read_resources(dev);
 	/* PCI BAR allocation must not land inside the ECAM aperture that the
-	 * romstage routed and acpi_fill_mcfg() reports to the OS. The IIO limit
+	 * bootblock routed and the MCFG reports to the OS. The IIO limit
 	 * register (0xa8/0xac path, early_startup.inc:97-99) stores address bits
 	 * 31:26, so its decoding covers through the end of that 64 MiB block, not
 	 * up to the encoded value: the last decoded byte is 0x8fffffff. That makes
@@ -121,15 +121,8 @@ static void grantley_domain_set_resources(struct device *dev)
 	assign_resources(dev->downstream);
 }
 
-#if CONFIG(HAVE_ACPI_TABLES)
-/* The romstage routes the single 256-bus ECAM segment at a fixed base
- * before the Uncore blob runs; report the same window to the OS. */
-unsigned long acpi_fill_mcfg(acpi_mcfg_t *mcfg, unsigned long current)
-{
-	return current + acpi_create_mcfg_mmconfig((void *)current,
-						   GRANTLEY_ECAM_BASE, 0, 0, 255);
-}
-#endif
+_Static_assert(CONFIG_ECAM_MMCONF_BASE_ADDRESS == GRANTLEY_ECAM_BASE,
+	       "ECAM base must match the bootblock route");
 
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
