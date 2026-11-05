@@ -85,29 +85,14 @@ config GRANTLEY_NATIVE_CONTRACT_D4M4
 	  base compiled into the blob at PE+0x106B8.  Set only by the board
 	  Kconfig.
 
-config GRANTLEY_INTELSETUP_STOCK_QD4
-	bool "Serve the QD4 stock IntelSetup payload to UncoreInitPeim"
-	depends on GRANTLEY_NATIVE_CONTRACT_QD4
-	default n
+config GRANTLEY_INTELSETUP_FILE
+	string "IntelSetup default variable path and filename"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/intelsetup.bin"
 	help
-	  The 6091-byte IntelSetup factory default in pei_intelsetup_stock.h was
-	  extracted from the X99-QD4 BIOS.  It is board data, not a portable
-	  structure, so it is served only when this option is enabled.  With it
-	  off, GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM uses
-	  its own ZeroMem(0x17CB) + IIO default path (EccSupport = 0/DIS, every
-	  other policy field zero).
-
-config GRANTLEY_INTELSETUP_STOCK_D4M4
-	bool "Serve the X99D4M4 stock IntelSetup payload to UncoreInitPeim"
-	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
-	default n
-	help
-	  The 6090-byte IntelSetup factory default in pei_intelsetup_d4m4.h was
-	  extracted from the X99D4M4 BIOS image.  It is that board's own data,
-	  not QD4's and not a portable structure, so it is served only when this
-	  option is enabled for this board.  With it off,
-	  GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM uses its
-	  own ZeroMem(0x17CA) + IIO default path.
+	  Raw IntelSetup (SYSTEM_CONFIGURATION) payload served to
+	  UncoreInitPeim. When the file does not exist, the variable is not
+	  provided and the module uses its built-in defaults.
 
 config GRANTLEY_UNCORE_RC_SERIAL
 	bool "Enable UncoreInitPeim serial debug output"

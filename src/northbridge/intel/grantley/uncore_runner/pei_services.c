@@ -6,7 +6,6 @@
 #include <cf9_reset.h>
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <device/mmio.h>
-#include <drivers/efi/efivars.h>
 #include <post.h>
 #include <console/console.h>
 /* Forward declaration of I/O and PCI operations */
@@ -1272,13 +1271,14 @@ static EFI_STATUS EFIAPI grantley_cpu_io_write(
 	return EFI_SUCCESS;
 }
 
-void grantley_pei_set_var_store(struct grantley_uncore_state *state,
-				const struct region_device *rdev)
+void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,
+				 const void *data, size_t size)
 {
 	if (!state)
 		return;
 
-	state->var_store_rdev = rdev;
+	state->setup = data;
+	state->setup_size = data ? size : 0;
 }
 
 EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
@@ -1294,147 +1294,14 @@ EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
 	return EFI_SUCCESS;
 }
 
-void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
-				 uint16_t max_dram_speed_mts,
-				 uint8_t tcl, uint8_t trcd, uint8_t trp,
-				 uint8_t tras, uint8_t command_rate, bool ecc_en)
+static bool grantley_is_intelsetup(const CHAR16 *name)
 {
-	if (!state)
-		return;
+	static const char setup_name[] = "IntelSetup";
 
-	state->max_dram_speed_mts = max_dram_speed_mts;
-	state->tcl = tcl;
-	state->trcd = trcd;
-	state->trp = trp;
-	state->tras = tras;
-	state->command_rate = command_rate;
-	state->ecc_en = ecc_en;
-
-	/* Only DdrFreqLimit and EccSupport have byte-proven offsets in the stock
-	 * SYSTEM_CONFIGURATION (0x1248 and 0x11FF).  The timing/command-rate
-	 * fields are not at 0x70..0x75 in the real structure and their true
-	 * offsets are unproven, so they are refused instead of written blindly.
-	 */
-	if (tcl || trcd || trp || tras || command_rate)
-		printk(BIOS_WARNING, "IntelSetup: timing overrides have no verified "
-		       "SYSTEM_CONFIGURATION offset and are NOT applied\n");
-}
-
-const uint8_t *grantley_intelsetup_stock(void)
-{
-	const struct grantley_native_contract *contract = grantley_native_contract();
-
-	return contract ? contract->intelsetup_payload : (const uint8_t *)0;
-}
-
-/* Fail closed: a board must call grantley_intelsetup_allow_stock(true) to
- * serve its own factory variable.  The release/native-off paths never do.
- */
-static bool intelsetup_stock_allowed;
-
-void grantley_intelsetup_allow_stock(bool enable)
-{
-	intelsetup_stock_allowed = enable;
-}
-
-/* DdrFreqLimit enum from MemHost.h; the values are the ones the stock setup
- * uses (0 = AUTO, 5 = DDR1333 ... 13 = DDR2400).
- */
-/*
- * L"IntelSetup" (SYSTEM_CONFIGURATION) for UncoreInitPeim.
- *
- * The variable's size and bytes belong to the board contract: 6091 bytes on
- * QD4, 6090 on X99D4M4.  The two field offsets (DdrFreqLimit 0x1248,
- * EccSupport 0x11FF) are proven for QD4; on X99D4M4 only the payload identity
- * is proven (that board's own NVAR bytes), its field semantics are not, so
- * its contract sets intelsetup_offsets_proven = false and the payload is
- * served verbatim.  Nothing else is interpreted on either board.
- * Three cases:
- *
- *  - live variable in the attached EFI store: returned verbatim, but only at
- *    the contract's exact size (a short policy buffer is what the PEIM would
- *    trust blindly);
- *  - no live variable: the board's own stock default payload, and only when
- *    that board's Kconfig option compiled it in; where the contract says the
- *    offsets are proven, only EccSupport (0x11FF) can be overridden and
- *    DdrFreqLimit (0x1248) keeps the stock AUTO because the per-speed enum is
- *    not byte-proven; where they are not proven, no byte is touched;
- *  - anything else: EFI_NOT_FOUND / EFI_BUFFER_TOO_SMALL, never a fabricated
- *    size or a zero-filled buffer that silently means ECC_DIS, and never
- *    another board's bytes.
- */
-static EFI_STATUS grantley_intelsetup_variable(struct grantley_uncore_state *state,
-					       void *data, UINTN *data_size,
-					       UINT32 *attributes, enum cb_err err,
-					       uint32_t live_size)
-{
-	const struct grantley_native_contract *contract = grantley_native_contract();
-	const uint32_t policy_size = contract ? contract->intelsetup_size : 0;
-	const uint8_t *policy = contract ? contract->intelsetup_payload : (const uint8_t *)0;
-
-	if (err == CB_EFI_BUFFER_TOO_SMALL) {
-		if (!policy_size)
-			return EFI_NOT_FOUND;
-		*data_size = policy_size;
-		return EFI_BUFFER_TOO_SMALL;
-	}
-
-	if (err == CB_SUCCESS) {
-		if (!policy_size || live_size != policy_size) {
-			printk(BIOS_ERR, "IntelSetup: live variable is 0x%x bytes, "
-			       "expected 0x%x; refusing to hand it to the PEIM\n",
-			       live_size, policy_size);
-			return EFI_NOT_FOUND;
-		}
-		printk(BIOS_INFO, "IntelSetup: %u bytes from the live EFI variable\n",
-		       live_size);
-		*data_size = policy_size;
-		if (attributes)
-			*attributes = 0;
-		return EFI_SUCCESS;
-	}
-
-	/* Platform defaults: the exact stock payload, not a synthetic struct.
-	 * The payload is board-specific; when this board did not compile its own
-	 * payload in, answer EFI_NOT_FOUND and let the PEIM use its own
-	 * ZeroMem + IIO defaults.
-	 */
-	if (!intelsetup_stock_allowed || !policy || !policy_size)
-		return EFI_NOT_FOUND;
-
-	memcpy(data, policy, policy_size);
-
-	uint8_t *setup = data;
-	if (contract->intelsetup_offsets_proven) {
-		/* DdrFreqLimit's offset is proven (0x1248, stock value 0 = AUTO)
-		 * but the enum for a *specific* speed is not: the stock images
-		 * only ever contain 0, so writing 0x05/0x07/0x0B/... for a
-		 * requested speed would be an unverified enum guess.  Refuse it
-		 * and keep AUTO.
-		 */
-		if (state->max_dram_speed_mts)
-			printk(BIOS_WARNING, "IntelSetup: DdrFreqLimit=%u MT/s has no "
-			       "byte-proven SYSTEM_CONFIGURATION enum; keeping AUTO (0)\n",
-			       state->max_dram_speed_mts);
-		if (state->ecc_en)
-			setup[GRANTLEY_INTELSETUP_OFF_ECC_SUPPORT] =
-				GRANTLEY_INTELSETUP_ECC_ENABLED;
-	}
-
-#if CONFIG(GRANTLEY_UNCORE_RC_SERIAL)
-	setup[GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL] =
-		GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN;
-#endif
-
-	printk(BIOS_INFO, "IntelSetup: %u stock default bytes, "
-	       "DdrFreqLimit=%u EccSupport=%u\n", policy_size,
-	       setup[GRANTLEY_INTELSETUP_OFF_DDR_FREQ_LIMIT],
-	       setup[GRANTLEY_INTELSETUP_OFF_ECC_SUPPORT]);
-
-	*data_size = policy_size;
-	if (attributes)
-		*attributes = 0;
-	return EFI_SUCCESS;
+	for (size_t i = 0; i < sizeof(setup_name); i++)
+		if (name[i] != (CHAR16)setup_name[i])
+			return false;
+	return true;
 }
 
 static EFI_STATUS EFIAPI grantley_get_variable(
@@ -1445,77 +1312,31 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	UINTN *data_size,
 	void *data)
 {
+	static const EFI_GUID setup_guid = GRANTLEY_INTELSETUP_VENDOR_GUID;
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
 	if (!state || !this || !variable_name || !vendor_guid || !data_size)
 		return EFI_INVALID_PARAMETER;
 
-	/* Convert CHAR16 UTF-16LE variable name to ASCII for coreboot efi_fv_get_option */
-	const CHAR16 *var_name16 = (const CHAR16 *)variable_name;
-	char ascii_name[64];
-	size_t i = 0;
-
-	while (var_name16[i] != 0 && i < sizeof(ascii_name) - 1) {
-		ascii_name[i] = (char)(var_name16[i] & 0x7f);
-		i++;
-	}
-	ascii_name[i] = '\0';
-
-	bool is_setup = strcmp(ascii_name, "IntelSetup") == 0;
-
-	/* Stock GetVariable matches name AND vendor GUID.  Do this before the
-	 * size query: answering BUFFER_TOO_SMALL for a foreign GUID would leak
-	 * the platform's IntelSetup size and, worse, make a caller that then
-	 * retries with a large buffer receive this board's defaults.
-	 */
-	static const EFI_GUID setup_vendor_guid = GRANTLEY_INTELSETUP_VENDOR_GUID;
-	if (is_setup && memcmp(vendor_guid, &setup_vendor_guid,
-			       sizeof(setup_vendor_guid)) != 0)
+	if (!state->setup || !grantley_is_intelsetup(variable_name) ||
+	    memcmp(vendor_guid, &setup_guid, sizeof(setup_guid)) != 0)
 		return EFI_NOT_FOUND;
 
-	/* Size discovery for SYSTEM_CONFIGURATION comes first: reporting a short
-	 * buffer with EFI_SUCCESS makes the PEIM trust a truncated policy.
-	 * Data == NULL is the standard size query too; it must report the
-	 * required size rather than reading or filling a buffer.
-	 *
-	 * The size is the board contract's, because the vendor PEIMs do not all
-	 * ask for the same one (QD4 0x17CB, X99D4M4 0x17CA).  When the board
-	 * has not opted in to its own payload and no variable store is
-	 * attached, the variable does not exist at all: answer EFI_NOT_FOUND
-	 * instead of advertising a size.
-	 */
-	const struct grantley_native_contract *contract = grantley_native_contract();
-	const uint32_t setup_size = contract ? contract->intelsetup_size : 0;
-
-	if (is_setup && !intelsetup_stock_allowed && !state->var_store_rdev)
-		return EFI_NOT_FOUND;
-	if (is_setup && (!setup_size || *data_size < setup_size || !data)) {
-		if (!setup_size)
-			return EFI_NOT_FOUND;
-		*data_size = setup_size;
+	if (!data || *data_size < state->setup_size) {
+		*data_size = state->setup_size;
 		return EFI_BUFFER_TOO_SMALL;
 	}
 
-	enum cb_err err = CB_ERR;
-	uint32_t size = (uint32_t)*data_size;
-	if (state->var_store_rdev)
-		err = efi_fv_get_option(state->var_store_rdev,
-					vendor_guid, ascii_name,
-					data, &size);
+	memcpy(data, state->setup, state->setup_size);
+#if CONFIG(GRANTLEY_UNCORE_RC_SERIAL)
+	if (GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL < state->setup_size)
+		((uint8_t *)data)[GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL] =
+			GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN;
+#endif
 
-	if (is_setup)
-		return grantley_intelsetup_variable(state, data, data_size,
-						    attributes, err, size);
-
-	if (err == CB_EFI_BUFFER_TOO_SMALL)
-		return EFI_BUFFER_TOO_SMALL;
-	if (err != CB_SUCCESS)
-		return EFI_NOT_FOUND;
-
-	*data_size = (UINTN)size;
+	*data_size = state->setup_size;
 	if (attributes)
 		*attributes = 0;
-
 	return EFI_SUCCESS;
 }
 

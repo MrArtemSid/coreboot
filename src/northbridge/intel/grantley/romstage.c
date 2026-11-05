@@ -22,11 +22,6 @@
 #include "platform.h"
 #include "memmap.h"
 
-void __weak mainboard_memory_init_params(struct grantley_memory_params *params)
-{
-	/* Default implementation: leave all parameters as 0 for safe auto detection */
-}
-
 bool __weak mainboard_get_board_identity(struct grantley_board_identity *identity)
 {
 	return false;
@@ -150,9 +145,12 @@ void __noreturn romstage_main(void)
 			grantley_pcd_set_token1_required(false);
 		}
 
-		/* A board's stock IntelSetup bytes are never served implicitly:
-		 * only a contract with a compiled-in payload can enable them. */
-		grantley_intelsetup_allow_stock(contract->intelsetup_payload != NULL);
+		size_t setup_size = 0;
+		const void *setup = cbfs_ro_map("intelsetup.bin", &setup_size);
+		grantley_pei_set_intelsetup(&uncore_state, setup, setup_size);
+		if (setup)
+			printk(BIOS_INFO, "Grantley: IntelSetup %zu bytes from CBFS\n",
+			       setup_size);
 
 		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
 		status = grantley_pei_set_mmcfg(&uncore_state, GRANTLEY_ECAM_BASE);
@@ -168,18 +166,6 @@ void __noreturn romstage_main(void)
 			if (status != EFI_SUCCESS)
 				die("Grantley: PlatformInfo board identity failure\n");
 		}
-
-		/* Query mainboard for optional memory parameter overrides */
-		struct grantley_memory_params mem_params = { 0 };
-		mainboard_memory_init_params(&mem_params);
-		grantley_pei_set_mem_params(&uncore_state,
-					    mem_params.max_dram_speed_mts,
-					    mem_params.tcl,
-					    mem_params.trcd,
-					    mem_params.trp,
-					    mem_params.tras,
-					    mem_params.command_rate,
-					    mem_params.ecc_en);
 
 		post_code(0x35);
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");

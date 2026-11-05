@@ -13,8 +13,7 @@
  * Everything the runner needs in order to enter the vendor UncoreInitPeim is
  * described here and nowhere else: the authorized blob (size, SHA-256 and the
  * PE ImageBase it must be mapped at), the way the module obtains its
- * MMCFG/ECAM base, the PEI_DEPEX it was built against, and whether a stock
- * IntelSetup payload is compiled in for this board.
+ * MMCFG/ECAM base and the PEI_DEPEX it was built against.
  *
  * The table is selected from Kconfig by GRANTLEY_NATIVE_CONTRACT_<BOARD>,
  * which each mainboard Kconfig defaults for exactly one board.  There is no
@@ -81,16 +80,6 @@ struct grantley_native_contract {
 	uint32_t depex_size;
 	uint8_t depex_ppi_count;
 
-	/* Board's own stock IntelSetup payload, or NULL when not compiled in.
-	 * Only the board-specific Kconfig option can make this non-NULL.
-	 */
-	const uint8_t *intelsetup_payload;
-	uint32_t intelsetup_size;
-	/* True only when the two field offsets below were proven on this
-	 * board's payload.  When false the payload is served verbatim and no
-	 * field is overridden.
-	 */
-	bool intelsetup_offsets_proven;
 };
 
 /* The selected board's contract, or NULL when no contract is configured. */

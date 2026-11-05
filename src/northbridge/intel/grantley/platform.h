@@ -7,16 +7,6 @@
 #include <stdint.h>
 #include <device/pci_ids.h>
 
-struct grantley_memory_params {
-	uint16_t max_dram_speed_mts; /* 0 = Auto/SPD, 1600, 1866, 2133, 2400 */
-	uint8_t tcl;                 /* 0 = Auto */
-	uint8_t trcd;                /* 0 = Auto */
-	uint8_t trp;                 /* 0 = Auto */
-	uint8_t tras;                /* 0 = Auto */
-	uint8_t command_rate;        /* 0 = Auto, 1 = 1T, 2 = 2T */
-	bool ecc_en;                 /* Force ECC enable */
-};
-
 struct grantley_board_identity {
 	uint8_t board_id;
 	uint32_t policy_revision;
@@ -24,9 +14,6 @@ struct grantley_board_identity {
 
 /* Return false to preserve the default PlatformInfo policy. */
 bool mainboard_get_board_identity(struct grantley_board_identity *identity);
-
-/* Optional memory policy supplied to UncoreInitPeim. */
-void mainboard_memory_init_params(struct grantley_memory_params *params);
 
 /* Supported PCH device IDs on Grantley hybrid / native platforms,
  * aliased to the shared pci_ids.h definitions. */

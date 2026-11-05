@@ -3,13 +3,6 @@
 #include <kconfig.h>
 #include "native_contract.h"
 
-#if CONFIG(GRANTLEY_INTELSETUP_STOCK_QD4)
-#include "pei_intelsetup_stock.h"
-#endif
-#if CONFIG(GRANTLEY_INTELSETUP_STOCK_D4M4)
-#include "pei_intelsetup_d4m4.h"
-#endif
-
 #if CONFIG(GRANTLEY_NATIVE_CONTRACT_QD4)
 
 /*
@@ -36,11 +29,6 @@ static const struct grantley_native_contract contract_qd4 = {
 	.pcd_token1 = 0x80000000ULL,
 	.depex_size = 0x82,
 	.depex_ppi_count = 7,
-	.intelsetup_size = 0x17cb,
-	.intelsetup_offsets_proven = true,
-#if CONFIG(GRANTLEY_INTELSETUP_STOCK_QD4)
-	.intelsetup_payload = grantley_intelsetup_stock_defaults,
-#endif
 };
 
 #endif /* CONFIG(GRANTLEY_NATIVE_CONTRACT_QD4) */
@@ -61,8 +49,7 @@ static const struct grantley_native_contract contract_qd4 = {
  * Blob: 766368 bytes, sha256 35b74537...382d4, PE ImageBase 0xFFDCE8E0.
  * The blob is at stock image offset 0xDCE8E0 and its FFS file is
  * D71C8BA4-4AF2-4D0D-B1BA-F2409F0C20D3 with a 0x82-byte PEI_DEPEX naming the
- * same seven PPIs as QD4.  Its own stock IntelSetup default is 6090 bytes
- * (NVAR at 0x800202).
+ * same seven PPIs as QD4.
  */
 static const struct grantley_native_contract contract_d4m4 = {
 	.board = "envinda/x99d4m4 (X99D4M4)",
@@ -80,18 +67,6 @@ static const struct grantley_native_contract contract_d4m4 = {
 	.pcd_ecam_store_offset = 0x2b484,
 	.depex_size = 0x82,
 	.depex_ppi_count = 7,
-	.intelsetup_size = 0x17ca,
-	/*
-	 * Payload identity is proven (this board's NVAR bytes), field semantics
-	 * are not: 0x1248/0x11FF only decode to plausible enums when the QD4
-	 * offsets are applied, and this board's machinecontract lists consumed
-	 * offsets 0x74/0x2D6/0x2D9/0x2DB and no 0x11FF consumer.  So the
-	 * payload is served verbatim and no byte is overridden.
-	 */
-	.intelsetup_offsets_proven = false,
-#if CONFIG(GRANTLEY_INTELSETUP_STOCK_D4M4)
-	.intelsetup_payload = grantley_intelsetup_d4m4_defaults,
-#endif
 };
 
 #endif /* CONFIG(GRANTLEY_NATIVE_CONTRACT_D4M4) */

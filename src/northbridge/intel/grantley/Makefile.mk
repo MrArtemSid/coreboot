@@ -20,9 +20,6 @@ romstage-y += memmap.c
 romstage-y += native_raminit/spd.c
 romstage-y += uncore_runner/pei_services.c
 romstage-y += uncore_runner/pei_pcd.c
-# Board descriptor: the approved blob pin, PCD policy and IntelSetup payload
-# for the selected board.  Always linked because pei_services consults it; the
-# payload itself is compiled only when that board's policy option is enabled.
 romstage-y += uncore_runner/native_contract.c
 romstage-y += uncore_runner/pei_image.c
 romstage-y += uncore_runner/pei_sha256.c
@@ -44,6 +41,13 @@ uncore.bin-type := raw
 uncore.bin-position := $(if $(wildcard $(uncore_bin_file)),\
 	$(shell $(PYTHON3) util/grantley/pe_image_base.py \
 		$(uncore_bin_file)))
+
+intelsetup_file := $(call strip_quotes,$(CONFIG_GRANTLEY_INTELSETUP_FILE))
+ifneq ($(wildcard $(intelsetup_file)),)
+cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += intelsetup.bin
+intelsetup.bin-file := $(intelsetup_file)
+intelsetup.bin-type := raw
+endif
 
 # There is deliberately no ramstage/resource map or memory-init substitute.
 ifeq ($(CONFIG_HAVE_INTEL_UNCORE_BIN),)

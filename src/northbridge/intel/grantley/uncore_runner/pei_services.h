@@ -13,25 +13,6 @@
 
 #define MAX_GRANTLEY_PPI_DESCRIPTORS 32
 
-/* Stock default of the EFI variable L"IntelSetup" (SYSTEM_CONFIGURATION) as
- * read by UncoreInitPeim: 6091 bytes.  The PEIM consumes offsets >= 0x2D6;
- * the two verified fields this port may override are named below.
- */
-#define GRANTLEY_INTELSETUP_SIZE		0x17cb
-#define GRANTLEY_INTELSETUP_OFF_DDR_FREQ_LIMIT	0x1248
-#define GRANTLEY_INTELSETUP_OFF_ECC_SUPPORT	0x11ff
-/* EccSupport enum: 0 = disabled, 1 = enabled, 2 = automatic.
- *
- * The stock IntelSetup payload contains 2 (AUTO).  The blob compares the
- * field with 2 and 1 (0xFFE5D8CD) and enables or disables the ECC bit
- * accordingly, so writing 1 on an explicit ecc_en request follows the
- * blob's code shape; it is NOT a byte-observed "enabled" value in this
- * image.  With no request the stock 2 (AUTO) is kept verbatim.
- */
-#define GRANTLEY_INTELSETUP_ECC_DISABLED	0
-#define GRANTLEY_INTELSETUP_ECC_ENABLED		1
-#define GRANTLEY_INTELSETUP_ECC_AUTO		2
-
 /* serialDebugMsgLvl; 1 is SDBG_MIN. */
 #define GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL	0x2d6
 #define GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN	1
@@ -105,8 +86,9 @@ struct grantley_uncore_state {
 	BOOLEAN memory_refused;
 	enum grantley_pei_memory_refusal memory_refusal;
 
-	/* Pointer to backing region device for EFI variable store */
-	const struct region_device *var_store_rdev;
+	/* IntelSetup default variable served to the PEIM, or NULL. */
+	const void *setup;
+	size_t setup_size;
 
 	uintptr_t saved_esp;
 
@@ -165,15 +147,6 @@ struct grantley_uncore_state {
 	/* Boot Mode */
 	EFI_BOOT_MODE boot_mode;
 
-	/* Override parameters provided by mainboard / configuration */
-	uint16_t max_dram_speed_mts;
-	uint8_t tcl;
-	uint8_t trcd;
-	uint8_t trp;
-	uint8_t tras;
-	uint8_t command_rate;
-	bool ecc_en;
-
 	/* Resulting initialized DRAM info */
 	EFI_PHYSICAL_ADDRESS dram_base;
 	UINT64 dram_size;
@@ -199,19 +172,13 @@ static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
 /* Initialise MMCFG base address for MMIO-based PCI config access */
 EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
 
-/* Attach backing EFI variable store region device */
-void grantley_pei_set_var_store(struct grantley_uncore_state *state,
-				const struct region_device *rdev);
+/* Serve this payload as the IntelSetup variable; NULL means none. */
+void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,
+				 const void *data, size_t size);
 
 /* Update the existing PlatformInfo HOB payload before invoking the PEIM. */
 EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
 	uint8_t board_id, uint32_t policy_revision);
-
-/* Configure memory override parameters (or clear to 0 for automatic SPD detection) */
-void grantley_pei_set_mem_params(struct grantley_uncore_state *state,
-				 uint16_t max_dram_speed_mts,
-				 uint8_t tcl, uint8_t trcd, uint8_t trp,
-				 uint8_t tras, uint8_t command_rate, bool ecc_en);
 
 struct grantley_memory_map;
 EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
@@ -308,21 +275,6 @@ EFI_STATUS grantley_pei_set_memory_window(struct grantley_uncore_state *state,
 					  uint64_t reserved_size,
 					  BOOLEAN reserved_known);
 
-
-/* The stock IntelSetup default payload extracted from the QD4 BIOS image
- * (see pei_intelsetup_stock.h for image hash, offsets and payload hash).
- */
-const uint8_t *grantley_intelsetup_stock(void);
-
-/* Permit (or refuse) serving that QD4-specific payload when the board has no
- * live IntelSetup variable.  The bytes are a QD4 factory default, not a
- * platform-independent structure: another board's VARSTORE may legitimately
- * hold different defaults.  romstage passes CONFIG(GRANTLEY_INTELSETUP_STOCK_QD4);
- * when refused, GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM
- * falls back to its own ZeroMem(0x17CB) + IIO default path.  Host tests start
- * with the payload enabled so the exact bytes stay pinned by a test.
- */
-void grantley_intelsetup_allow_stock(bool enable);
 
 /* Initialize PEI services table and internal storage.
  * State and both 8-byte-aligned, non-overlapping arenas must remain live until
