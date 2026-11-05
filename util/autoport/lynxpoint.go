@@ -183,7 +183,7 @@ func (b lynxpoint) Scan(ctx Context, addr PCIDevData) {
 
 	sataPortMap := "0x3f"
 	if sataDev, ok := PCIMap[PCIAddr{Bus: 0, Dev: 0x1f, Func: 2}]; ok && len(sataDev.ConfigDump) > 0x92 {
-		sataPortMap = fmt.Sprintf("0x%x", sataDev.ConfigDump[0x92]&0x3f)
+		sataPortMap = fmt.Sprintf("0x%02x", sataDev.ConfigDump[0x92]&0x3f)
 	}
 
 	cur := DevTreeNode{
