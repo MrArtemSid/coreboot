@@ -234,6 +234,11 @@ void __noreturn romstage_main(void)
 			die("Grantley: invalid post-PEIM memory map\n");
 		}
 
+		/* Route C0000h-FFFFFh to DRAM for the payload; keep PAM unlocked. */
+		const pci_devfn_t sad = PCI_DEV(grantley_uncore_bus(), 15, 4);
+		pci_s_write_config32(sad, 0x40, 0x33333330);
+		pci_s_write_config32(sad, 0x44, 0x00333333);
+
 		post_code(0x36);
 		printk(BIOS_INFO, "Grantley: validated %llu memory ranges, SMRAM %llx+%llx\n",
 		       (unsigned long long)memory_map.count,
