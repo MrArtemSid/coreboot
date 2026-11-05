@@ -52,10 +52,6 @@ struct grantley_uncore_state {
 
 	uintptr_t saved_esp;
 
-	/* MMCFG Base configuration */
-	uintptr_t mmcfg_base;
-	BOOLEAN mmcfg_enabled;
-
 	/* HOB storage */
 	void *hob_list;
 	UINTN hob_size;
@@ -86,8 +82,8 @@ static inline struct grantley_uncore_state *grantley_get_uncore_state(void)
 }
 #endif
 
-/* Initialise MMCFG base address for MMIO-based PCI config access */
-EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t mmcfg_base);
+/* Check, or establish, the Uncore ECAM route at mmcfg_base. */
+EFI_STATUS grantley_pei_set_mmcfg(uintptr_t mmcfg_base);
 
 /* Serve this payload as the IntelSetup variable; NULL means none. */
 void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,

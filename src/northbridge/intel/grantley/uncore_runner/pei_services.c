@@ -287,12 +287,8 @@ static uint32_t route_cpuid(void)
 }
 #endif
 
-EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t base)
+EFI_STATUS grantley_pei_set_mmcfg(uintptr_t base)
 {
-	if (!state)
-		return EFI_INVALID_PARAMETER;
-	state->mmcfg_enabled = FALSE;
-	state->mmcfg_base = 0;
 	/* One complete 256-bus ECAM segment, below the IA-32 address ceiling. */
 	if (!base || (base & 0xfffffff) || base > 0xf0000000ULL)
 		return EFI_INVALID_PARAMETER;
@@ -338,8 +334,6 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 		    (route_read32(pcu, 0x40, base) & 0x8000ffff) != cpubusno ||
 		    (route_read32(iio, 0x108, base) & 0x1ffff) != iio_rule)
 			return EFI_DEVICE_ERROR;
-		state->mmcfg_base = base;
-		state->mmcfg_enabled = TRUE;
 		return EFI_SUCCESS;
 	}
 	if ((route_read32(reset_ubox, 0, 0) & 0xffff) != 0x8086)
@@ -381,72 +375,15 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	    (route_read32(iio, 0x108, base) & 0x1ffff) != iio_rule)
 		return EFI_DEVICE_ERROR;
 
-	state->mmcfg_base = base;
-	state->mmcfg_enabled = TRUE;
 	return EFI_SUCCESS;
 }
 
-static inline void pci_cfg_decode(UINT64 address, pci_devfn_t *pdev,
-				  UINT32 *reg, UINT8 *bus, UINT8 *dev,
-				  UINT8 *func)
+/* EFI_PEI_PCI_CFG_ADDRESS: register in bits 63:32 when non-zero, else 7:0. */
+static pci_devfn_t pci_cfg_decode(UINT64 address, UINT16 *reg)
 {
-	*bus = (address >> 24) & 0xff;
-	*dev = (address >> 16) & 0x1f;
-	*func = (address >> 8) & 0x07;
-	*reg = (address >> 32) != 0 ? (UINT32)(address >> 32) :
-				       (UINT32)(address & 0xff);
-	*pdev = PCI_DEV(*bus, *dev, *func);
-}
-
-static inline uintptr_t pci_cfg_mmio(uintptr_t base, UINT8 bus, UINT8 dev,
-				     UINT8 func, UINT32 reg)
-{
-	return base + (((uintptr_t)bus) << 20) + (((uintptr_t)dev) << 15) +
-	       (((uintptr_t)func) << 12) + reg;
-}
-
-/* One access of the requested width: an MMCONFIG address when routed,
- * otherwise CF8 with the encoded device. */
-static EFI_STATUS pci_cfg_load(uintptr_t mmio, pci_devfn_t dev, UINT32 reg,
-			       EFI_PEI_PCI_CFG_PPI_WIDTH width, void *buffer)
-{
-	switch (width) {
-	case EfiPeiPciCfgWidthUint8:
-		*(UINT8 *)buffer = mmio ? read8((void *)mmio)
-					: pci_s_read_config8(dev, reg);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint16:
-		*(UINT16 *)buffer = mmio ? read16((void *)mmio)
-					 : pci_s_read_config16(dev, reg);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint32:
-		*(UINT32 *)buffer = mmio ? read32((void *)mmio)
-					 : pci_s_read_config32(dev, reg);
-		return EFI_SUCCESS;
-	default:
-		return EFI_INVALID_PARAMETER;
-	}
-}
-
-static EFI_STATUS pci_cfg_store(uintptr_t mmio, pci_devfn_t dev, UINT32 reg,
-				EFI_PEI_PCI_CFG_PPI_WIDTH width, void *buffer)
-{
-	switch (width) {
-	case EfiPeiPciCfgWidthUint8:
-		mmio ? write8((void *)mmio, *(UINT8 *)buffer)
-		     : pci_s_write_config8(dev, reg, *(UINT8 *)buffer);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint16:
-		mmio ? write16((void *)mmio, *(UINT16 *)buffer)
-		     : pci_s_write_config16(dev, reg, *(UINT16 *)buffer);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint32:
-		mmio ? write32((void *)mmio, *(UINT32 *)buffer)
-		     : pci_s_write_config32(dev, reg, *(UINT32 *)buffer);
-		return EFI_SUCCESS;
-	default:
-		return EFI_INVALID_PARAMETER;
-	}
+	*reg = (address >> 32) ? (UINT16)(address >> 32) : (UINT16)(address & 0xff);
+	return PCI_DEV((address >> 24) & 0xff, (address >> 16) & 0x1f,
+		       (address >> 8) & 0x07);
 }
 
 static EFI_STATUS EFIAPI grantley_pci_cfg_read(
@@ -456,24 +393,25 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_read(
 	UINT64 address,
 	void *buffer)
 {
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-	pci_devfn_t pdev;
-	UINT32 reg;
-	UINT8 bus, dev, func;
+	UINT16 reg;
+	pci_devfn_t dev = pci_cfg_decode(address, &reg);
 
-	if (!state || !buffer)
+	if (!buffer)
 		return EFI_INVALID_PARAMETER;
 
-	pci_cfg_decode(address, &pdev, &reg, &bus, &dev, &func);
-
-	if (state->mmcfg_enabled)
-		return pci_cfg_load(pci_cfg_mmio(state->mmcfg_base, bus, dev,
-						  func, reg), 0, 0, width, buffer);
-
-	if (reg >= 256)
-		return EFI_UNSUPPORTED;
-
-	return pci_cfg_load(0, pdev, reg, width, buffer);
+	switch (width) {
+	case EfiPeiPciCfgWidthUint8:
+		*(UINT8 *)buffer = pci_s_read_config8(dev, reg);
+		return EFI_SUCCESS;
+	case EfiPeiPciCfgWidthUint16:
+		*(UINT16 *)buffer = pci_s_read_config16(dev, reg);
+		return EFI_SUCCESS;
+	case EfiPeiPciCfgWidthUint32:
+		*(UINT32 *)buffer = pci_s_read_config32(dev, reg);
+		return EFI_SUCCESS;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
 }
 
 static EFI_STATUS EFIAPI grantley_pci_cfg_write(
@@ -483,24 +421,25 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_write(
 	UINT64 address,
 	void *buffer)
 {
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-	pci_devfn_t pdev;
-	UINT32 reg;
-	UINT8 bus, dev, func;
+	UINT16 reg;
+	pci_devfn_t dev = pci_cfg_decode(address, &reg);
 
-	if (!state || !buffer)
+	if (!buffer)
 		return EFI_INVALID_PARAMETER;
 
-	pci_cfg_decode(address, &pdev, &reg, &bus, &dev, &func);
-
-	if (state->mmcfg_enabled)
-		return pci_cfg_store(pci_cfg_mmio(state->mmcfg_base, bus, dev,
-						   func, reg), 0, 0, width, buffer);
-
-	if (reg >= 256)
-		return EFI_UNSUPPORTED;
-
-	return pci_cfg_store(0, pdev, reg, width, buffer);
+	switch (width) {
+	case EfiPeiPciCfgWidthUint8:
+		pci_s_write_config8(dev, reg, *(UINT8 *)buffer);
+		return EFI_SUCCESS;
+	case EfiPeiPciCfgWidthUint16:
+		pci_s_write_config16(dev, reg, *(UINT16 *)buffer);
+		return EFI_SUCCESS;
+	case EfiPeiPciCfgWidthUint32:
+		pci_s_write_config32(dev, reg, *(UINT32 *)buffer);
+		return EFI_SUCCESS;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
 }
 
 static EFI_STATUS EFIAPI grantley_pci_cfg_modify(

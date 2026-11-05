@@ -104,8 +104,7 @@ void __noreturn romstage_main(void)
 			printk(BIOS_INFO, "Grantley: IntelSetup %zu bytes from CBFS\n",
 			       setup_size);
 
-		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
-		status = grantley_pei_set_mmcfg(&uncore_state, GRANTLEY_ECAM_BASE);
+		status = grantley_pei_set_mmcfg(CONFIG_ECAM_MMCONF_BASE_ADDRESS);
 		if (status != EFI_SUCCESS) {
 			post_code(0xee);
 			die("Grantley: uncore configuration routing failed\n");
