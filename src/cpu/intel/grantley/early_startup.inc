@@ -1,13 +1,16 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Private cold-boot BSP startup. No stack and no MM0/MM1/MM2 temporaries.
- * The single-socket ABI assigns all 256 ECAM buses to node zero, with IIO
- * on bus 00 and uncore on ff. Other topologies require a different contract.
+ * Uses the cold-boot four-socket bus scheme from grantley_routing.h.
  */
 #ifndef GRANTLEY_STARTUP_MACROS
 #define GRANTLEY_STARTUP_MACROS
 #include <cpu/intel/grantley/grantley_routing.h>
-#define GRANTLEY_UBOX 0x8ff87000
-#define GRANTLEY_PCU 0x8fff2000
+#define GRANTLEY_UBOX	GRANTLEY_UNCORE_MMIO(0x87000)	/* 16.7 */
+#define GRANTLEY_PCU	GRANTLEY_UNCORE_MMIO(0xf2000)	/* 30.2 */
+#define GRANTLEY_VCU	GRANTLEY_UNCORE_MMIO(0xf8000)	/* 31.0 */
+#define GRANTLEY_CFG_NODE GRANTLEY_UNCORE_MMIO(0x85040)	/* 16.5.0x40 */
+#define GRANTLEY_UBOX_CF8(reg)	GRANTLEY_CF8(GRANTLEY_UNCORE_BUS, 16, 7, reg)
+#define GRANTLEY_SAD_CF8(reg)	GRANTLEY_CF8(GRANTLEY_UNCORE_BUS, 15, 5, reg)
 
 /* Legacy access: selector immediate, data EAX; EBX/ECX/ESI/EDI unchanged. */
 .macro startup_pci_read selector
@@ -70,29 +73,29 @@
 	movl	$GRANTLEY_CPUBUSNO, %eax
 	movw	$0xcfc, %dx
 	outl	%eax, %dx
-	startup_pci_read 0x80ff87d0
+	startup_pci_read GRANTLEY_UBOX_CF8(0xd0)
 	cmpl	$GRANTLEY_CPUBUSNO, %eax
 	jne	.Lstartup_failure
-	startup_pci_read 0x80ff8700
+	startup_pci_read GRANTLEY_UBOX_CF8(0x00)
 	cmpw	$0x8086, %ax
 	jne	.Lstartup_failure
-	startup_pci_read 0x80ff7d00
+	startup_pci_read GRANTLEY_SAD_CF8(0x00)
 	cmpw	$0x8086, %ax
 	jne	.Lstartup_failure
 	startup_pci_read 0x80002800
 	cmpw	$0x8086, %ax
 	jne	.Lstartup_failure
 
-	/* Each 32-bus target field is zero; length 00 encodes 256 buses. */
-	xorl	%ebx, %ebx
-	startup_pci_write 0x80ff7de4, 0xffffff
+	/* Four-socket target list; rule length 00 encodes 256 buses. */
+	movl	$GRANTLEY_MMCFG_TARGET_LIST, %ebx
+	startup_pci_write GRANTLEY_SAD_CF8(0xe4), 0xffffff
 	movl	$(GRANTLEY_ECAM_BASE | 1), %ebx
-	startup_pci_write 0x80ff7dc0, 0xfc000007
-	startup_pci_read 0x80ff87dc
+	startup_pci_write GRANTLEY_SAD_CF8(0xc0), 0xfc000007
+	startup_pci_read GRANTLEY_UBOX_CF8(0xdc)
 	andl	$~7, %eax
 	orl	$1, %eax
 	movl	%eax, %ebx
-	startup_pci_write 0x80ff87dc, 7
+	startup_pci_write GRANTLEY_UBOX_CF8(0xdc), 7
 
 	/* A0 has 32-bit base/limit at 84/88. Later silicon has 64-bit
 	 * fields at 90/98: clear BOTH high words before enabling CSR use.
@@ -114,10 +117,10 @@
 	movl	$GRANTLEY_ECAM_LIMIT, %ebx
 	startup_pci_write 0x80002888, 0xfc000000
 .Lstartup_iio_ready:
-	movl	0x8ff85040, %eax
+	movl	$GRANTLEY_CFG_NODE, %eax
 	andl	$~7, %eax
-	movl	%eax, 0x8ff85040
-	startup_mmio_verify 0x8ff85040, 0, 7
+	movl	%eax, GRANTLEY_CFG_NODE
+	startup_mmio_verify GRANTLEY_CFG_NODE, 0, 7
 
 	/* MY_NID=0 and AM_I_MASTER=1. MASTER_NID retains its cold-reset
 	 * node-zero value; do not alter unrelated package C-state controls.
@@ -180,12 +183,12 @@
 	 * bounded independently. A VCU failure is diagnostic, as in the stock
 	 * cold-boot path; it must not introduce a new unconditional boot stop.
 	 */
-	cmpb	$0, 0x8ff850b0
+	cmpb	$0, GRANTLEY_UNCORE_MMIO(0x850b0)
 	jne	.Lstartup_ready
 .macro startup_vcu_wait
 	movl	$0x1000, %ecx
 .Lvcu_poll\@:
-	movl	0x8fff8040, %eax
+	movl	(GRANTLEY_VCU + 0x40), %eax
 	cmpl	$0xffffffff, %eax
 	je	.Lvcu_failure
 	testl	$0x80000000, %eax
@@ -197,16 +200,16 @@
 .Lvcu_idle\@:
 .endm
 	startup_vcu_wait
-	movl	$0x1000a, 0x8fff8044
-	movl	$0x80000002, 0x8fff8040
+	movl	$0x1000a, (GRANTLEY_VCU + 0x44)
+	movl	$0x80000002, (GRANTLEY_VCU + 0x40)
 	startup_vcu_wait
-	movl	$0, 0x8fff8044
-	movl	$0x80000006, 0x8fff8040
+	movl	$0, (GRANTLEY_VCU + 0x44)
+	movl	$0x80000006, (GRANTLEY_VCU + 0x40)
 	startup_vcu_wait
-	movl	$0x8001100f, 0x8fff8040
+	movl	$0x8001100f, (GRANTLEY_VCU + 0x40)
 	startup_vcu_wait
-	movl	$0x1000a, 0x8fff8044
-	movl	$0x80000003, 0x8fff8040
+	movl	$0x1000a, (GRANTLEY_VCU + 0x44)
+	movl	$0x80000003, (GRANTLEY_VCU + 0x40)
 	startup_vcu_wait
 	jmp	.Lstartup_ready
 .Lvcu_failure:
@@ -273,7 +276,7 @@
 .Lstartup_apic_id_ready:
 	orl	%edi, %esi
 	xorl	%edi, %edi
-	movl	0x8fff3094, %eax
+	movl	(GRANTLEY_PCU + 0x1094), %eax
 	cmpl	$0xffffffff, %eax
 	je	.Lstartup_post_failure
 	testl	$(1 << 28), %eax

@@ -895,10 +895,10 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 		return EFI_INVALID_PARAMETER;
 
 	const pci_devfn_t reset_ubox = PCI_DEV(1, 16, 7);
-	const pci_devfn_t ubox = PCI_DEV(0xff, 16, 7);
-	const pci_devfn_t sad = PCI_DEV(0xff, 15, 5);
+	const pci_devfn_t ubox = PCI_DEV(GRANTLEY_UNCORE_BUS, 16, 7);
+	const pci_devfn_t sad = PCI_DEV(GRANTLEY_UNCORE_BUS, 15, 5);
 	const pci_devfn_t iio = PCI_DEV(0, 5, 0);
-	const pci_devfn_t pcu = PCI_DEV(0xff, 30, 2);
+	const pci_devfn_t pcu = PCI_DEV(GRANTLEY_UNCORE_BUS, 30, 2);
 	uint16_t base_reg = (route_cpuid() & 0xfffff) == 0x306f0 ? 0x84 : 0x90;
 	uint16_t limit_reg = base_reg == 0x84 ? 0x88 : 0x98;
 
@@ -910,7 +910,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 		if ((route_read32(ubox, 0xd0, 0) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
 		    (route_read32(sad, 0, 0) & 0xffff) != 0x8086 ||
 		    (route_read32(iio, 0, 0) & 0xffff) != 0x8086 ||
-		    (route_read32(sad, 0xe4, 0) & 0x00ffffff) != 0 ||
+		    (route_read32(sad, 0xe4, 0) & 0x00ffffff) != GRANTLEY_MMCFG_TARGET_LIST ||
 		    (route_read32(sad, 0xc0, 0) & 0xfc000007) != (base | 1) ||
 		    (route_read32(ubox, 0xdc, 0) & 7) != 1 ||
 		    (route_read32(iio, base_reg, 0) & 0xfc000000) != base ||
@@ -923,7 +923,7 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 			return EFI_DEVICE_ERROR;
 		if ((route_read32(pcu, 0, base) & 0xffff) != 0x8086 ||
 		    (route_read32(pcu, 0x40, base) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
-		    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
+		    (route_read32(iio, 0x108, base) & 0x1ffff) != GRANTLEY_IIO_BUS_RULE)
 			return EFI_DEVICE_ERROR;
 		state->mmcfg_base = base;
 		state->mmcfg_enabled = TRUE;
@@ -939,8 +939,8 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	    (route_read32(iio, 0, 0) & 0xffff) != 0x8086)
 		return EFI_DEVICE_ERROR;
 
-	/* Single-socket target list: every ECAM bus targets socket zero. */
-	route_write32(sad, 0xe4, 0, 0);
+	/* Four-socket target list, as the vendor cold-boot scheme writes it. */
+	route_write32(sad, 0xe4, 0, GRANTLEY_MMCFG_TARGET_LIST);
 	route_write32(sad, 0xc0, 0, base | 1);
 	uint32_t rule = route_read32(ubox, 0xdc, 0);
 	route_write32(ubox, 0xdc, 0, (rule & ~7U) | 1U);
@@ -959,13 +959,13 @@ EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t
 	if ((route_read32(pcu, 0, base) & 0xffff) != 0x8086)
 		return EFI_DEVICE_ERROR;
 	uint32_t buses = route_read32(pcu, 0x40, base);
-	route_write32(pcu, 0x40, base, (buses & 0xffff0000) | 0xff00);
+	route_write32(pcu, 0x40, base, (buses & 0xffff0000) | (GRANTLEY_CPUBUSNO & 0xffff));
 	buses = route_read32(iio, 0x108, base);
-	route_write32(iio, 0x108, base, (buses & 0xfffe0000) | 0x1ff00);
+	route_write32(iio, 0x108, base, (buses & 0xfffe0000) | GRANTLEY_IIO_BUS_RULE);
 	buses = route_read32(pcu, 0x40, base);
 	route_write32(pcu, 0x40, base, buses | 0x80000000);
 	if ((route_read32(pcu, 0x40, base) & 0x8000ffff) != GRANTLEY_CPUBUSNO ||
-	    (route_read32(iio, 0x108, base) & 0x1ffff) != 0x1ff00)
+	    (route_read32(iio, 0x108, base) & 0x1ffff) != GRANTLEY_IIO_BUS_RULE)
 		return EFI_DEVICE_ERROR;
 
 	state->mmcfg_base = base;

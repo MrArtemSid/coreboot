@@ -12,12 +12,13 @@
 #include <device/pci_ops.h>
 #include <string.h>
 #include "grantley.h"
+#include "grantley_routing.h"
 
 /* Socket 0 uncore bus, established before memory initialization. */
 #define IIO_DEV PCI_DEV(0, 5, 0)
-#define SAD_DEV PCI_DEV(0xff, 12, 6)
+#define SAD_DEV PCI_DEV(GRANTLEY_UNCORE_BUS, 12, 6)
 #define GRANTLEY_MSR_LT_CONTROL 0x2e7
-#define UBOX_DFX_DEV PCI_DEV(0xff, 16, 6)
+#define UBOX_DFX_DEV PCI_DEV(GRANTLEY_UNCORE_BUS, 16, 6)
 #define SAD_SMRAMC 0x4c
 #define SMRAM_ENABLE (1 << 3)
 #define SMRAM_LOCK (1 << 4)

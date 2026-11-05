@@ -6,8 +6,9 @@
 #include <cpu/x86/msr.h>
 #include <device/pci_ops.h>
 #include "grantley.h"
+#include "grantley_routing.h"
 
-#define UBOX_DFX_DEV PCI_DEV(0xff, 16, 6)
+#define UBOX_DFX_DEV PCI_DEV(GRANTLEY_UNCORE_BUS, 16, 6)
 #define SMM_FEATURE_CONTROL 0x58
 #define SMM_FEATURE_LOCK (1 << 0)
 #define SMM_CODE_CHECK (1 << 2)
