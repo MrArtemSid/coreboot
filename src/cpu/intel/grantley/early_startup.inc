@@ -117,7 +117,7 @@
 	movl	$GRANTLEY_ECAM_LIMIT, %ebx
 	startup_pci_write 0x80002888, 0xfc000000
 .Lstartup_iio_ready:
-	movl	$GRANTLEY_CFG_NODE, %eax
+	movl	GRANTLEY_CFG_NODE, %eax
 	andl	$~7, %eax
 	movl	%eax, GRANTLEY_CFG_NODE
 	startup_mmio_verify GRANTLEY_CFG_NODE, 0, 7
