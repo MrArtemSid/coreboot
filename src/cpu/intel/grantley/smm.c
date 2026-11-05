@@ -16,13 +16,8 @@
 
 /* Socket 0 uncore bus, established before memory initialization. */
 #define IIO_DEV PCI_DEV(0, 5, 0)
-#define SAD_DEV PCI_DEV(grantley_uncore_bus(), 12, 6)
 #define GRANTLEY_MSR_LT_CONTROL 0x2e7
 #define UBOX_DFX_DEV PCI_DEV(grantley_uncore_bus(), 16, 6)
-#define SAD_SMRAMC 0x4c
-#define SMRAM_ENABLE (1 << 3)
-#define SMRAM_LOCK (1 << 4)
-#define SMRAM_OPEN (1 << 6)
 #define SMM_FEATURE_CONTROL 0x58
 #define SMM_SAVE_STATE_MSR (1 << 1)
 
@@ -49,8 +44,7 @@ void grantley_get_smm_info(uintptr_t *base, size_t *size, size_t *save_state_siz
 		die("Grantley: invalid hardware TSEG for SMRR\n");
 	if (!(rdmsr(MTRR_CAP_MSR).lo & MTRR_CAP_SMRR))
 		die("Grantley: SMRR required for SMM\n");
-	if (pci_s_read_config16(SAD_DEV, PCI_VENDOR_ID) != 0x8086 ||
-	    pci_s_read_config16(UBOX_DFX_DEV, PCI_VENDOR_ID) != 0x8086)
+	if (pci_s_read_config16(UBOX_DFX_DEV, PCI_VENDOR_ID) != 0x8086)
 		die("Grantley: SMM uncore registers unavailable\n");
 
 	/* Do not confuse the server CSR with a client SMM feature-control MSR.
@@ -116,15 +110,6 @@ void grantley_cpu_finalize(struct device *dev)
 
 void grantley_smm_lock(void)
 {
-	/* Use the server SAD SMRAM control, never the client host bridge at 00:00.0. */
-	uint8_t control = pci_s_read_config8(SAD_DEV, SAD_SMRAMC);
-	control = (control & ~SMRAM_OPEN) | SMRAM_ENABLE | SMRAM_LOCK;
-	pci_s_write_config8(SAD_DEV, SAD_SMRAMC, control);
-	const uint8_t readback = pci_s_read_config8(SAD_DEV, SAD_SMRAMC);
-	if ((readback & (SMRAM_OPEN | SMRAM_ENABLE | SMRAM_LOCK)) !=
-	    (SMRAM_ENABLE | SMRAM_LOCK))
-		die("Grantley: failed to close and lock SMRAM\n");
-
-	/* Only allow normal SMIs after all CPUs have relocated and SMRAM is locked. */
+	/* SMRAMC is IvyBridge-EP only; TSEG and SMRR protect SMRAM here. */
 	global_smi_enable();
 }
