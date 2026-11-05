@@ -26,7 +26,7 @@ bool __weak mainboard_get_board_identity(struct grantley_board_identity *identit
 /* Static CAR storage for PEI runner services and HOB list */
 static struct grantley_uncore_state uncore_state;
 static uint8_t pei_pool[64 * 1024] __aligned(16);
-static uint8_t pei_hob[16 * 1024] __aligned(16);
+static uint8_t pei_hob[32 * 1024] __aligned(16);
 
 void __noreturn romstage_main(void)
 {
