@@ -11,7 +11,10 @@
 #include <cpu/intel/grantley/grantley.h>
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <acpi/acpi.h>
+#include <acpi/acpi_device.h>
+#include <acpi/acpigen.h>
 #include <acpi/acpigen_pci.h>
+#include <device/pci_rom.h>
 #include <arch/ioapic.h>
 #include <cpu/intel/microcode.h>
 #include <cpu/x86/msr.h>
@@ -213,16 +216,16 @@ static const char *grantley_domain_acpi_name(const struct device *dev)
 		assert(dev->upstream);
 		if (dev->upstream->secondary == 0) {
 			switch (dev->path.pci.devfn) {
-			case PCI_DEVFN(1, 0): return "RP01";
-			case PCI_DEVFN(1, 1): return "RP02";
-			case PCI_DEVFN(2, 0): return "RP03";
-			case PCI_DEVFN(2, 1): return "RP04";
-			case PCI_DEVFN(2, 2): return "RP05";
-			case PCI_DEVFN(2, 3): return "RP06";
-			case PCI_DEVFN(3, 0): return "RP07";
-			case PCI_DEVFN(3, 1): return "RP08";
-			case PCI_DEVFN(3, 2): return "RP09";
-			case PCI_DEVFN(3, 3): return "RP10";
+			case PCI_DEVFN(1, 0): return "IIO0";
+			case PCI_DEVFN(1, 1): return "IIO1";
+			case PCI_DEVFN(2, 0): return "IIO2";
+			case PCI_DEVFN(2, 1): return "IIO3";
+			case PCI_DEVFN(2, 2): return "IIO4";
+			case PCI_DEVFN(2, 3): return "IIO5";
+			case PCI_DEVFN(3, 0): return "IIO6";
+			case PCI_DEVFN(3, 1): return "IIO7";
+			case PCI_DEVFN(3, 2): return "IIO8";
+			case PCI_DEVFN(3, 3): return "IIO9";
 			}
 		}
 
@@ -249,12 +252,45 @@ static const char *grantley_domain_acpi_name(const struct device *dev)
 	return NULL;
 }
 
+static void grantley_domain_fill_ssdt(const struct device *dev)
+{
+	pci_domain_fill_ssdt(dev);
+
+	/* IIO ports are distinct from the PCH's RP01..RP08 namespace. */
+	acpigen_write_scope(acpi_device_path(dev));
+	for (const struct device *port = dev->downstream->children; port;
+	     port = port->sibling) {
+		const char *name = grantley_domain_acpi_name(port);
+		if (!port->enabled || !name)
+			continue;
+
+		acpigen_write_device(name);
+		acpigen_write_ADR_pci_device(port);
+		if (port->downstream) {
+			for (const struct device *child = port->downstream->children; child;
+			     child = child->sibling) {
+				name = grantley_domain_acpi_name(child);
+				if (!child->enabled || !name || !child->ops ||
+				    child->ops->acpi_fill_ssdt != pci_rom_ssdt)
+					continue;
+
+				/* pci_rom_ssdt() opens this device's scope for _ROM. */
+				acpigen_write_device(name);
+				acpigen_write_ADR_pci_device(child);
+				acpigen_write_device_end();
+			}
+		}
+		acpigen_write_device_end();
+	}
+	acpigen_write_scope_end();
+}
+
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
 	.set_resources    = grantley_domain_set_resources,
 	.scan_bus         = grantley_domain_scan_bus,
 	.acpi_name        = grantley_domain_acpi_name,
-	.acpi_fill_ssdt   = pci_domain_fill_ssdt,
+	.acpi_fill_ssdt   = grantley_domain_fill_ssdt,
 	.write_acpi_tables = grantley_write_acpi_tables,
 	.ops_pci          = &pci_dev_ops_pci,
 };
