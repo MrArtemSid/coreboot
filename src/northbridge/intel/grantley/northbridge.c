@@ -93,6 +93,13 @@ static void grantley_domain_read_resources(struct device *dev)
 	const struct grantley_memory_map *map = grantley_get_memory_map();
 	int idx = 10;
 
+	/* The legacy I/O range below 0x1000 is decoded but not a PCI window. */
+	struct resource *res = new_resource(dev, 3);
+	res->base = 0;
+	res->size = 0x1000;
+	res->limit = 0xfff;
+	res->flags = IORESOURCE_IO | IORESOURCE_SUBTRACTIVE | IORESOURCE_ASSIGNED;
+
 	/* The windows the Uncore RC programs into the IIO for socket 0. */
 	domain_io_window_from_to(dev, 0, 0x1000, 0x10000);
 	domain_mem_window_from_to(dev, 1, GRANTLEY_ECAM_END, GRANTLEY_MMIOL_END);
