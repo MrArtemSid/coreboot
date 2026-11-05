@@ -254,69 +254,45 @@ static pci_devfn_t pci_cfg_decode(UINT64 address, UINT16 *reg)
 		       (address >> 8) & 0x07);
 }
 
-static EFI_STATUS EFIAPI grantley_pci_cfg_read(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_PCI_CFG2_PPI * this,
-	EFI_PEI_PCI_CFG_PPI_WIDTH width,
-	UINT64 address,
-	void *buffer)
+static EFI_STATUS EFIAPI grantley_pci_cfg_read(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_PCI_CFG2_PPI *this, EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address, void *buffer)
 {
 	UINT16 reg;
 	pci_devfn_t dev = pci_cfg_decode(address, &reg);
 
-	if (!buffer)
+	if (!buffer || width > EfiPeiPciCfgWidthUint32)
 		return EFI_INVALID_PARAMETER;
-
-	switch (width) {
-	case EfiPeiPciCfgWidthUint8:
+	if (width == EfiPeiPciCfgWidthUint8)
 		*(UINT8 *)buffer = pci_s_read_config8(dev, reg);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint16:
+	else if (width == EfiPeiPciCfgWidthUint16)
 		*(UINT16 *)buffer = pci_s_read_config16(dev, reg);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint32:
+	else
 		*(UINT32 *)buffer = pci_s_read_config32(dev, reg);
-		return EFI_SUCCESS;
-	default:
-		return EFI_INVALID_PARAMETER;
-	}
+	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI grantley_pci_cfg_write(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_PCI_CFG2_PPI * this,
-	EFI_PEI_PCI_CFG_PPI_WIDTH width,
-	UINT64 address,
-	void *buffer)
+static EFI_STATUS EFIAPI grantley_pci_cfg_write(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_PCI_CFG2_PPI *this, EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address, void *buffer)
 {
 	UINT16 reg;
 	pci_devfn_t dev = pci_cfg_decode(address, &reg);
 
-	if (!buffer)
+	if (!buffer || width > EfiPeiPciCfgWidthUint32)
 		return EFI_INVALID_PARAMETER;
-
-	switch (width) {
-	case EfiPeiPciCfgWidthUint8:
+	if (width == EfiPeiPciCfgWidthUint8)
 		pci_s_write_config8(dev, reg, *(UINT8 *)buffer);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint16:
+	else if (width == EfiPeiPciCfgWidthUint16)
 		pci_s_write_config16(dev, reg, *(UINT16 *)buffer);
-		return EFI_SUCCESS;
-	case EfiPeiPciCfgWidthUint32:
+	else
 		pci_s_write_config32(dev, reg, *(UINT32 *)buffer);
-		return EFI_SUCCESS;
-	default:
-		return EFI_INVALID_PARAMETER;
-	}
+	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI grantley_pci_cfg_modify(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_PCI_CFG2_PPI * this,
-	EFI_PEI_PCI_CFG_PPI_WIDTH width,
-	UINT64 address,
-	void *set_bits,
-	void *clear_bits)
+static EFI_STATUS EFIAPI grantley_pci_cfg_modify(const EFI_PEI_SERVICES **services,
+	const EFI_PEI_PCI_CFG2_PPI *this, EFI_PEI_PCI_CFG_PPI_WIDTH width,
+	UINT64 address, void *set_bits, void *clear_bits)
 {
 	UINT32 val = 0, set = 0, clr = 0;
 	EFI_STATUS status;
@@ -338,149 +314,90 @@ static EFI_STATUS EFIAPI grantley_pci_cfg_modify(
 	return grantley_pci_cfg_write(services, this, width, address, &val);
 }
 
-static UINT8 EFIAPI grantley_io_read8(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address)
+static UINT8 EFIAPI grantley_io_read8(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port)
 {
-	return inb((uint16_t)address);
+	return inb(port);
 }
 
-static UINT16 EFIAPI grantley_io_read16(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address)
+static UINT16 EFIAPI grantley_io_read16(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port)
 {
-	return inw((uint16_t)address);
+	return inw(port);
 }
 
-static UINT32 EFIAPI grantley_io_read32(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address)
+static UINT32 EFIAPI grantley_io_read32(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port)
 {
-	return inl((uint16_t)address);
+	return inl(port);
 }
 
-static UINT64 EFIAPI grantley_io_read64(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address)
+static UINT64 EFIAPI grantley_io_read64(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port)
 {
-	return (UINT64)inl((uint16_t)address) |
-	       ((UINT64)inl((uint16_t)(address + 4)) << 32);
+	return inl(port) | (UINT64)inl(port + 4) << 32;
 }
 
-static VOID EFIAPI grantley_io_write8(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address,
-	UINT8 data)
+static VOID EFIAPI grantley_io_write8(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port, UINT8 data)
 {
-	outb(data, (uint16_t)address);
+	outb(data, port);
 }
 
-static VOID EFIAPI grantley_io_write16(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address,
-	UINT16 data)
+static VOID EFIAPI grantley_io_write16(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port, UINT16 data)
 {
-	outw(data, (uint16_t)address);
+	outw(data, port);
 }
 
-static VOID EFIAPI grantley_io_write32(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address,
-	UINT32 data)
+static VOID EFIAPI grantley_io_write32(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port, UINT32 data)
 {
-	outl(data, (uint16_t)address);
+	outl(data, port);
 }
 
-static VOID EFIAPI grantley_io_write64(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	UINT64 address,
-	UINT64 data)
+static VOID EFIAPI grantley_io_write64(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, UINT64 port, UINT64 data)
 {
-	outl((UINT32)data, (uint16_t)address);
-	outl((UINT32)(data >> 32), (uint16_t)(address + 4));
+	outl(data, port);
+	outl(data >> 32, port + 4);
 }
 
-static EFI_STATUS EFIAPI grantley_cpu_io_read(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	EFI_PEI_CPU_IO_PPI_WIDTH width,
-	UINT64 address,
-	UINTN count,
-	void *buffer)
+static EFI_STATUS EFIAPI grantley_cpu_io_read(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, EFI_PEI_CPU_IO_PPI_WIDTH width,
+	UINT64 port, UINTN count, void *buffer)
 {
-	if (!buffer || count == 0)
+	UINT8 *buf = buffer;
+
+	if (!buf || !count || width > EfiPeiCpuIoWidthUint32)
 		return EFI_INVALID_PARAMETER;
-
-	UINT8 *buf = (UINT8 *)buffer;
-
-	while (count--) {
-		switch (width) {
-		case EfiPeiCpuIoWidthUint8:
-			*buf = grantley_io_read8(services, this, address);
-			buf += 1;
-			address += 1;
-			break;
-		case EfiPeiCpuIoWidthUint16:
-			*(UINT16 *)buf = grantley_io_read16(services, this, address);
-			buf += 2;
-			address += 2;
-			break;
-		case EfiPeiCpuIoWidthUint32:
-			*(UINT32 *)buf = grantley_io_read32(services, this, address);
-			buf += 4;
-			address += 4;
-			break;
-		default:
-			return EFI_INVALID_PARAMETER;
-		}
+	for (size_t step = 1 << width; count--; port += step, buf += step) {
+		if (width == EfiPeiCpuIoWidthUint8)
+			*buf = inb(port);
+		else if (width == EfiPeiCpuIoWidthUint16)
+			*(UINT16 *)buf = inw(port);
+		else
+			*(UINT32 *)buf = inl(port);
 	}
-
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI grantley_cpu_io_write(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_CPU_IO_PPI *this,
-	EFI_PEI_CPU_IO_PPI_WIDTH width,
-	UINT64 address,
-	UINTN count,
-	void *buffer)
+static EFI_STATUS EFIAPI grantley_cpu_io_write(const EFI_PEI_SERVICES **s,
+	const EFI_PEI_CPU_IO_PPI *this, EFI_PEI_CPU_IO_PPI_WIDTH width,
+	UINT64 port, UINTN count, void *buffer)
 {
-	if (!buffer || count == 0)
+	const UINT8 *buf = buffer;
+
+	if (!buf || !count || width > EfiPeiCpuIoWidthUint32)
 		return EFI_INVALID_PARAMETER;
-
-	const UINT8 *buf = (const UINT8 *)buffer;
-
-	while (count--) {
-		switch (width) {
-		case EfiPeiCpuIoWidthUint8:
-			grantley_io_write8(services, this, address, *buf);
-			buf += 1;
-			address += 1;
-			break;
-		case EfiPeiCpuIoWidthUint16:
-			grantley_io_write16(services, this, address, *(const UINT16 *)buf);
-			buf += 2;
-			address += 2;
-			break;
-		case EfiPeiCpuIoWidthUint32:
-			grantley_io_write32(services, this, address, *(const UINT32 *)buf);
-			buf += 4;
-			address += 4;
-			break;
-		default:
-			return EFI_INVALID_PARAMETER;
-		}
+	for (size_t step = 1 << width; count--; port += step, buf += step) {
+		if (width == EfiPeiCpuIoWidthUint8)
+			outb(*buf, port);
+		else if (width == EfiPeiCpuIoWidthUint16)
+			outw(*(const UINT16 *)buf, port);
+		else
+			outl(*(const UINT32 *)buf, port);
 	}
-
 	return EFI_SUCCESS;
 }
 
