@@ -29,7 +29,7 @@ struct grantley_uncore_state {
 	/* PPI Registry */
 	const EFI_PEI_PPI_DESCRIPTOR * ppi_descriptors[MAX_GRANTLEY_PPI_DESCRIPTORS];
 	UINTN ppi_count;
-	EFI_PEI_PPI_DESCRIPTOR platform_info_ppi;
+	UINT8 *platform_info;
 
 	/* IntelSetup default variable served to the PEIM, or NULL. */
 	const void *setup;

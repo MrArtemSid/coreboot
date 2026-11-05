@@ -246,10 +246,10 @@ void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,
 EFI_STATUS grantley_pei_set_board_identity(struct grantley_uncore_state *state,
 	uint8_t board_id, uint32_t policy_revision)
 {
-	if (!state || !state->platform_info_ppi.Ppi)
+	if (!state || !state->platform_info)
 		return EFI_INVALID_PARAMETER;
 
-	uint8_t *data = state->platform_info_ppi.Ppi;
+	uint8_t *data = state->platform_info;
 	data[0x46] = board_id;
 	/* TypeRevisionId is an unaligned DWORD in the PlatformInfo payload. */
 	memcpy(data + 0x1e, &policy_revision, sizeof(policy_revision));
@@ -535,7 +535,7 @@ static void grantley_init_hob_list(struct grantley_uncore_state *state, void *ho
 	};
 }
 
-/* The module dereferences the PlatformInfo GUID HOB without a NULL check. */
+/* The module reads PlatformInfo only from this HOB, without a NULL check. */
 static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *state)
 {
 	void *hob = (void *)0;
@@ -573,12 +573,8 @@ static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *
 	/* SysData.SysSioExist = 1 at offset 0x9e */
 	data[0x9e] = 1;
 
-	/* Readiness PPI: data lives in the GUID HOB; it has no callable methods. */
-	state->platform_info_ppi = (EFI_PEI_PPI_DESCRIPTOR) {
-		EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
-		&g_platform_info_guid, data,
-	};
-	return grantley_install_ppi(s_ptr, &state->platform_info_ppi);
+	state->platform_info = data;
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
