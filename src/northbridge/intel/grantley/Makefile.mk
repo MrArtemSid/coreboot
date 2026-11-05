@@ -24,7 +24,6 @@ romstage-y += uncore_runner/pei_hobs.c
 postcar-y += memmap.c
 ramstage-y += memmap.c
 ramstage-y += northbridge.c
-ramstage-y += iio.c
 
 cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
 uncore_bin_file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
