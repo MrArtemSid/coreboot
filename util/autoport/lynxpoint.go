@@ -515,6 +515,9 @@ func init() {
 	RegisterPCI(0x8086, 0x8ca4, GenericPCI{}) /* Lynx Point Refresh (9 Series PCH) */
 	RegisterPCI(0x8086, 0x8d24, GenericPCI{}) /* Wellsburg (C610 / C612 / X99) */
 
+	/* SPSR */
+	RegisterPCI(0x8086, 0x8d7c, GenericPCI{}) /* Wellsburg (C610 / C612 / X99) */
+
 	/* LAN Controller on LP PCH (if EEPROM has 0x0000/0xffff in DID) */
 	RegisterPCI(0x8086, 0x155a, GenericPCI{})
 
