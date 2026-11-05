@@ -14,6 +14,8 @@
 #include <cpu/x86/smm.h>
 #include <drivers/intel/oc_mailbox/oc_mailbox.h>
 #include <types.h>
+#include "chip.h"
+#include "iio.h"
 #include "platform.h"
 #include "memmap.h"
 
@@ -131,6 +133,15 @@ struct device_operations grantley_pci_domain_ops = {
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
+static void grantley_init(void *chip_info)
+{
+	const struct northbridge_intel_grantley_config *cfg = chip_info;
+
+	if (cfg->start_iio_links)
+		grantley_iio_start_links(cfg);
+}
+
 struct chip_operations northbridge_intel_grantley_ops = {
 	.name = "Intel Haswell-EP / Broadwell-EP Northbridge",
+	.init = grantley_init,
 };
