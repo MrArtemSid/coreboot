@@ -590,29 +590,11 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	if (!pe_base || !state)
 		return EFI_INVALID_PARAMETER;
 
-	uintptr_t exec_addr = (uintptr_t)pe_base;
-	EFI_STATUS status = EFI_SUCCESS;
-	grantley_peim_entry_t entry_point;
-
-	struct grantley_peim_image image;
-	status = grantley_peim_verify(pe_base, pe_size, &image);
+	uintptr_t entry;
+	EFI_STATUS status = grantley_peim_entry(pe_base, pe_size, &entry);
 	if (status != EFI_SUCCESS)
 		return status;
-
-	/* There is no loader: the image runs in place at its ImageBase. */
-	if (exec_addr != image.image_base) {
-		printk(BIOS_ERR, "PEIM: image base 0x%x, mapped at 0x%lx; this port "
-		       "executes the image in place and has no loader\n",
-		       image.image_base, (unsigned long)exec_addr);
-		return EFI_UNSUPPORTED;
-	}
-	if (!image.xip_compatible) {
-		printk(BIOS_ERR, "PEIM: image sections are not laid out for in-place "
-		       "execution\n");
-		return EFI_UNSUPPORTED;
-	}
-
-	entry_point = (grantley_peim_entry_t)(exec_addr + image.entry_rva);
+	grantley_peim_entry_t entry_point = (grantley_peim_entry_t)entry;
 
 	/*
 	 * UncoreInitPeim allocates ~440 KB on the stack at entry
