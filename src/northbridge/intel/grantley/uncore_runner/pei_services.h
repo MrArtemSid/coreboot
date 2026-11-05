@@ -9,7 +9,7 @@
 #include <Ppi/Pcd.h>
 #include <Ppi/ReadOnlyVariable2.h>
 
-#define MAX_GRANTLEY_PPI_DESCRIPTORS 32
+#define MAX_GRANTLEY_PPI_DESCRIPTORS 16
 
 /* serialDebugMsgLvl; 1 is SDBG_MIN. */
 #define GRANTLEY_RC_SERIAL_SDBG_MIN	1
