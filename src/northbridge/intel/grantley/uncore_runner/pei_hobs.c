@@ -22,12 +22,7 @@ struct grantley_smram_descriptor {
  * and reports the ABSEG/HSEG aliases without it. */
 #define GRANTLEY_SMRAM_CACHEABLE 0x8ULL
 
-/* TOLM[31:26] and TOHM[63:26] hold the index of the last 64 MiB block that
- * decodes to DRAM, not the first address above it (IIO_VTD.h:1097-1140:
- * "0 <= Address[31:26] <= TOLM[31:26]"; MemAddrMap.c:3133-3160 programs the
- * block count minus one), and the stock RC sizes its HOBs from the same block
- * counts (EdkMemoryQpiInit.c:1963-1975). The usable end is therefore one
- * 64 MiB block above the masked field. */
+/* TOLM/TOHM hold the last decoded 64 MiB block, not the end address. */
 #define GRANTLEY_MEMORY_BLOCK (64ULL * MiB)
 #define GRANTLEY_PHYS_ADDRESS_MAX (1ULL << 46)
 
@@ -55,8 +50,7 @@ static bool grantley_decode_tolm(uint32_t raw, uint64_t *end)
 {
 	uint64_t limit = raw & 0xfc000000ULL;
 
-	/* TOLM[25:0] is reserved: a register that reads back as all ones (dead
-	 * config cycle) sets those bits and must not be taken for a limit. */
+	/* Reserved low bits set means a dead config cycle. */
 	if ((raw & 0x03ffffffULL) || !limit)
 		return false;
 	limit += GRANTLEY_MEMORY_BLOCK;
@@ -81,10 +75,7 @@ static bool grantley_decode_tohm(uint32_t low, uint32_t high, uint64_t *end)
 	return true;
 }
 
-/* Merge descriptors of the same type that touch or overlap. The stock RC
- * publishes high DRAM one 4 GiB chunk at a time (EdkMemoryQpiInit.c:1490-1535),
- * so without merging a large DIMM population would exhaust the fixed range
- * array before the sweep ever sees a full picture. */
+/* Merge touching descriptors: high DRAM is reported in 4 GiB chunks. */
 static bool add_range(struct grantley_memory_range *ranges, size_t *count,
 		      uint64_t base, uint64_t size, uint64_t type)
 {
@@ -128,11 +119,7 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 	if (!grantley_decode_tolm(tolm_raw, &tolm) ||
 	    !grantley_decode_tohm(tohm_lo, tohm_hi, &tohm))
 		return EFI_DEVICE_ERROR;
-	/* romstage routes the single 256-bus ECAM segment at GRANTLEY_ECAM_BASE
-	 * and northbridge.c reserves that window unconditionally. DRAM decoded
-	 * through it is an unsupported memory map (config accesses would land in
-	 * RAM), not a resource conflict for the allocator to arbitrate; the
-	 * reference map ends low DRAM at 0x7f800000, i.e. exactly at the base. */
+	/* Low DRAM must end below the fixed ECAM window. */
 	if (tolm > GRANTLEY_ECAM_BASE)
 		return EFI_DEVICE_ERROR;
 
@@ -186,12 +173,8 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 						return EFI_OUT_OF_RESOURCES;
 				} else if (r->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY ||
 					   position == RANGE_STRADDLES_DRAM) {
-					/* System memory outside the decoded window means
-					 * the map and the hardware disagree; a reservation
-					 * that merely straddles it cannot be interpreted. */
 					return EFI_DEVICE_ERROR;
 				}
-				/* Reserved MMIO/flash outside DRAM does not carve RAM. */
 			}
 		} else if (hob->HobType == EFI_HOB_TYPE_MEMORY_ALLOCATION) {
 			if (hob->HobLength < sizeof(EFI_HOB_MEMORY_ALLOCATION))
@@ -235,10 +218,7 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 					memcpy(&d, data + 8 + i * sizeof(d), sizeof(d));
 					if (!d.size || d.physical > UINT64_MAX - d.size)
 						return EFI_DEVICE_ERROR;
-					/* ABSEG/HSEG describe the legacy aliases (physical
-					 * 0xa0000, CPU address 0xfeda0000); only the
-					 * relocatable TSEG can host coreboot's SMM
-					 * handler, so anything else is not our region. */
+					/* Skip the ABSEG/HSEG aliases; only TSEG is used. */
 					if (d.physical < 0x100000 || d.physical >= tolm ||
 					    d.size > tolm - d.physical || d.physical != d.cpu)
 						continue;
@@ -309,9 +289,7 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 		result.ranges[result.count++] = (struct grantley_memory_range) { base, end - base, type };
 	}
 	bool covered = false, have_ram = false, pei_covered = false;
-	/* The PEIM runs flat 32-bit and installs this region as its permanent
-	 * memory, so only low DRAM can back it: an allocator that reported
-	 * memory above 4 GiB would hand out pages the PEIM cannot address. */
+	/* The InstallPeiMemory() region must be low system RAM. */
 	const bool pei_low = state->dram_size && state->dram_base <= 0x100000000ULL &&
 			     state->dram_size <= 0x100000000ULL - state->dram_base;
 	for (size_t i = 0; i < result.count; i++) {
@@ -331,35 +309,19 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 	return EFI_SUCCESS;
 }
 
-/* Can coreboot's SMM layout live in a TSEG of this shape? The bound TSEG is
- * what smm_region() reports, and src/cpu/x86/smm/tseg_region.c:39-40 asserts,
- * in this order, that the base is aligned to the size and that the size is
- * strictly greater than the external stage cache plus the IED plus the
- * optional OPAL state. src/cpu/intel/grantley/platform.c:28-34 additionally
- * requires a power-of-two size with a base aligned to it below 4 GiB, because
- * the SMRR mask cannot describe anything else (smm.c:47 dies on failure).
- * CONFIG_FATAL_ASSERTS is not set in this port, so a power-of-two TSEG of at
- * most cache+IED would reach the handler with sub_size - IED - cache
- * underflowing a size_t instead of stopping: reject it here, where the
- * hardware TSEG is first known. */
+/* TSEG must fit coreboot SMM and be describable by SMRR. */
 static bool smm_layout_fits(uint64_t base, uint64_t size, uint64_t ied_size,
 			    uint64_t smm_reserved_size)
 {
-	if (size <= ied_size + smm_reserved_size)	/* strict '>' in tseg_region.c:40 */
-		return false;
-	if (size & (size - 1))				/* SMRR size must be a power of two */
-		return false;
-	if (base & (size - 1))				/* IS_ALIGNED(sub_base, sub_size) */
-		return false;
-	return base + size <= 0x100000000ULL;		/* SMRR covers 32-bit addresses */
+	return size > ied_size + smm_reserved_size && !(size & (size - 1)) &&
+	       !(base & (size - 1)) && base + size <= 0x100000000ULL;
 }
 
 bool grantley_memmap_bind_tseg(struct grantley_memory_map *map,
 			       uint32_t tseg_base_mib, uint32_t tseg_limit_mib,
 			       uint64_t ied_size, uint64_t smm_reserved_size)
 {
-	/* TSEG_N0[31:20] is the MiB-aligned base, TSEG_N1[31:20] the last MiB
-	 * of the region; the decoder ignores bits 19:0 (IIO_VTD.h:784-832). */
+	/* TSEG_N0/N1 hold the first and last MiB of the TSEG. */
 	const uint64_t base = tseg_base_mib & 0xfff00000ULL;
 	const uint64_t end = (tseg_limit_mib & 0xfff00000ULL) + MiB;
 
@@ -370,9 +332,7 @@ bool grantley_memmap_bind_tseg(struct grantley_memory_map *map,
 		return false;
 	if (base != map->smram_base || end < map->smram_base + map->smram_size)
 		return false;
-	/* Only the vendor IED is carved out of the TSEG that the stock HOB calls
-	 * SMRAM (EdkMemoryQpiInit.c:2172-2177); anything more means the HOB and
-	 * the chipset disagree about where the TSEG is. */
+	/* The SMRAM HOB omits only the IED at the top of TSEG. */
 	if (end - (map->smram_base + map->smram_size) > ied_size)
 		return false;
 	if (!smm_layout_fits(base, end - base, ied_size, smm_reserved_size))

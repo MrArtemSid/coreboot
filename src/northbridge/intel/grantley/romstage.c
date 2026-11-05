@@ -50,10 +50,7 @@ void __noreturn romstage_main(void)
 
 	/* Check for Intel Grantley Uncore reference blob (UncoreInitPeim) */
 	if (CONFIG(HAVE_INTEL_UNCORE_BIN)) {
-		/* Keep all CAR statics, including the PEI arenas and private IDT,
-		 * below a dedicated 768 KiB descending stack.  The selected entry
-		 * frame alone is 0x6db38 bytes; maximum nested usage is not proven.
-		 */
+		/* CAR statics must stay below the 768 KiB module stack. */
 		const uintptr_t stack_top =
 			CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64;
 		if (CONFIG_DCACHE_RAM_SIZE <= 768 * 1024 + 64 ||
@@ -119,10 +116,7 @@ void __noreturn romstage_main(void)
 		struct grantley_memory_map memory_map;
 		status = grantley_pei_memory_map(&uncore_state, tolm, tohm_lo, tohm_hi,
 						&memory_map);
-		/* The SMRAM HOB reports the cacheable TSEG only; the vendor IED
-		 * above it is still inside the TSEG the IIO decodes, and coreboot's
-		 * TSEG layout carves the IED off the top of smm_region(). Bind the
-		 * map to the TSEG registers instead of guessing the size. */
+		/* The SMRAM HOB omits the IED; take the full TSEG from the IIO. */
 		const bool tseg_ok = status == EFI_SUCCESS &&
 			grantley_memmap_bind_tseg(&memory_map,
 						  pci_s_read_config32(dev, 0xa8),

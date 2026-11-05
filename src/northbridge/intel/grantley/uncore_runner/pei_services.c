@@ -23,9 +23,6 @@ static struct grantley_uncore_state *grantley_get_uncore_state(void)
 
 static bool grantley_ppi_descriptor_valid(const EFI_PEI_PPI_DESCRIPTOR *desc)
 {
-	/* PI: InstallPpi() only accepts EFI_PEI_PPI_DESCRIPTOR_PPI entries;
-	 * notification descriptors are rejected with EFI_INVALID_PARAMETER.
-	 */
 	return desc->Guid != (void *)0 &&
 	       (desc->Flags & EFI_PEI_PPI_DESCRIPTOR_PPI) != 0 &&
 	       (desc->Flags & EFI_PEI_PPI_DESCRIPTOR_NOTIFY_TYPES) == 0;
@@ -40,9 +37,6 @@ static EFI_STATUS EFIAPI grantley_install_ppi(
 	if (!state || !ppi_list)
 		return EFI_INVALID_PARAMETER;
 
-	/* Validate the whole list before installing anything: a partial install
-	 * would leave the PPI database in a state the caller cannot undo.
-	 */
 	const EFI_PEI_PPI_DESCRIPTOR *desc = ppi_list;
 	UINTN count = 0;
 
@@ -58,9 +52,6 @@ static EFI_STATUS EFIAPI grantley_install_ppi(
 	if (count > MAX_GRANTLEY_PPI_DESCRIPTORS - state->ppi_count)
 		return EFI_OUT_OF_RESOURCES;
 
-	/* No notification dispatch happens here: this runner has no end-of-PEI
-	 * point and does not implement NotifyPpi() (see grantley_notify_ppi()).
-	 */
 	for (UINTN i = 0; i < count; i++)
 		state->ppi_descriptors[state->ppi_count++] = &ppi_list[i];
 
@@ -150,9 +141,7 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 	/* Overwrite the previous END_OF_HOB_LIST marker with the new HOB */
 	EFI_HOB_GENERIC_HEADER *new_hob =
 		(EFI_HOB_GENERIC_HEADER *)((UINT8 *)state->hob_list + state->hob_allocated);
-	/* EDK2's PeiCreateHob zeroes the whole record: callers rely on a cleared
-	 * payload and the storage may still contain the HOB it replaces.
-	 */
+	/* Callers rely on a zeroed payload, as with EDK2 PeiCreateHob. */
 	memset(new_hob, 0, aligned_length);
 	new_hob->HobType = type;
 	new_hob->HobLength = aligned_length;
@@ -513,12 +502,7 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 		return status;
 	grantley_peim_entry_t entry_point = (grantley_peim_entry_t)entry;
 
-	/*
-	 * UncoreInitPeim allocates ~440 KB on the stack at entry
-	 * (e.g. sub $0x6db38, %esp). Switch to a dedicated stack at
-	 * top of CAR (0xfe1fffc0), providing >800 KB of headroom,
-	 * then restore coreboot's esp upon return.
-	 */
+	/* The module needs ~440 KiB of stack: run it on the top of CAR. */
 	uintptr_t car_stack_top =
 		CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64;
 	const void *services_arg = &state->services_ptr;
@@ -664,15 +648,7 @@ static EFI_STATUS grantley_memory_test_failure(EFI_STATUS status)
 	return status;
 }
 
-/* Operation values in the memory-test PPI: Ignore, Quick, Sparse, Extensive.
- *
- * Stock 0xB6EC423C is reported to write 0x5A5A5A5A at 0x40000-byte strides
- * and to leave the pattern in place.  This port deliberately does not do that:
- * it runs only when the PEIM asks, saves/restores each word, and refuses
- * high-memory addresses while the IA-32 PEIM runs in CAR.  A destructive stock
- * shape needs a validated DRAM range first; that evidence is not in this
- * slice.
- */
+/* Non-destructive pattern test; operation 3 (Extensive) checks every dword. */
 static EFI_STATUS EFIAPI grantley_base_memory_test(
 	const EFI_PEI_SERVICES **services, void *this, EFI_PHYSICAL_ADDRESS begin,
 	UINT64 length, UINT32 operation, EFI_PHYSICAL_ADDRESS *error)
@@ -779,12 +755,7 @@ static void grantley_init_hob_list(struct grantley_uncore_state *state, void *ho
 	};
 }
 
-/*
- * Uncore blob requires EFI_PLATFORM_INFO GUID HOB in addition
- * to PLATFORM_INFO_PPI. Uncore blob routines (at 0x31254,
- * 0xb363c, 0xb364e, 0xb52aa, 0xb5dc0) call GetFirstGuidHob()
- * and dereference the result without checking for NULL.
- */
+/* The module dereferences the PlatformInfo GUID HOB without a NULL check. */
 static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *state)
 {
 	void *hob = (void *)0;
@@ -813,18 +784,12 @@ static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *
 	*(uint16_t *)(data + 0x1a) = 0;
 	/* ExtendedInfoValid = 1 at offset 0x2c */
 	data[0x2c] = 1;
-	/* Temporary HEDT profile, policy revision zero from the cleared payload.
-	 * A mainboard can override both fields before PEIM entry.
-	 */
+	/* HEDT board type; mainboards may override it. */
 	data[0x46] = 0x13;
 	/* MemTsegSize at offset 0x85 */
 #if CONFIG(SMM_TSEG)
 	*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
 #endif
-	/* MemIedSize at 0x89 stays zero: no debug-memory carveout is requested.
-	 * The PEIM produces MemTolm/MaxTolm and MemMir0/1 during initialization;
-	 * do not fabricate trained memory addresses in this input HOB.
-	 */
 	/* SysData.SysSioExist = 1 at offset 0x9e */
 	data[0x9e] = 1;
 
