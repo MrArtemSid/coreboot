@@ -10,6 +10,7 @@
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <acpi/acpi.h>
 #include <acpi/acpigen_pci.h>
+#include <arch/ioapic.h>
 #include <cpu/intel/microcode.h>
 #include <cpu/x86/msr.h>
 #include <cpu/x86/smm.h>
@@ -19,8 +20,13 @@
 #include "chip.h"
 #include "platform.h"
 #include "memmap.h"
+#include <southbridge/intel/lynxpoint/pch.h>
 
 #define GRANTLEY_MMIOL_END		0xfc000000ULL
+/* Stock firmware places the 8 KiB VT-d BAR at the top of MMIOL. */
+#define GRANTLEY_VTD_BASE		0xfbffc000
+#define IIO_VTBAR			0x180
+#define  IIO_VTBAR_EN			(1 << 0)
 #define GRANTLEY_MMIOH_BASE		0x380000000000ULL
 #define GRANTLEY_MMIOH_END		0x384000000000ULL
 
@@ -93,6 +99,8 @@ static void grantley_domain_read_resources(struct device *dev)
 	/* Report ECAM as reserved; the MMIOL window starts right above it. */
 	mmio_from_to(dev, idx++, GRANTLEY_ECAM_BASE, GRANTLEY_ECAM_END);
 	mmio_from_to(dev, idx++, 0xa0000, 0xc0000);
+	if (pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_VTBAR) & IIO_VTBAR_EN)
+		mmio_from_to(dev, idx++, GRANTLEY_VTD_BASE, GRANTLEY_MMIOL_END);
 
 	for (unsigned int i = 0; i < map->count; i++) {
 		const struct grantley_memory_range *range = &map->ranges[i];
@@ -135,6 +143,40 @@ static void grantley_domain_scan_bus(struct device *dev)
 	pci_host_bridge_scan_bus(dev);
 }
 
+static unsigned long grantley_fill_dmar(unsigned long current)
+{
+	const unsigned long tmp = current;
+
+	current += acpi_create_dmar_drhd_4k(current, DRHD_INCLUDE_PCI_ALL, 0,
+					    GRANTLEY_VTD_BASE);
+	current += acpi_create_dmar_ds_ioapic_from_hw(current, IO_APIC_ADDR,
+						      PCH_IOAPIC_PCI_BUS,
+						      PCH_IOAPIC_PCI_SLOT, 0);
+	for (size_t i = 0; i < 8; i++)
+		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
+							PCH_HPET_PCI_SLOT, i);
+	acpi_dmar_drhd_fixup(tmp, current);
+
+	return current;
+}
+
+static unsigned long grantley_write_acpi_tables(const struct device *dev,
+						unsigned long current,
+						struct acpi_rsdp *rsdp)
+{
+	if (!(pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_VTBAR) & IIO_VTBAR_EN))
+		return current;
+
+	acpi_dmar_t *const dmar = (acpi_dmar_t *)current;
+	printk(BIOS_DEBUG, "ACPI:    * DMAR\n");
+	acpi_create_dmar(dmar, DMAR_INTR_REMAP, grantley_fill_dmar);
+	current += dmar->header.length;
+	current = acpi_align_current(current);
+	acpi_add_table(rsdp, dmar);
+
+	return current;
+}
+
 static const char *grantley_domain_acpi_name(const struct device *dev)
 {
 	return dev->path.type == DEVICE_PATH_DOMAIN ? "PCI0" : NULL;
@@ -146,6 +188,7 @@ struct device_operations grantley_pci_domain_ops = {
 	.scan_bus         = grantley_domain_scan_bus,
 	.acpi_name        = grantley_domain_acpi_name,
 	.acpi_fill_ssdt   = pci_domain_fill_ssdt,
+	.write_acpi_tables = grantley_write_acpi_tables,
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
@@ -166,6 +209,11 @@ static void iio_start_bifurcation(pci_devfn_t dev, u8 cfg)
 static void grantley_init(void *chip_info)
 {
 	const struct northbridge_intel_grantley_config *cfg = chip_info;
+
+	/* The Uncore RC leaves VT-d off; IIO late init would enable it. */
+	if (cfg->vtd_support)
+		pci_s_write_config32(PCI_DEV(0, 5, 0), IIO_VTBAR,
+				     GRANTLEY_VTD_BASE | IIO_VTBAR_EN);
 
 	if (!cfg->start_iio_links)
 		return;

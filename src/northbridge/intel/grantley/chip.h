@@ -18,6 +18,7 @@
 #define IIO_BIFURCATE_X8	1
 
 struct northbridge_intel_grantley_config {
+	bool vtd_support;
 	bool start_iio_links;
 	u8 iou0_bifurcation;	/* 00:02.0 */
 	u8 iou1_bifurcation;	/* 00:03.0 */
