@@ -32,6 +32,10 @@
 #define GRANTLEY_INTELSETUP_ECC_ENABLED		1
 #define GRANTLEY_INTELSETUP_ECC_AUTO		2
 
+/* serialDebugMsgLvl; 1 is SDBG_MIN. */
+#define GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL	0x2d6
+#define GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN	1
+
 /* Vendor GUID the vendor PEIM passes to GetVariable(L"IntelSetup").  The
  * value is at image 0xFFDCFBF8 and is the EFI variable namespace owner, not
  * an arbitrary store selector: stock GetVariable matches name AND GUID.

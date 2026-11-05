@@ -147,6 +147,17 @@ config GRANTLEY_INTELSETUP_STOCK_D4M4
 	  GetVariable("IntelSetup") answers EFI_NOT_FOUND and the PEIM uses its
 	  own ZeroMem(0x17CA) + IIO default path.
 
+config GRANTLEY_UNCORE_RC_SERIAL
+	bool "Enable UncoreInitPeim serial debug output"
+	depends on HAVE_INTEL_UNCORE_BIN
+	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
+	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
+	default y
+	help
+	  Set serialDebugMsgLvl in the IntelSetup payload to 1 so the
+	  Uncore reference code prints its own messages on COM1. The stock
+	  payload has it at 0.
+
 config DCACHE_BSP_STACK_SIZE
 	hex
 	default 0x10000

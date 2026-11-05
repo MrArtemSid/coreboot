@@ -1423,6 +1423,11 @@ static EFI_STATUS grantley_intelsetup_variable(struct grantley_uncore_state *sta
 				GRANTLEY_INTELSETUP_ECC_ENABLED;
 	}
 
+#if CONFIG(GRANTLEY_UNCORE_RC_SERIAL)
+	setup[GRANTLEY_INTELSETUP_OFF_RC_SERIAL_LEVEL] =
+		GRANTLEY_INTELSETUP_RC_SERIAL_SDBG_MIN;
+#endif
+
 	printk(BIOS_INFO, "IntelSetup: %u stock default bytes, "
 	       "DdrFreqLimit=%u EccSupport=%u\n", policy_size,
 	       setup[GRANTLEY_INTELSETUP_OFF_DDR_FREQ_LIMIT],
