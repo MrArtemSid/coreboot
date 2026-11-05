@@ -5,6 +5,7 @@
 #include <console/console.h>
 #include <device/device.h>
 #include <device/pci.h>
+#include <device/pci_ids.h>
 #include <device/pci_ops.h>
 #include <cpu/cpu.h>
 #include <cpu/intel/grantley/grantley.h>
@@ -28,6 +29,11 @@
 #define GRANTLEY_VTD_BASE		0xfbffc000
 #define IIO_VTBAR			0x180
 #define  IIO_VTBAR_EN			(1 << 0)
+#define IIO_IOAPIC_ABAR			0x40
+#define  IIO_IOAPIC_ABAR_EN		(1 << 15)
+/* Stock firmware places the IIO IOAPIC right above the PCH one. */
+#define IIO_IOAPIC_ABAR_STOCK		(IIO_IOAPIC_ABAR_EN | 0x010)
+#define IIO_IOAPIC_GSI_BASE		24
 #define GRANTLEY_MMIOH_BASE		0x380000000000ULL
 #define GRANTLEY_MMIOH_END		0x384000000000ULL
 
@@ -151,15 +157,28 @@ static void grantley_domain_scan_bus(struct device *dev)
 	pci_host_bridge_scan_bus(dev);
 }
 
+static uintptr_t iio_ioapic_addr(void)
+{
+	const u16 abar = pci_s_read_config16(PCI_DEV(0, 5, 4), IIO_IOAPIC_ABAR);
+
+	if (!(abar & IIO_IOAPIC_ABAR_EN))
+		return 0;
+	return IO_APIC_ADDR | ((abar & 0xfff) << 8);
+}
+
 static unsigned long grantley_fill_dmar(unsigned long current)
 {
 	const unsigned long tmp = current;
+	const uintptr_t iio_ioapic = iio_ioapic_addr();
 
 	current += acpi_create_dmar_drhd_4k(current, DRHD_INCLUDE_PCI_ALL, 0,
 					    GRANTLEY_VTD_BASE);
 	current += acpi_create_dmar_ds_ioapic_from_hw(current, IO_APIC_ADDR,
 						      PCH_IOAPIC_PCI_BUS,
 						      PCH_IOAPIC_PCI_SLOT, 0);
+	if (iio_ioapic)
+		current += acpi_create_dmar_ds_ioapic_from_hw(current, iio_ioapic,
+							      0, 5, 4);
 	for (size_t i = 0; i < 8; i++)
 		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
 							PCH_HPET_PCI_SLOT, i);
@@ -238,6 +257,43 @@ struct device_operations grantley_pci_domain_ops = {
 	.acpi_fill_ssdt   = pci_domain_fill_ssdt,
 	.write_acpi_tables = grantley_write_acpi_tables,
 	.ops_pci          = &pci_dev_ops_pci,
+};
+
+static void iio_ioapic_read_resources(struct device *dev)
+{
+	pci_dev_read_resources(dev);
+
+	/* The Uncore RC may leave the IOAPIC window disabled. */
+	if (!iio_ioapic_addr())
+		pci_write_config16(dev, IIO_IOAPIC_ABAR, IIO_IOAPIC_ABAR_STOCK);
+
+	mmio_range(dev, IIO_IOAPIC_ABAR, iio_ioapic_addr(), 0x100);
+}
+
+static void iio_ioapic_init(struct device *dev)
+{
+	pci_dev_init(dev);
+	ioapic_create_dev(dev, iio_ioapic_addr(), IIO_IOAPIC_GSI_BASE);
+}
+
+static struct device_operations iio_ioapic_ops = {
+	.read_resources   = iio_ioapic_read_resources,
+	.set_resources    = pci_dev_set_resources,
+	.enable_resources = pci_dev_enable_resources,
+	.init             = iio_ioapic_init,
+	.ops_pci          = &pci_dev_ops_pci,
+};
+
+static const unsigned short iio_ioapic_ids[] = {
+	0x2f2c, /* Haswell-EP */
+	0x6f2c, /* Broadwell-EP */
+	0
+};
+
+static const struct pci_driver iio_ioapic_driver __pci_driver = {
+	.ops     = &iio_ioapic_ops,
+	.vendor  = PCI_VID_INTEL,
+	.devices = iio_ioapic_ids,
 };
 
 #define IIO_BIFCTRL		0x190
