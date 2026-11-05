@@ -93,7 +93,7 @@ static void grantley_domain_read_resources(struct device *dev)
 	int idx = 10;
 
 	/* The windows the Uncore RC programs into the IIO for socket 0. */
-	domain_io_window_from_to(dev, 0, 0, 0x10000);
+	domain_io_window_from_to(dev, 0, 0x1000, 0x10000);
 	domain_mem_window_from_to(dev, 1, GRANTLEY_ECAM_END, GRANTLEY_MMIOL_END);
 	domain_mem_window_from_to(dev, 2, GRANTLEY_MMIOH_BASE, GRANTLEY_MMIOH_END);
 	/* Report ECAM as reserved; the MMIOL window starts right above it. */
