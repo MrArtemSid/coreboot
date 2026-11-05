@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
-#include <cf9_reset.h>
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <device/mmio.h>
 #include <post.h>
@@ -80,32 +79,6 @@ static EFI_STATUS EFIAPI grantley_install_ppi(
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS EFIAPI grantley_reinstall_ppi(
-	const struct _EFI_PEI_SERVICES **services,
-	const EFI_PEI_PPI_DESCRIPTOR *old_ppi,
-	const EFI_PEI_PPI_DESCRIPTOR *new_ppi)
-{
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-
-	if (!state || !old_ppi || !new_ppi)
-		return EFI_INVALID_PARAMETER;
-	if (!grantley_ppi_descriptor_valid(new_ppi) || !old_ppi->Guid ||
-	    !new_ppi->Guid)
-		return EFI_INVALID_PARAMETER;
-	/* PI: the replacement must describe the same interface. */
-	if (memcmp(old_ppi->Guid, new_ppi->Guid, sizeof(EFI_GUID)) != 0)
-		return EFI_INVALID_PARAMETER;
-
-	for (UINTN i = 0; i < state->ppi_count; i++) {
-		if (state->ppi_descriptors[i] != old_ppi)
-			continue;
-		state->ppi_descriptors[i] = new_ppi;
-		return EFI_SUCCESS;
-	}
-
-	return EFI_NOT_FOUND;
-}
-
 static EFI_STATUS EFIAPI grantley_locate_ppi(
 	const struct _EFI_PEI_SERVICES **services,
 	const void *guid,
@@ -140,23 +113,6 @@ static EFI_STATUS EFIAPI grantley_locate_ppi(
 	return EFI_NOT_FOUND;
 }
 
-static EFI_STATUS EFIAPI grantley_notify_ppi(
-	const struct _EFI_PEI_SERVICES **services,
-	const struct _EFI_PEI_NOTIFY_DESCRIPTOR *notify_list)
-{
-	/* This runner executes one PEIM and has no end-of-PEI dispatch point.
-	 * It cannot honour either notification flavour, so it refuses the
-	 * registration instead of reporting success and losing the callback.
-	 * The vendor PEIM never calls NotifyPpi (0 `call *0x24` in the image).
-	 */
-	if (!notify_list || !notify_list->Guid || !notify_list->Notify)
-		return EFI_INVALID_PARAMETER;
-	if ((notify_list->Flags & EFI_PEI_PPI_DESCRIPTOR_NOTIFY_TYPES) == 0)
-		return EFI_INVALID_PARAMETER;
-
-	return EFI_UNSUPPORTED;
-}
-
 static EFI_STATUS EFIAPI grantley_get_boot_mode(
 	const struct _EFI_PEI_SERVICES **services,
 	EFI_BOOT_MODE * mode)
@@ -167,19 +123,6 @@ static EFI_STATUS EFIAPI grantley_get_boot_mode(
 		return EFI_INVALID_PARAMETER;
 
 	*mode = state->boot_mode;
-	return EFI_SUCCESS;
-}
-
-static EFI_STATUS EFIAPI grantley_set_boot_mode(
-	const struct _EFI_PEI_SERVICES **services,
-	EFI_BOOT_MODE boot_mode)
-{
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-
-	if (!state)
-		return EFI_INVALID_PARAMETER;
-
-	state->boot_mode = boot_mode;
 	return EFI_SUCCESS;
 }
 
@@ -243,465 +186,29 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 	return EFI_SUCCESS;
 }
 
-static UINT64 grantley_page_down(UINT64 value)
-{
-	return value & ~(UINT64)0xfff;
-}
-
-static UINT64 grantley_page_up(UINT64 value)
-{
-	return (value + 0xfff) & ~(UINT64)0xfff;
-}
-
 /*
- * Overlap test used on both sides of the allocator.  An unrepresentable range
- * (base + size past the end of the address space) cannot describe memory and
- * is reported as overlapping so that every caller refuses it instead of
- * silently skipping the check.
+ * The module does not allocate pages, so the region is only recorded here
+ * and checked against the HOB memory map after the module returns.
  */
-static BOOLEAN grantley_ranges_overlap(UINT64 base_a, UINT64 size_a,
-				       UINT64 base_b, UINT64 size_b)
-{
-	if (!size_a || !size_b)
-		return FALSE;
-	if (base_a > UINT64_MAX - size_a || base_b > UINT64_MAX - size_b)
-		return TRUE;
-	return base_a < base_b + size_b && base_b < base_a + size_a;
-}
-
-/* Regions the page allocator must never hand out once an arena exists. */
-static BOOLEAN grantley_arena_region_excluded(const struct grantley_uncore_state *state,
-					      UINT64 base, UINT64 size)
-{
-	return grantley_ranges_overlap(base, size, CONFIG_DCACHE_RAM_BASE,
-				       CONFIG_DCACHE_RAM_SIZE) ||
-	       grantley_ranges_overlap(base, size, (UINT64)(uintptr_t)state->pool_base,
-				       state->pool_size) ||
-	       grantley_ranges_overlap(base, size, (UINT64)(uintptr_t)state->hob_list,
-				       state->hob_size) ||
-	       grantley_ranges_overlap(base, size, (UINT64)(uintptr_t)state,
-				       sizeof(*state));
-}
-
-EFI_STATUS grantley_pei_set_memory_window(struct grantley_uncore_state *state,
-					  uint64_t ceiling,
-					  EFI_PHYSICAL_ADDRESS reserved_base,
-					  uint64_t reserved_size,
-					  BOOLEAN reserved_known)
-{
-	if (!state || !ceiling)
-		return EFI_INVALID_PARAMETER;
-	if (state->dram_initialized)
-		return EFI_ALREADY_STARTED;
-
-	/*
-	 * Nothing at or above the CAR base is claimable DRAM: the runner
-	 * executes the PEIM from CONFIG_DCACHE_RAM_BASE and on a stack at
-	 * CONFIG_DCACHE_RAM_BASE + CONFIG_DCACHE_RAM_SIZE - 64 (romstage.c).
-	 * An arena that could reach either would hand the PEIM the very
-	 * memory it is running from, so bound the window at the CAR base
-	 * instead of validating the range later.
-	 */
-	if (ceiling > (uint64_t)CONFIG_DCACHE_RAM_BASE)
-		return EFI_INVALID_PARAMETER;
-
-	/* A reserved range that does not fit in the address space cannot
-	 * describe memory; refuse it instead of wrapping in the overlap test. */
-	if (reserved_known && reserved_size &&
-	    reserved_base > UINT64_MAX - reserved_size)
-		return EFI_INVALID_PARAMETER;
-
-	/* A known exclusion with a base but no size is a half-resolved value:
-	 * it would re-create the "no exclusion" fail-open while carrying the
-	 * resolved flag.  Only (0, 0) may declare "positively none". */
-	if (reserved_known && !reserved_size && reserved_base)
-		return EFI_INVALID_PARAMETER;
-
-	state->memory_ceiling = ceiling;
-	state->arena_ceiling = ceiling;
-	state->smram_base = reserved_size ? (uint64_t)reserved_base : 0;
-	state->smram_size = reserved_size;
-	/* Explicit: an exclusion nobody has resolved yet is not "no exclusion". */
-	state->exclusion_known = reserved_known;
-	return EFI_SUCCESS;
-}
-
-/* InstallPeiMemory() policy.
- *
- * This runner does not implement the generic PEI-core contract: the stock PEI
- * core records the region and raises SwitchStackSignal, after which the
- * dispatcher creates a Stack HOB, migrates the HOB heap and the stack into the
- * region, rewrites the PHIT and switches stacks.  None of that exists here
- * (no dispatcher, no stack migration, no PHIT rewrite).
- *
- * What it does instead: once the MRC has trained DRAM, the backing window is
- * pinned from the TOLM read back from hardware, and a claim is accepted only
- * when it fits that window; the accepted claim becomes the arena the service
- * hands out.  A malformed claim, or one that cannot be backed by a decoded
- * trained TOLM, is refused.  Refusal is fatal on the target because the PEIM
- * does not test the status: the arena is zeroed, post 0xe7 is issued and die()
- * is called, so no unvalidated memory is ever handed out.  Under ENV_TEST the
- * refusal is returned so the tests can observe it.
- */
-void grantley_pei_set_smram(struct grantley_uncore_state *state,
-			    uint64_t base, uint64_t size)
-{
-	if (!state)
-		return;
-	if (!size || (base & 0xfff) || (size & 0xfff) ||
-	    base >= GRANTLEY_PEI_MEMORY_LIMIT ||
-	    size > GRANTLEY_PEI_MEMORY_LIMIT - base) {
-		state->smram_base = 0;
-		state->smram_size = 0;
-		/* An unusable window is not a resolved one. */
-		state->exclusion_known = FALSE;
-		return;
-	}
-	state->smram_base = base;
-	state->smram_size = size;
-	/* The same pair bounds a claim accepted through InstallPeiMemory(). */
-	state->exclusion_known = TRUE;
-}
-
-const char *grantley_pei_memory_refusal_string(enum grantley_pei_memory_refusal why)
-{
-	switch (why) {
-	case GRANTLEY_PEI_MEMORY_REGION_OK:
-		return "region passes address/overlap checks";
-	case GRANTLEY_PEI_MEMORY_REFUSED_INVALID:
-		return "invalid length or address overflow";
-	case GRANTLEY_PEI_MEMORY_REFUSED_UNREACHABLE:
-		return "region is not fully inside 1 MiB..4 GiB";
-	case GRANTLEY_PEI_MEMORY_REFUSED_LIVE_STORAGE:
-		return "region overlaps state/pool/HOB/CAR storage";
-	case GRANTLEY_PEI_MEMORY_REFUSED_SMRAM:
-		return "region overlaps the configured SMRAM/TSEG window";
-	case GRANTLEY_PEI_MEMORY_REFUSED_NO_VENDOR_CONTRACT:
-		return "vendor InstallPeiMemory contract (HOB/stack/PHIT "
-		       "migration) is not implemented";
-	case GRANTLEY_PEI_MEMORY_REFUSED_WINDOW:
-		return "claim does not fit the pinned DRAM window "
-		       "(ceiling/exclusion/alignment)";
-	case GRANTLEY_PEI_MEMORY_REFUSED_NO_TOLM:
-		return "trained TOLM readback is absent or unusable (zero, "
-		       "reserved bits set, above ECAM, or too small for TSEG)";
-	}
-	return "unknown memory refusal";
-}
-
-enum grantley_pei_memory_refusal
-grantley_pei_memory_contract_refusal(const struct grantley_uncore_state *state,
-				     uint64_t begin, uint64_t length)
-{
-	if (!state || !length || length > UINT64_MAX - begin)
-		return GRANTLEY_PEI_MEMORY_REFUSED_INVALID;
-
-	uint64_t end = begin + length;
-	/* The whole region must be reachable by a flat IA-32 PEIM; clipping a
-	 * region that straddles 4 GiB would be a false success.
-	 */
-	if (begin < GRANTLEY_PEI_MEMORY_FLOOR ||
-	    begin >= GRANTLEY_PEI_MEMORY_LIMIT ||
-	    end > GRANTLEY_PEI_MEMORY_LIMIT)
-		return GRANTLEY_PEI_MEMORY_REFUSED_UNREACHABLE;
-
-	const struct {
-		uintptr_t start;
-		uint64_t length;
-	} live[] = {
-		{ (uintptr_t)state, sizeof(*state) },
-		{ (uintptr_t)state->pool_base, state->pool_size },
-		{ (uintptr_t)state->hob_list, state->hob_size },
-		{ (uintptr_t)CONFIG_DCACHE_RAM_BASE, CONFIG_DCACHE_RAM_SIZE },
-	};
-
-	for (size_t i = 0; i < ARRAY_SIZE(live); i++) {
-		if (!live[i].length || !live[i].start)
-			continue;
-		uint64_t live_end = (uint64_t)live[i].start + live[i].length;
-		if (begin < live_end && (uint64_t)live[i].start < end)
-			return GRANTLEY_PEI_MEMORY_REFUSED_LIVE_STORAGE;
-	}
-
-	if (state->smram_size) {
-		uint64_t smram_end = state->smram_base + state->smram_size;
-		if (begin < smram_end && state->smram_base < end)
-			return GRANTLEY_PEI_MEMORY_REFUSED_SMRAM;
-	}
-
-	return GRANTLEY_PEI_MEMORY_REFUSED_NO_VENDOR_CONTRACT;
-}
-
-EFI_STATUS grantley_pei_memory_region_check(const struct grantley_uncore_state *state,
-					    uint64_t begin, uint64_t length)
-{
-	switch (grantley_pei_memory_contract_refusal(state, begin, length)) {
-	case GRANTLEY_PEI_MEMORY_REGION_OK:
-	case GRANTLEY_PEI_MEMORY_REFUSED_NO_VENDOR_CONTRACT:
-		return EFI_SUCCESS;
-	case GRANTLEY_PEI_MEMORY_REFUSED_INVALID:
-		return EFI_INVALID_PARAMETER;
-	case GRANTLEY_PEI_MEMORY_REFUSED_UNREACHABLE:
-		return EFI_UNSUPPORTED;
-	case GRANTLEY_PEI_MEMORY_REFUSED_LIVE_STORAGE:
-	case GRANTLEY_PEI_MEMORY_REFUSED_SMRAM:
-		return EFI_INVALID_PARAMETER;
-	case GRANTLEY_PEI_MEMORY_REFUSED_WINDOW:
-		/* Not produced by the classifier; a claim outside the pinned
-		 * window is an unsupported range for this address check. */
-		return EFI_UNSUPPORTED;
-	case GRANTLEY_PEI_MEMORY_REFUSED_NO_TOLM:
-		/* Also install-path only: no trained bound to check against. */
-		return EFI_UNSUPPORTED;
-	}
-	return EFI_UNSUPPORTED;
-}
-
-/*
- * Validate and record the range a PEIM installs as permanent memory.
- *
- * Only reachable once a window is pinned; without one the service keeps its
- * E7 refusal.  The stock core does nothing of this: 0xFFDA26FF stores Begin,
- * Length and Begin + Length, sets PeiMemoryInstalled and returns EFI_SUCCESS.
- * Everything that keeps the arena from describing memory the platform cannot
- * hand out is therefore this provider's job.  A rejected range is never
- * recorded, and the first accepted range is never replaced.
- */
-static EFI_STATUS grantley_pei_memory_install(struct grantley_uncore_state *state,
-					      EFI_PHYSICAL_ADDRESS begin,
-					      UINT64 length)
-{
-	UINT64 start = begin;
-	UINT64 end;
-	UINT64 floor;
-
-	if (!state)
-		return EFI_INVALID_PARAMETER;
-
-	if (!length || start > UINT64_MAX - length)
-		return EFI_INVALID_PARAMETER;
-	end = start + length;
-
-	/* Without a pinned window there is nothing to validate against; the
-	 * caller refuses long before this point. */
-	if (!state->memory_ceiling)
-		return EFI_NOT_READY;
-	/* The claim must be backed by the validated window (TOLM). */
-	if (end > state->memory_ceiling)
-		return EFI_INVALID_PARAMETER;
-
-	floor = grantley_page_up(start);
-
-	/* The registered span may reach past the allocatable top: the top of
-	 * low DRAM is where the Uncore PEIM has already committed TSEG (its
-	 * GetMemoryMap() runs before this callback).  A claim ending there is
-	 * valid, but no page at or above arena_ceiling may ever be handed out,
-	 * so the arena stops below it. */
-	UINT64 top = end < state->arena_ceiling ? end : state->arena_ceiling;
-
-	/* Pages are only exposed from the first page boundary at or after
-	 * begin: the partial head is not handed out.  If no whole page remains
-	 * the arena could never satisfy a single AllocatePages request, so the
-	 * claim is refused instead of recording a range the allocator can only
-	 * fail on.
-	 */
-	if (floor >= top || top - floor < 4096)
-		return EFI_INVALID_PARAMETER;
-
-	/* An exclusion that has not been resolved yet must not be read as "the
-	 * platform has none": that is how a TSEG gets handed out as DRAM. */
-	if (!state->exclusion_known)
-		return EFI_NOT_READY;
-
-	/* A TSEG/IED the platform has published is not DRAM at all.  The range
-	 * may legitimately cover storage the runner is still using (the stock
-	 * PEIM claims all of low DRAM); what must never happen is that a page
-	 * is handed out over it, which grantley_allocate_pages() enforces.
-	 */
-	if (grantley_ranges_overlap(floor, end - floor, state->smram_base,
-				    state->smram_size))
-		return EFI_INVALID_PARAMETER;
-
-	state->dram_base = floor;
-	state->dram_size = top - floor;
-	state->dram_free_top = top;
-	state->dram_initialized = TRUE;
-	return EFI_SUCCESS;
-}
-
-static EFI_STATUS grantley_pei_pin_window_from_hardware(struct grantley_uncore_state *state);
-
 static EFI_STATUS EFIAPI grantley_install_pei_memory(
 	const struct _EFI_PEI_SERVICES **services,
 	EFI_PHYSICAL_ADDRESS memory_begin,
 	UINT64 memory_length)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
-	EFI_STATUS status;
-	enum grantley_pei_memory_refusal why;
 
-	if (!state)
+	if (!state || !memory_length || memory_begin < GRANTLEY_PEI_MEMORY_FLOOR ||
+	    memory_begin >= GRANTLEY_PEI_MEMORY_LIMIT ||
+	    memory_length > GRANTLEY_PEI_MEMORY_LIMIT - memory_begin)
 		return EFI_INVALID_PARAMETER;
-
-	/* First accepted arena wins: the PEIM never tests this status, so a
-	 * second claim may not silently replace memory already handed out. */
 	if (state->dram_initialized)
 		return EFI_SUCCESS;
 
-	/* A malformed claim is refused before any register is read. */
-	if (!memory_length || (uint64_t)memory_begin > UINT64_MAX - memory_length) {
-		why = GRANTLEY_PEI_MEMORY_REFUSED_INVALID;
-		status = EFI_INVALID_PARAMETER;
-		goto refuse;
-	}
-
-	/* M4: the bounds exist at this moment, not before entry.  Pin them from
-	 * the TOLM the MRC just programmed; a readback that cannot be decoded
-	 * keeps the refusal (training did not publish a limit). */
-	if (!state->memory_ceiling) {
-		status = grantley_pei_pin_window_from_hardware(state);
-		if (status != EFI_SUCCESS) {
-			why = GRANTLEY_PEI_MEMORY_REFUSED_NO_TOLM;
-			status = EFI_UNSUPPORTED;
-			goto refuse;
-		}
-	}
-
-	status = grantley_pei_memory_install(state, memory_begin, memory_length);
-	if (status == EFI_SUCCESS) {
-		state->memory_install_failed = FALSE;
-		state->memory_refused = FALSE;
-		printk(BIOS_INFO, "PEIM: InstallPeiMemory(begin=0x%llx "
-		       "length=0x%llx) accepted: backing limit 0x%llx, "
-		       "arena 0x%llx+0x%llx\n",
-		       (unsigned long long)memory_begin,
-		       (unsigned long long)memory_length,
-		       (unsigned long long)state->memory_ceiling,
-		       (unsigned long long)state->dram_base,
-		       (unsigned long long)state->dram_size);
-		return EFI_SUCCESS;
-	}
-	why = GRANTLEY_PEI_MEMORY_REFUSED_WINDOW;
-
-refuse:
-
-	state->memory_refused = TRUE;
-	state->memory_refusal = why;
-
-	/*
-	 * The pinned PEIM does not test this status: 0xFFE60FFD and 0xFFE61513
-	 * both fall straight through to ReportStatusCode with the same range,
-	 * and 0xFFE6112F then allocates its workspace.  A refused first claim
-	 * must therefore leave the allocators with nothing to hand out,
-	 * instead of silently serving CAR as if the claim had worked.
-	 */
-	if (!state->dram_initialized) {
-		state->memory_install_failed = TRUE;
-		state->dram_base = 0;
-		state->dram_size = 0;
-		state->dram_free_top = 0;
-	}
-
-	printk(BIOS_ERR, "PEIM: InstallPeiMemory(begin=0x%llx length=0x%llx) "
-	       "refused: %s; no permanent window or PHIT update was created\n",
-	       (unsigned long long)memory_begin,
-	       (unsigned long long)memory_length,
-	       grantley_pei_memory_refusal_string(why));
-
-#if ENV_TEST
-	/* Host tests cannot unwind a PEIM; report the refusal as a status and
-	 * let the caller assert it.  Firmware does not return to the blob:
-	 * the PEIM ignores this status, so a status alone would not be a gate.
-	 */
-	return status;
-#else
-	post_code(0xe7);
-	die("Grantley: InstallPeiMemory cannot be honored: the claim is not "
-	    "backed by the trained TOLM window (and no HOB/stack/PHIT migration "
-	    "exists); refusing to hand the PEIM unvalidated memory\n");
-#endif
-}
-
-static bool grantley_page_type_valid(EFI_MEMORY_TYPE memory_type)
-{
-	switch (memory_type) {
-	case EfiReservedMemoryType:
-	case EfiLoaderCode:
-	case EfiLoaderData:
-	case EfiBootServicesCode:
-	case EfiBootServicesData:
-	case EfiRuntimeServicesCode:
-	case EfiRuntimeServicesData:
-	case EfiACPIReclaimMemory:
-	case EfiACPIMemoryNVS:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static EFI_STATUS EFIAPI grantley_allocate_pages(
-	const struct _EFI_PEI_SERVICES **services,
-	EFI_MEMORY_TYPE memory_type,
-	UINTN pages,
-	EFI_PHYSICAL_ADDRESS * addr)
-{
-	struct grantley_uncore_state *state = grantley_get_uncore_state();
-
-	if (!state || !addr)
-		return EFI_INVALID_PARAMETER;
-
-	if (!pages)
-		return EFI_INVALID_PARAMETER;
-	if (!grantley_page_type_valid(memory_type))
-		return EFI_INVALID_PARAMETER;
-	if (pages > (UINTN)-1 / 4096)
-		return EFI_OUT_OF_RESOURCES;
-
-	/* A refused claim must not be papered over by handing out CAR: the PEIM
-	 * ignores the status and treats what it gets as permanent. */
-	if (state->memory_install_failed)
-		return EFI_OUT_OF_RESOURCES;
-
-	/*
-	 * Once a PEIM has installed permanent memory the stock core stops using
-	 * temporary RAM: 0xFFDA275E carves pages downwards from
-	 * FreePhysicalMemoryTop and refuses to cross PhysicalMemoryBegin.  Do
-	 * the same here, because the PEIM asks for pages after install and
-	 * expects them outside CAR.
-	 */
-	if (state->dram_initialized) {
-		UINT64 top = grantley_page_down(state->dram_free_top);
-		UINT64 bytes = (UINT64)pages * 4096;
-		UINT64 candidate;
-
-		if (top < state->dram_base || bytes > top - state->dram_base)
-			return EFI_OUT_OF_RESOURCES;
-		candidate = top - bytes;
-
-		/* The core still runs from CAR and keeps the HOB list and pool
-		 * there until it migrates.  Handing those pages out as permanent
-		 * memory would corrupt the very structures describing the
-		 * allocation, so refuse instead of carving around them. */
-		if (grantley_arena_region_excluded(state, candidate, bytes))
-			return EFI_OUT_OF_RESOURCES;
-
-		state->dram_free_top = candidate;
-		*addr = candidate;
-		return EFI_SUCCESS;
-	}
-
-	if (state->pool_allocated > state->pool_size)
-		return EFI_OUT_OF_RESOURCES;
-	uintptr_t current = (uintptr_t)state->pool_base + state->pool_allocated;
-	UINTN padding = -current & 4095;
-	UINTN remaining = state->pool_size - state->pool_allocated;
-	UINTN bytes = pages * 4096;
-	if (padding > remaining || bytes > remaining - padding)
-		return EFI_OUT_OF_RESOURCES;
-
-	*addr = current + padding;
-	state->pool_allocated += padding + bytes;
+	printk(BIOS_INFO, "PEIM: InstallPeiMemory(0x%llx, 0x%llx)\n",
+	       (unsigned long long)memory_begin, (unsigned long long)memory_length);
+	state->dram_base = memory_begin;
+	state->dram_size = memory_length;
+	state->dram_initialized = TRUE;
 	return EFI_SUCCESS;
 }
 
@@ -716,12 +223,6 @@ static EFI_STATUS EFIAPI grantley_allocate_pool(
 		return EFI_INVALID_PARAMETER;
 
 	if (size > (UINTN)-1 - 7)
-		return EFI_OUT_OF_RESOURCES;
-
-	/* Same reason as AllocatePages: after a refused claim the PEIM's next
-	 * act is AllocatePool (0xFFE6112F) for the arena it believes it owns,
-	 * so handing out CAR here would be indistinguishable from success. */
-	if (state->memory_install_failed)
 		return EFI_OUT_OF_RESOURCES;
 
 	UINTN aligned_size = (size + 7) & ~(UINTN)7;
@@ -745,15 +246,6 @@ static VOID EFIAPI grantley_copy_mem(
 		memcpy(destination, source, length);
 }
 
-static VOID EFIAPI grantley_set_mem(
-	void *buffer,
-	UINTN size,
-	UINT8 value)
-{
-	if (buffer && size)
-		memset(buffer, value, size);
-}
-
 static EFI_STATUS EFIAPI grantley_report_status_code(
 	const struct _EFI_PEI_SERVICES **services,
 	EFI_STATUS_CODE_TYPE type,
@@ -763,13 +255,6 @@ static EFI_STATUS EFIAPI grantley_report_status_code(
 	const void *data)
 {
 	post_code((uint8_t)value);
-	return EFI_SUCCESS;
-}
-
-static EFI_STATUS EFIAPI grantley_reset_system(
-	const struct _EFI_PEI_SERVICES **services)
-{
-	system_reset();
 	return EFI_SUCCESS;
 }
 
@@ -801,83 +286,6 @@ static uint32_t route_cpuid(void)
 	return cpuid_eax(1);
 }
 #endif
-
-/*
- * M4 - pin the DRAM window from the bounds the MRC just programmed.
- *
- * InstallPeiMemory is reached only after MrcStatus == 0 (gate at 0xFFE5F109)
- * and after step 64 of the MRC table ran (0xFFE33995 -> 0xFFE33874 ->
- * 0xFFE33741 = WriteTolmTohmCSRs, MemAddrMap.c:3096).  That step is the only
- * writer of the TOLM register (IIO_VTD 0x090040D0) and of
- * host->var.mem.lowMemBase/lowMemSize in the whole blob, so at this moment -
- * and not before entry - PCI 0:5.0 0xd0 holds the trained low-DRAM limit.
- * romstage reads the same register after the PEIM and grantley_pei_memory_map()
- * decodes it with the same rule; if the two disagreed the map check would fail,
- * so the encoding is reused here rather than given a new mask.
- *
- * TSEG is programmed by the PEIM itself, in the GetMemoryMap() call that
- * InstallEfiMemory() makes before InstallPeiMemory(): for every present socket
- * it read-modify-writes TSEG_N0/N1 (IIO 0x090040A8/AC) from
- * PlatformInfo->MemData.MemTsegSize (offset 0x85, which
- * grantley_init_platform_info_hob() sets to CONFIG_SMM_TSEG_SIZE).  The same
- * call trims the low main-memory descriptor down to the TSEG base, so the
- * descriptor this claim is cut from ends there and the claim cannot reach
- * SMRAM.  The arena cap below keeps that true even if a map ever offered a
- * descriptor ending on TOLM: no page at or above arena_ceiling is handed out.
- * CONFIG_SMM_TSEG_SIZE is the whole TSEG and already contains the IED at its
- * top (tseg_region.c), so it is reserved once: adding CONFIG_IED_REGION_SIZE
- * would take the IED out twice.
- *
- * Everything this function reads is a device register.  A zero or all-ones
- * readback, a limit above the ECAM window romstage routes, or no room for the
- * SMRAM reservation is a refusal - never a guessed window.
- */
-static EFI_STATUS grantley_pei_pin_window_from_hardware(struct grantley_uncore_state *state)
-{
-	const uint64_t block = 64ULL * 1024ULL * 1024ULL;
-	const uint64_t tseg = CONFIG_SMM_TSEG_SIZE;
-	uint32_t raw;
-	uint64_t tolm_end;
-
-	if (!state)
-		return EFI_INVALID_PARAMETER;
-	if (state->dram_initialized)
-		return EFI_ALREADY_STARTED;
-
-	raw = route_read32(PCI_DEV(0, 5, 0), 0xd0, 0);
-	/* TOLM[25:0] is reserved: a dead config cycle reads back all ones. */
-	if (!raw || (raw & 0x03ffffffUL))
-		return EFI_DEVICE_ERROR;
-	tolm_end = (uint64_t)(raw & 0xfc000000UL) + block;
-	if (tolm_end < block || tolm_end > GRANTLEY_PEI_MEMORY_LIMIT)
-		return EFI_DEVICE_ERROR;
-	/* The same clamp the map builder applies: DRAM decoded through the ECAM
-	 * window would make config accesses land in RAM. */
-	if (tolm_end > GRANTLEY_ECAM_BASE)
-		return EFI_DEVICE_ERROR;
-	/* No room for the SMM reservation at the top of low DRAM. */
-	if (tolm_end <= tseg)
-		return EFI_DEVICE_ERROR;
-
-	if (state->exclusion_known) {
-		/* A validated SMRAM window is already programmed; keep it and pin
-		 * only the bounds.  The claim is then still checked against it. */
-		state->memory_ceiling = tolm_end;
-		state->arena_ceiling = tolm_end - tseg;
-		return EFI_SUCCESS;
-	}
-
-	/* Pin the bounds.  This port has not pinned an exclusion, and the PEIM
-	 * has just programmed the TSEG at the top of this same window: what
-	 * keeps allocations out of SMRAM is the arena cap below plus
-	 * GetMemoryMap()'s trim of the main descriptor, not an exclusion pair
-	 * that could be read here. */
-	EFI_STATUS status = grantley_pei_set_memory_window(state, tolm_end, 0, 0, TRUE);
-	if (status != EFI_SUCCESS)
-		return status;
-	state->arena_ceiling = tolm_end - tseg;
-	return EFI_SUCCESS;
-}
 
 EFI_STATUS grantley_pei_set_mmcfg(struct grantley_uncore_state *state, uintptr_t base)
 {
@@ -1470,6 +878,14 @@ static EFI_STATUS EFIAPI grantley_ffs_stub(void)
 	return EFI_NOT_FOUND;
 }
 
+/* The module never calls the remaining services. */
+static EFI_STATUS EFIAPI grantley_unsupported_service(void)
+{
+	printk(BIOS_ERR, "PEIM: unsupported PEI service called from %p\n",
+	       __builtin_return_address(0));
+	return EFI_UNSUPPORTED;
+}
+
 /* The module only reads PCD token 1, the ECAM base. */
 static UINT64 EFIAPI grantley_pcd_get64(UINTN token)
 {
@@ -1628,23 +1044,23 @@ static const EFI_PEI_SERVICES g_pei_services_template = {
 		.HeaderSize = sizeof(EFI_PEI_SERVICES),
 	},
 	.InstallPpi         = (EFI_PEI_INSTALL_PPI)grantley_install_ppi,
-	.ReInstallPpi       = (EFI_PEI_REINSTALL_PPI)grantley_reinstall_ppi,
+	.ReInstallPpi       = (EFI_PEI_REINSTALL_PPI)grantley_unsupported_service,
 	.LocatePpi          = (EFI_PEI_LOCATE_PPI)grantley_locate_ppi,
-	.NotifyPpi          = (EFI_PEI_NOTIFY_PPI)grantley_notify_ppi,
+	.NotifyPpi          = (EFI_PEI_NOTIFY_PPI)grantley_unsupported_service,
 	.GetBootMode        = (EFI_PEI_GET_BOOT_MODE)grantley_get_boot_mode,
-	.SetBootMode        = (EFI_PEI_SET_BOOT_MODE)grantley_set_boot_mode,
+	.SetBootMode        = (EFI_PEI_SET_BOOT_MODE)grantley_unsupported_service,
 	.GetHobList         = (EFI_PEI_GET_HOB_LIST)grantley_get_hob_list,
 	.CreateHob          = (EFI_PEI_CREATE_HOB)grantley_create_hob,
 	.FfsFindNextVolume  = (EFI_PEI_FFS_FIND_NEXT_VOLUME2)grantley_ffs_stub,
 	.FfsFindNextFile    = (EFI_PEI_FFS_FIND_NEXT_FILE2)grantley_ffs_stub,
 	.FfsFindSectionData = (EFI_PEI_FFS_FIND_SECTION_DATA2)grantley_ffs_stub,
 	.InstallPeiMemory   = (EFI_PEI_INSTALL_PEI_MEMORY)grantley_install_pei_memory,
-	.AllocatePages      = (EFI_PEI_ALLOCATE_PAGES)grantley_allocate_pages,
+	.AllocatePages      = (EFI_PEI_ALLOCATE_PAGES)grantley_unsupported_service,
 	.AllocatePool       = (EFI_PEI_ALLOCATE_POOL)grantley_allocate_pool,
 	.CopyMem            = (EFI_PEI_COPY_MEM)grantley_copy_mem,
-	.SetMem             = (EFI_PEI_SET_MEM)grantley_set_mem,
+	.SetMem             = (EFI_PEI_SET_MEM)grantley_unsupported_service,
 	.ReportStatusCode   = (EFI_PEI_REPORT_STATUS_CODE)grantley_report_status_code,
-	.ResetSystem        = (EFI_PEI_RESET_SYSTEM)grantley_reset_system,
+	.ResetSystem        = (EFI_PEI_RESET_SYSTEM)grantley_unsupported_service,
 };
 
 static void grantley_init_hob_list(struct grantley_uncore_state *state, void *hob_buf)
