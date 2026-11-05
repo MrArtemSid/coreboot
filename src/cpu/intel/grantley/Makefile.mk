@@ -14,6 +14,8 @@ ramstage-y += platform.c
 
 ramstage-y += cpu_init.c
 ramstage-$(CONFIG_HAVE_ACPI_TABLES) += acpi.c
+# Package-level Turbo state for the ACPI P-state tables.
+subdirs-$(CONFIG_HAVE_ACPI_TABLES) += ../turbo
 ramstage-$(CONFIG_HAVE_SMI_HANDLER) += smm.c
 smm-$(CONFIG_HAVE_SMI_HANDLER) += smm_finalize.c
 
