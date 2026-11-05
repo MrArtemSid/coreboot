@@ -85,45 +85,8 @@ config GRANTLEY_NATIVE_CONTRACT_D4M4
 	  base compiled into the blob at PE+0x106B8.  Set only by the board
 	  Kconfig.
 
-config GRANTLEY_UNCORE_NATIVE_ENTRY
-	bool "Enter UncoreInitPeim with the native PCD/DEPEX contract (experimental)"
-	depends on HAVE_INTEL_UNCORE_BIN
-	depends on GRANTLEY_NATIVE_CONTRACT_QD4 || GRANTLEY_NATIVE_CONTRACT_D4M4
-	default n
-	help
-	  Opt in to the native entry slice: romstage supplies the board's PCD
-	  policy so the runner can satisfy the vendor PEIM's runtime contract,
-	  its PEI_DEPEX set and the SHA-256 image pin before the entry point.
-
-	  With this symbol off, no PCD value is supplied.  A board that selects
-	  GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT then refuses before entry;
-	  a board that does not keeps the pre-native dispatch path.
-	  Entry, memory handoff and the post-PEIM map have no hardware
-	  observation on either board; X99D4M4 TOLM/TSEG/InstallPeiMemory
-	  timing is unmeasured, so do not read this option as a boot claim.
-
-config GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT
-	bool
-	help
-	  Selected by a board that ships an UncoreInitPeim but must never enter
-	  it without its native contract.
-
-	  Without GRANTLEY_UNCORE_NATIVE_ENTRY the runner's pre-native path only
-	  checks the PE structure and the ImageBase and then calls the entry
-	  point: no PCD provider is installed, the PEI_DEPEX set is not checked
-	  and the image is not hashed against a pin.  The vendor module's first
-	  action is an unguarded PCD LocatePpi + Get64(1), so entering it on
-	  that path dereferences a call target the runner never supplied.  With
-	  this symbol selected such a build refuses before the parse instead of
-	  degrading into that path, and romstage stops with the named
-	  GRANTLEY_STOP_CONTRACT reason.
-
-	  Set only by a board Kconfig (X99-BD4, X99-XD4).  Boards that keep the
-	  pre-native dispatch path on purpose do not select it.
-
 config GRANTLEY_INTELSETUP_STOCK_QD4
 	bool "Serve the QD4 stock IntelSetup payload to UncoreInitPeim"
-	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
 	depends on GRANTLEY_NATIVE_CONTRACT_QD4
 	default n
 	help
@@ -136,7 +99,6 @@ config GRANTLEY_INTELSETUP_STOCK_QD4
 
 config GRANTLEY_INTELSETUP_STOCK_D4M4
 	bool "Serve the X99D4M4 stock IntelSetup payload to UncoreInitPeim"
-	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
 	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
 	default n
 	help
@@ -150,7 +112,6 @@ config GRANTLEY_INTELSETUP_STOCK_D4M4
 config GRANTLEY_UNCORE_RC_SERIAL
 	bool "Enable UncoreInitPeim serial debug output"
 	depends on HAVE_INTEL_UNCORE_BIN
-	depends on GRANTLEY_UNCORE_NATIVE_ENTRY
 	depends on GRANTLEY_NATIVE_CONTRACT_D4M4
 	default y
 	help

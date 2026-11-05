@@ -1,22 +1,9 @@
 # Full-ROM build for the Huananzhi X99-BD4 (Grantley uncore, Lynx Point PCH).
 #
-# Board support only: this profile packages the pinned x99-bd4 blob set
-# (descriptor, ME, UncoreInitPeim) from 3rdparty/blobs/mainboard/huananzhi/
-# x99-bd4 and builds a complete 16 MiB image.  The provenance of that set
-# against the board's stock image (s.bin) is unverified: the pinned
-# UncoreInitPeim carries ImageBase 0xffde4de8 while the module inside s.bin
-# carries 0xffde4ef8, and the descriptor and ME regions differ from s.bin too.
-# It deliberately does not opt into GRANTLEY_UNCORE_NATIVE_ENTRY: the runtime
-# PCD policy and the PE ImageBase contract for this board are not recovered.
-#
-# The board selects GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT, so the packaged
-# blob is not entered in this configuration: the runner refuses before the PE
-# is parsed (stop reason GRANTLEY_STOP_CONTRACT, post code 0xe4) instead of
-# calling an entry point whose first action is an unguarded PCD Get64(1) with
-# no provider installed.  The blob is packaged for audit, not for execution.
-#
-# Not bootable, not a flash recommendation: no BD4 hardware observation exists
-# for this port, DRAM training and the post-PEIM memory handoff are unproven.
+# Build-only: no native Uncore contract exists for this board yet, so
+# romstage stops before UncoreInitPeim is entered (post code 0xe6). The
+# provenance of the pinned x99-bd4 blob set against the stock image is
+# unverified.
 CONFIG_ANY_TOOLCHAIN=y
 CONFIG_VENDOR_HUANANZHI=y
 CONFIG_BOARD_HUANANZHI_X99_BD4=y

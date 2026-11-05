@@ -111,7 +111,6 @@ void __noreturn romstage_main(void)
 		 * never calls the getter; the runner checks those bytes
 		 * instead, so no runtime token is required there.
 		 */
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 		const struct grantley_native_contract *contract =
 			grantley_native_contract();
 
@@ -150,15 +149,10 @@ void __noreturn romstage_main(void)
 			}
 			grantley_pcd_set_token1_required(false);
 		}
-#endif
 
 		/* A board's stock IntelSetup bytes are never served implicitly:
 		 * only a contract with a compiled-in payload can enable them. */
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 		grantley_intelsetup_allow_stock(contract->intelsetup_payload != NULL);
-#else
-		grantley_intelsetup_allow_stock(false);
-#endif
 
 		/* Enable MMCFG at standard Grantley ECAM base (0x80000000) */
 		status = grantley_pei_set_mmcfg(&uncore_state, GRANTLEY_ECAM_BASE);
@@ -188,17 +182,7 @@ void __noreturn romstage_main(void)
 					    mem_params.ecc_en);
 
 		post_code(0x35);
-#if CONFIG(GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT) && \
-	!CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
-		/* The runner refuses in this configuration; do not print a
-		 * "launching ... memory training" line for an entry that will
-		 * not happen.
-		 */
-		printk(BIOS_ERR, "Grantley: this board requires its native entry "
-		       "contract; UncoreInitPeim will not be entered\n");
-#else
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");
-#endif
 
 		status = grantley_run_uncore_peim(uncore_bin, uncore_size,
 						  &uncore_state);

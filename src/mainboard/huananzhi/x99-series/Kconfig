@@ -21,9 +21,6 @@ config BOARD_SPECIFIC_OPTIONS
 	select BOARD_ROMSIZE_KB_16384
 	select AZALIA_USE_LEGACY_VERB_TABLE
 	select HAVE_ACPI_TABLES
-	# BD4 packages its UncoreInitPeim for a build-only image; without a
-	# native contract the runner must refuse instead of entering it.
-	select GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT if BOARD_HUANANZHI_X99_BD4
 
 config MAINBOARD_DIR
 	default "huananzhi/x99-series"

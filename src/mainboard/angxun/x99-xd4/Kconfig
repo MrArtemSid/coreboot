@@ -19,9 +19,6 @@ config BOARD_SPECIFIC_OPTIONS
 	# declares their sizes; hda_verb.c provides zero-length tables.
 	select AZALIA_USE_LEGACY_VERB_TABLE
 	select HAVE_ACPI_TABLES
-	# XD4 packages its UncoreInitPeim for a build-only image; without a
-	# native contract the runner must refuse instead of entering it.
-	select GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT
 
 config MAINBOARD_DIR
 	default "angxun/x99-xd4"

@@ -25,10 +25,8 @@ static inline void outl(uint32_t val, uint16_t port) { }
 #endif
 #undef NULL
 #include "pei_services.h"
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 #include "pei_image.h"
 #include "pei_pcd.h"
-#endif
 #include "native_contract.h"
 #include "../memmap.h"
 
@@ -1591,7 +1589,6 @@ const EFI_GUID grantley_uncore_depex[GRANTLEY_UNCORE_DEPEX_COUNT] = {
  * installs both as well): the native value-returning PCD_PPI the module calls
  * at entry, and the PI 1.2 EFI_PEI_PCD_PPI its PEI_DEPEX names.
  */
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 static EFI_GUID g_pcd_guid = {
 	0x06e81c58, 0x4ad7, 0x44bc,
 	{ 0x83, 0x90, 0xf1, 0x02, 0x65, 0xf7, 0x24, 0x80 }
@@ -1600,7 +1597,6 @@ static EFI_GUID g_efi_pei_pcd_guid = {
 	0x01f34d25, 0x4de2, 0x23ad,
 	{ 0x3f, 0xf3, 0x36, 0x35, 0x3f, 0xf3, 0x23, 0xf1 }
 };
-#endif
 
 EFI_STATUS grantley_uncore_deps_check(const struct _EFI_PEI_SERVICES **services,
 				      EFI_GUID *missing)
@@ -1634,7 +1630,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	EFI_STATUS status = EFI_SUCCESS;
 	grantley_peim_entry_t entry_point;
 
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 	struct grantley_peim_image image;
 	status = grantley_peim_verify(pe_base, pe_size, &image);
 	if (status != EFI_SUCCESS) {
@@ -1768,54 +1763,6 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	}
 
 	entry_point = (grantley_peim_entry_t)(exec_addr + image.entry_rva);
-#elif CONFIG(GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT)
-	/* This board declares that the packaged PEIM may only be executed
-	 * through its native contract, and no contract is selected in this
-	 * build.  Refuse before the parse: the pre-native path below would
-	 * call the entry point with no PCD provider, no PEI_DEPEX check and no
-	 * image pin, and the vendor module does not test LocatePpi's status
-	 * before its first Get64(1).  A named refusal is the only defined
-	 * outcome; it is not a degraded entry.
-	 */
-	printk(BIOS_ERR, "PEIM: this board requires its native contract and "
-	       "none is selected, not dispatching\n");
-	(void)exec_addr;	/* not inspected: the refusal precedes the image */
-	state->stop_reason = GRANTLEY_STOP_CONTRACT;
-	return EFI_UNSUPPORTED;
-#else
-	/* Pre-native runtime path: structure and ImageBase only.  The QD4 SHA
-	 * pin, DEPEX set and PCD token-1 gate are compiled out, so builds that
-	 * keep this path on purpose keep their previous behaviour instead of
-	 * being rejected as a "security violation" by a foreign board's
-	 * digest.  Boards that must not enter without a contract select
-	 * GRANTLEY_UNCORE_REQUIRE_NATIVE_CONTRACT and are handled above.
-	 */
-	const uint8_t *bytes = pe_base;
-	if (pe_size < 0x40)
-		return EFI_UNSUPPORTED;
-	if (bytes[0] != 'M' || bytes[1] != 'Z')
-		return EFI_UNSUPPORTED;
-	const uint32_t e_lfanew = (uint32_t)bytes[0x3c] |
-		((uint32_t)bytes[0x3d] << 8) | ((uint32_t)bytes[0x3e] << 16) |
-		((uint32_t)bytes[0x3f] << 24);
-	if (e_lfanew > pe_size || pe_size - e_lfanew < 0x40)
-		return EFI_UNSUPPORTED;
-	const uint8_t *pe_hdr = bytes + e_lfanew;
-	if (pe_hdr[0] != 'P' || pe_hdr[1] != 'E' ||
-	    pe_hdr[2] != 0 || pe_hdr[3] != 0)
-		return EFI_UNSUPPORTED;
-	const uint32_t entry_rva = (uint32_t)pe_hdr[0x28] |
-		((uint32_t)pe_hdr[0x29] << 8) | ((uint32_t)pe_hdr[0x2a] << 16) |
-		((uint32_t)pe_hdr[0x2b] << 24);
-	const uint32_t image_base = (uint32_t)pe_hdr[0x34] |
-		((uint32_t)pe_hdr[0x35] << 8) | ((uint32_t)pe_hdr[0x36] << 16) |
-		((uint32_t)pe_hdr[0x37] << 24);
-	if (exec_addr != (uintptr_t)image_base)
-		return EFI_UNSUPPORTED;
-	entry_point = (grantley_peim_entry_t)(uintptr_t)
-		(bytes + (intptr_t)(int32_t)entry_rva);
-	(void)status;
-#endif
 
 	/*
 	 * UncoreInitPeim allocates ~440 KB on the stack at entry
@@ -2004,7 +1951,6 @@ static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	  (void *)&g_read_only_var },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_test_guid,
 	  (void *)&g_memory_test },
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_mem_size_guid,
 	  (void *)&g_memory_size },
 	/* Both PCD interfaces are real value-returning tables; the provider
@@ -2013,11 +1959,6 @@ static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_pcd_guid, (void *)&grantley_pcd_ppi },
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
 	  &g_efi_pei_pcd_guid, (void *)&grantley_efi_pei_pcd_ppi },
-#else
-	/* Pre-native release/diag path: no PCD provider and no QD4 payload. */
-	{ EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
-	  &g_mem_size_guid, (void *)&g_memory_size },
-#endif
 };
 
 static const EFI_PEI_SERVICES g_pei_services_template = {
@@ -2167,12 +2108,10 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 
 	state->boot_mode = BOOT_WITH_FULL_CONFIGURATION;
 	state->stop_reason = GRANTLEY_STOP_NONE;
-#if CONFIG(GRANTLEY_UNCORE_NATIVE_ENTRY)
 	/* A new services instance starts with an unconfigured PCD provider; the
 	 * platform supplies the token value (if it has a proven one) afterwards.
 	 */
 	grantley_pcd_reset();
-#endif
 	state->pool_base = (UINT8 *)pool_buf;
 	state->pool_size = pool_size;
 	state->hob_list = hob_buf;

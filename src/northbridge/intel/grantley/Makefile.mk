@@ -24,19 +24,13 @@ romstage-y += uncore_runner/pei_pcd.c
 # for the selected board.  Always linked because pei_services consults it; the
 # payload itself is compiled only when that board's policy option is enabled.
 romstage-y += uncore_runner/native_contract.c
-# PE image verification, the board SHA-256 pin and the vboot hash provider are
-# part of the opt-in native entry contract only.  Release/non-native images
-# keep the pre-candidate structure-only path, so no board digest or IntelSetup
-# payload is linked into them.
-romstage-$(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY) += uncore_runner/pei_image.c
-romstage-$(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY) += uncore_runner/pei_sha256.c
+romstage-y += uncore_runner/pei_image.c
+romstage-y += uncore_runner/pei_sha256.c
 romstage-y += uncore_runner/pei_hobs.c
-ifeq ($(CONFIG_GRANTLEY_UNCORE_NATIVE_ENTRY),y)
 # SHA-256 for the UncoreInitPeim pin comes from the vboot reference library.
 romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/include
 romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib/include
 romstage-c-ccopts += -I$(top)/3rdparty/vboot/firmware/2lib
-endif
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
