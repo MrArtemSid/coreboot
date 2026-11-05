@@ -6,9 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <PiPei.h>
-#include <Ppi/CpuIo.h>
 #include <Ppi/Pcd.h>
-#include <Ppi/PciCfg2.h>
 #include <Ppi/ReadOnlyVariable2.h>
 
 #define MAX_GRANTLEY_PPI_DESCRIPTORS 32
