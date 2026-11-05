@@ -41,20 +41,24 @@ chip northbridge/intel/grantley
 			device pci 1c.7 on end # PCIe Port 8
 			device pci 1d.0 on end # EHCI 1
 			device pci 1f.0 on     # LPC bridge
-				chip superio/nuvoton/nct5539d
-					device pnp 2e.2 on # UART A (COM1)
-						io  0x60 = 0x3f8
-						irq 0x70 = 4
-					end
-					device pnp 2e.5 on # Keyboard / Mouse (KBC)
-						io  0x60 = 0x60
-						io  0x62 = 0x64
-						irq 0x70 = 1
-						irq 0x72 = 12
-					end
-					device pnp 2e.b on # Hardware Monitor
-						io  0x60 = 0xa20
-						irq 0x70 = 0
+				chip superio/common
+					device pnp 2e.0 on # passes SIO base addr to SSDT gen
+						chip superio/nuvoton/nct5539d
+							device pnp 2e.2 on # UART A
+								io  0x60 = 0x3f8
+								irq 0x70 = 4
+							end
+							device pnp 2e.5 on # PS/2 KBC
+								io  0x60 = 0x60
+								io  0x62 = 0x64
+								irq 0x70 = 1 # Keyboard
+								irq 0x72 = 12 # Mouse
+							end
+							device pnp 2e.b on # Hardware Monitor
+								io  0x60 = 0xa20
+								irq 0x70 = 0
+							end
+						end
 					end
 				end
 			end
