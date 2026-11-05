@@ -18,6 +18,10 @@ config ECAM_MMCONF_BASE_ADDRESS
 config ECAM_MMCONF_BUS_NUMBER
 	default 256
 
+# The Uncore reference code ends the IIO MMIOL window at 0xfbffffff.
+config DOMAIN_RESOURCE_32BIT_LIMIT
+	default 0xfc000000
+
 config DCACHE_RAM_BASE
 	hex
 	default 0xfe100000
