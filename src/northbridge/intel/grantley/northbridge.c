@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <assert.h>
 #include <commonlib/helpers.h>
 #include <console/console.h>
 #include <device/device.h>
@@ -179,7 +180,47 @@ static unsigned long grantley_write_acpi_tables(const struct device *dev,
 
 static const char *grantley_domain_acpi_name(const struct device *dev)
 {
-	return dev->path.type == DEVICE_PATH_DOMAIN ? "PCI0" : NULL;
+	if (dev->path.type == DEVICE_PATH_DOMAIN)
+		return "PCI0";
+
+	if (dev->path.type == DEVICE_PATH_PCI) {
+		assert(dev->upstream);
+		if (dev->upstream->secondary == 0) {
+			switch (dev->path.pci.devfn) {
+			case PCI_DEVFN(1, 0): return "RP01";
+			case PCI_DEVFN(1, 1): return "RP02";
+			case PCI_DEVFN(2, 0): return "RP03";
+			case PCI_DEVFN(2, 1): return "RP04";
+			case PCI_DEVFN(2, 2): return "RP05";
+			case PCI_DEVFN(2, 3): return "RP06";
+			case PCI_DEVFN(3, 0): return "RP07";
+			case PCI_DEVFN(3, 1): return "RP08";
+			case PCI_DEVFN(3, 2): return "RP09";
+			case PCI_DEVFN(3, 3): return "RP10";
+			}
+		}
+
+		const struct device *const port = dev->upstream->dev;
+		if (port && port->upstream && port->upstream->secondary == 0) {
+			switch (port->path.pci.devfn) {
+			case PCI_DEVFN(1, 0):
+			case PCI_DEVFN(1, 1):
+			case PCI_DEVFN(2, 0):
+			case PCI_DEVFN(2, 1):
+			case PCI_DEVFN(2, 2):
+			case PCI_DEVFN(2, 3):
+			case PCI_DEVFN(3, 0):
+			case PCI_DEVFN(3, 1):
+			case PCI_DEVFN(3, 2):
+			case PCI_DEVFN(3, 3):
+				if (dev->path.pci.devfn == PCI_DEVFN(0, 0))
+					return "DEV0";
+				break;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 struct device_operations grantley_pci_domain_ops = {
