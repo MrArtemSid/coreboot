@@ -1921,24 +1921,15 @@ static const EFI_PEI_READ_ONLY_VARIABLE2_PPI g_read_only_var = {
 	.NextVariableName = grantley_get_next_variable_name,
 };
 
-/* PEI_PLATFORM_MEMORY_SIZE_PPI (GrantleySocketPkg/Include/Ppi/PlatformMemorySize.h)
- * is "the minimum platform memory size in order to successfully pass control
- * into DXE", with MemorySize as IN OUT.  The value itself is a platform policy
- * number that this port has not verified against stock; it must at least never
- * shrink a caller's larger request.  Stock 0x9A7EF41E is reported to overwrite
- * the requested size with a platform total (0x12C00000 plus MTI pages); that
- * value depends on the PlatformInfo producer/DRAM state and is intentionally
- * not guessed here.
- */
-#define GRANTLEY_PEI_MIN_PERMANENT_MEMORY (64ULL * 1024 * 1024)
+/* Stock D4M4 returns 0x12c00000 plus the default memory-type pages. */
+#define GRANTLEY_PEI_PLATFORM_MEMORY_SIZE (0x12c00000ULL + (0xe30ULL << 12))
 
 static EFI_STATUS EFIAPI grantley_platform_memory_size(
 	const struct _EFI_PEI_SERVICES **services, void *this, UINT64 *size)
 {
 	if (!size)
 		return EFI_INVALID_PARAMETER;
-	if (*size < GRANTLEY_PEI_MIN_PERMANENT_MEMORY)
-		*size = GRANTLEY_PEI_MIN_PERMANENT_MEMORY;
+	*size = GRANTLEY_PEI_PLATFORM_MEMORY_SIZE;
 	return EFI_SUCCESS;
 }
 
