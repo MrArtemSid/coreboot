@@ -33,7 +33,7 @@ chip northbridge/intel/grantley
 			register "gpe0_en_1" = "0x202"
 			register "sata_port_map" = "0x07"
 
-			device pci 11.4 off end # sSATA (unused, IDE only)
+			device pci 11.4 on end # sSATA Controller (AHCI)
 			device pci 14.0 on end # xHCI Controller
 			device pci 16.0 on end # MEI 1
 			device pci 1a.0 on end # EHCI 2

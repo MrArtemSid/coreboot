@@ -227,6 +227,37 @@ static struct device_operations sata_ops = {
 	.ops_pci		= &pci_dev_ops_pci,
 };
 
+/*
+ * The second storage complex is strapped to IDE, which Linux drives with
+ * ata_piix: the redirection table of that driver has no idea about the
+ * SIDPR interface, and the ports stay unusable. Switch the complex to
+ * AHCI, after which it enumerates as 8d62 and ahci binds to it.
+ */
+static void ssata_enable(struct device *dev)
+{
+	pci_write_config16(dev, SATA_MAP, 0x0060);
+}
+
+static struct device_operations ssata_ops = {
+	.read_resources		= pci_dev_read_resources,
+	.set_resources		= pci_dev_set_resources,
+	.enable_resources	= pci_dev_enable_resources,
+	.enable			= ssata_enable,
+	.ops_pci		= &pci_dev_ops_pci,
+};
+
+static const unsigned short ssata_device_ids[] = {
+	PCI_DID_INTEL_WBG_SSATA_IDE,
+	PCI_DID_INTEL_WBG_SSATA_AHCI,
+	0
+};
+
+static const struct pci_driver pch_ssata __pci_driver = {
+	.ops	 = &ssata_ops,
+	.vendor	 = PCI_VID_INTEL,
+	.devices = ssata_device_ids,
+};
+
 static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_H_DESKTOP_SATA_IDE,
 	PCI_DID_INTEL_LPT_H_DESKTOP_SATA_AHCI,
