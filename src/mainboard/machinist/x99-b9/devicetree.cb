@@ -31,7 +31,7 @@ chip northbridge/intel/grantley
 			register "gen3_dec" = "LPC_IO(0xca0, 0x10)"
 			register "gen4_dec" = "LPC_IO(0x600, 0x20)"
 			register "gpe0_en_1" = "0x202"
-			register "sata_port_map" = "0x07"
+			register "sata_port_map" = "0x3f"
 
 			device pci 11.4 off end # sSATA (unused, IDE only)
 			device pci 14.0 on end # xHCI Controller
