@@ -55,4 +55,7 @@ void early_pch_init_grantley(void)
 
 	/* Clear only the early W1C status, preserving ME/reset/wake evidence. */
 	write32((void *)(uintptr_t)(CONFIG_FIXED_RCBA_MMIO_BASE + PRSTS), BIT(4));
+
+	/* The native path reaches this through early_pch_init_native(). */
+	early_thermal_init();
 }
