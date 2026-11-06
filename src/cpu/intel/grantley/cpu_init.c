@@ -30,7 +30,8 @@ static void grantley_core_init(struct device *cpu)
 	set_vmx_and_lock();
 	configure_dca_cap();
 	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
-	/* Preserve machine-check records and the trained package power policy. */
+	grantley_configure_cpu_pm();
+	/* Preserve machine-check banks and the existing package C-state limit. */
 }
 
 static void grantley_pre_mp_init(void)

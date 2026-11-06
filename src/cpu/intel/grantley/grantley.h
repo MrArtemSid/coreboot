@@ -16,6 +16,9 @@ struct grantley_cpu_params {
 
 void mainboard_cpu_init_params(struct grantley_cpu_params *params);
 void grantley_apply_cpu_overrides(const struct grantley_cpu_params *params);
+void grantley_configure_cpu_pm(void);
+bool grantley_cpu_pm_supported(void);
+void grantley_configure_package_power_limit(void);
 
 /* Model classification only: not a claim of validated socket/stepping support. */
 enum grantley_cpu {
