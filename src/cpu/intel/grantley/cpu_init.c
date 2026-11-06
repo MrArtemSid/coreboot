@@ -4,6 +4,7 @@
 #include <cpu/cpu.h>
 #include <cpu/intel/common/common.h>
 #include <cpu/intel/microcode.h>
+#include <cpu/intel/turbo.h>
 #include <cpu/x86/mp.h>
 #include <cpu/x86/msr.h>
 #include <cpu/x86/mtrr.h>
@@ -30,6 +31,12 @@ static void grantley_core_init(struct device *cpu)
 	set_vmx_and_lock();
 	configure_dca_cap();
 	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
+	/*
+	 * The reference code leaves the Turbo Disable bit set, which also keeps
+	 * the turbo P-state out of _PSS. Haswell clears it the same way; the
+	 * fused ratio limits stay untouched.
+	 */
+	enable_turbo();
 	grantley_configure_cpu_pm();
 	/*
 	 * The uncore banks that reset leaves populated are masked in MCi_CTL and
