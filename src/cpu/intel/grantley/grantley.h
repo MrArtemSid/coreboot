@@ -39,5 +39,7 @@ void grantley_smm_lock(void);
 struct device;
 void grantley_cpu_finalize(struct device *dev);
 void grantley_cpu_fill_ssdt(const struct device *dev);
+void grantley_generate_c_state_entries(void);
+void grantley_generate_power_states(int core, int cores_per_package);
 
 #endif

@@ -1,190 +1,98 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <acpi/acpi.h>
-#include <acpi/acpi_pm.h>
 #include <acpi/acpigen.h>
-#include <arch/ioapic.h>
-#include <arch/smp/mpspec.h>
+#include <commonlib/helpers.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
-#include <cpu/intel/common/common.h>
 #include <cpu/intel/msr.h>
 #include <cpu/intel/turbo.h>
-#include <cpu/x86/lapic.h>
-#include <intelblocks/acpi_wake_source.h>
-#include <intelblocks/acpi.h>
-#include <intelblocks/lpc_lib.h>
-#include <intelblocks/pmclib.h>
-#include <intelblocks/sgx.h>
-#include <intelblocks/tco.h>
-#include <intelblocks/uart.h>
-#include <soc/gpio.h>
-#include <soc/intel/common/tco.h>
-#include <soc/iomap.h>
-#include <soc/pm.h>
+#include <cpu/x86/msr.h>
+#include "grantley.h"
 
-#define  CPUID_6_EAX_ISST	(1 << 7)
+#define PSS_MAX_ENTRIES		16
+#define PSS_RATIO_STEP		1
+#define PSS_LATENCY_TRANSITION	10
+#define PSS_LATENCY_BUSMASTER	10
 
-#define ACPI_SCI_IRQ 9
+#define MSR_MISC_PWR_MGMT	0x1aa
+#define MSR_TURBO_RATIO_LIMIT	0x1ad
+#define MSR_PKG_POWER_SKU_UNIT	0x606
+#define MSR_PKG_POWER_SKU	0x614
+#define MSR_CONFIG_TDP_NOMINAL	0x648
 
-void ioapic_get_sci_pin(u8 *gsi, u8 *irq, u8 *flags)
+static int cpu_get_coord_type(void)
 {
-	int sci_irq = ACPI_SCI_IRQ;
-	uint32_t scis;
+	return rdmsr(MSR_MISC_PWR_MGMT).lo & BIT(0) ? SW_ANY : HW_ALL;
+}
 
-	scis = soc_read_sci_irq_select();
-	scis &= SCI_IRQ_SEL;
-	scis >>= SCI_IRQ_ADJUST;
+static u32 cpu_get_min_ratio(void)
+{
+	return (rdmsr(MSR_PLATFORM_INFO).hi >> 8) & 0xff;
+}
 
-	/* Determine how SCI is routed. */
-	switch (scis) {
-	case SCIS_IRQ9:
-	case SCIS_IRQ10:
-	case SCIS_IRQ11:
-		sci_irq = scis - SCIS_IRQ9 + 9;
-		break;
-	case SCIS_IRQ20:
-	case SCIS_IRQ21:
-	case SCIS_IRQ22:
-	case SCIS_IRQ23:
-		sci_irq = scis - SCIS_IRQ20 + 20;
-		break;
-	default:
-		printk(BIOS_DEBUG, "Invalid SCI route! Defaulting to IRQ%d.\n", sci_irq);
-		break;
+static u32 cpu_get_max_ratio(void)
+{
+	const msr_t platform = rdmsr(MSR_PLATFORM_INFO);
+
+	if ((platform.hi >> 1) & 3) {
+		const u32 nominal = rdmsr(MSR_CONFIG_TDP_NOMINAL).lo & 0xff;
+
+		if (nominal)
+			return nominal;
 	}
-
-	*gsi = sci_irq;
-	*irq = (sci_irq < 16) ? sci_irq : ACPI_SCI_IRQ;
-	*flags = MP_IRQ_TRIGGER_LEVEL | soc_madt_sci_irq_polarity(sci_irq);
-
-	printk(BIOS_DEBUG, "SCI is IRQ %d, GSI %d\n", *irq, *gsi);
+	return (platform.lo >> 8) & 0xff;
 }
 
-
-static const uintptr_t default_ioapic_bases[] = { IO_APIC_ADDR };
-
-__weak size_t soc_get_ioapic_info(const uintptr_t *ioapic_bases[])
+static u32 cpu_get_bus_clock(void)
 {
-	*ioapic_bases = default_ioapic_bases;
-	return ARRAY_SIZE(default_ioapic_bases);
+	return 100 * KHz;
 }
 
-unsigned long acpi_fill_madt(unsigned long current)
+static u32 cpu_get_power_max(void)
 {
-	const uintptr_t *ioapic_table;
-	size_t ioapic_entries;
+	const u32 unit = rdmsr(MSR_PKG_POWER_SKU_UNIT).lo & 0xf;
+	const u32 power = rdmsr(MSR_PKG_POWER_SKU).lo & 0x7fff;
 
-	/* Local APICs */
-	if (!CONFIG(ACPI_COMMON_MADT_LAPIC))
-		current = acpi_create_madt_lapics_with_nmis_hybrid(current);
-
-	/* IOAPIC */
-	ioapic_entries = soc_get_ioapic_info(&ioapic_table);
-
-	/* Default SOC IOAPIC entry */
-	ASSERT(ioapic_table[0] == IO_APIC_ADDR);
-
-	for (int i = 1; i < ioapic_entries; i++)
-		current += acpi_create_madt_ioapic_from_hw((void *)current, ioapic_table[i]);
-
-	return current;
+	return (power * 1000) >> unit;
 }
 
-void acpi_fill_fadt(acpi_fadt_t *fadt)
+static u32 cpu_get_max_turbo_ratio(void)
 {
-	const uint16_t pmbase = ACPI_BASE_ADDRESS;
-
-
-	fadt->pm1a_evt_blk = pmbase + PM1_STS;
-	fadt->pm1a_cnt_blk = pmbase + PM1_CNT;
-
-	fadt->gpe0_blk = pmbase + GPE0_STS(0);
-
-	fadt->pm1_evt_len = 4;
-	fadt->pm1_cnt_len = 2;
-
-	/* GPE0 STS/EN pairs each 32 bits wide. */
-	fadt->gpe0_blk_len = 2 * GPE0_REG_MAX * sizeof(uint32_t);
-
-	fadt->gpe1_blk = 0;
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_ACPI_USE_GPE1)) {
-		fadt->gpe1_blk = pmbase + GPE1_STS(0);
-		fadt->gpe1_blk_len = 2 * GPE1_REG_MAX * sizeof(uint32_t);
-		/*
-		 * NOTE: gpe1 is after gpe0, which has _STS and _EN register sets.
-		 * gpe1_base is the starting bit offset for GPE1.
-		 */
-		fadt->gpe1_base = fadt->gpe0_blk_len / 2 * 8;
-	}
-
-	fill_fadt_extended_pm_io(fadt);
-
-	fadt->flags |= ACPI_FADT_WBINVD | ACPI_FADT_C1_SUPPORTED |
-			ACPI_FADT_SLEEP_BUTTON |
-			ACPI_FADT_SEALED_CASE | ACPI_FADT_S4_RTC_WAKE;
-
-	if (CONFIG(USE_PM_ACPI_TIMER))
-		fadt->flags |= ACPI_FADT_PLATFORM_CLOCK;
+	return rdmsr(MSR_TURBO_RATIO_LIMIT).lo & 0xff;
 }
 
-unsigned long southbridge_write_acpi_tables(const struct device *device,
-					    unsigned long current,
-					    struct acpi_rsdp *rsdp)
-{
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_UART)) {
-		current = acpi_write_dbg2_pci_uart(rsdp, current,
-						uart_get_device(),
-						ACPI_ACCESS_SIZE_DWORD_ACCESS);
-	}
+/* Duty-cycle percentages and controls follow the stock Grantley SSDT. */
+static acpi_tstate_t tss_table_fine[] = {
+	{ 100, 1000, 0, 0x00, 0 },
+	{ 94, 940, 0, 0x1f, 0 },
+	{ 88, 880, 0, 0x1e, 0 },
+	{ 82, 820, 0, 0x1d, 0 },
+	{ 75, 760, 0, 0x1c, 0 },
+	{ 69, 700, 0, 0x1b, 0 },
+	{ 63, 640, 0, 0x1a, 0 },
+	{ 57, 580, 0, 0x19, 0 },
+	{ 50, 520, 0, 0x18, 0 },
+	{ 44, 460, 0, 0x17, 0 },
+	{ 38, 400, 0, 0x16, 0 },
+	{ 32, 340, 0, 0x15, 0 },
+	{ 25, 280, 0, 0x14, 0 },
+	{ 19, 220, 0, 0x13, 0 },
+	{ 13, 160, 0, 0x12, 0 },
+};
 
-	return acpi_write_hpet(device, current, rsdp);
-}
+static acpi_tstate_t tss_table_coarse[] = {
+	{ 100, 1000, 0, 0x00, 0 },
+	{ 88, 875, 0, 0x1f, 0 },
+	{ 75, 750, 0, 0x1e, 0 },
+	{ 63, 625, 0, 0x1d, 0 },
+	{ 50, 500, 0, 0x1c, 0 },
+	{ 38, 375, 0, 0x1b, 0 },
+	{ 25, 250, 0, 0x1a, 0 },
+	{ 13, 125, 0, 0x19, 0 },
+};
 
-__weak
-void acpi_fill_soc_wake(uint32_t *pm1_en, uint32_t *gpe0_en,
-			const struct chipset_power_state *ps)
-{
-}
-
-/*
- * Save wake source information for calculating ACPI _SWS values
- *
- * @pm1:  PM1_STS register with only enabled events set
- * @gpe0: GPE0_STS registers with only enabled events set
- *
- * return the number of registers in the gpe0 array
- */
-
-int soc_fill_acpi_wake(const struct chipset_power_state *ps, uint32_t *pm1, uint32_t **gpe0)
-{
-	static uint32_t gpe0_sts[GPE0_REG_MAX];
-	uint32_t gpe0_en[GPE0_REG_MAX];
-	uint32_t pm1_en;
-	int i;
-
-	/*
-	 * PM1_EN to check the basic wake events which can happen through
-	 * powerbtn or any other wake source like lidopen, key board press etc.
-	 */
-	pm1_en = ps->pm1_en;
-	pm1_en |= WAK_STS | PWRBTN_EN;
-
-	memcpy(gpe0_en, ps->gpe0_en, sizeof(gpe0_en));
-
-	acpi_fill_soc_wake(&pm1_en, gpe0_en, ps);
-
-	*pm1 = ps->pm1_sts & pm1_en;
-
-	/* Mask off GPE0 status bits that are not enabled */
-	*gpe0 = &gpe0_sts[0];
-	for (i = 0; i < GPE0_REG_MAX; i++)
-		gpe0_sts[i] = ps->gpe0_sts[i] & gpe0_en[i];
-
-	return GPE0_REG_MAX;
-}
-
-int common_calculate_power_ratio(int tdp, int p1_ratio, int ratio)
+static int common_calculate_power_ratio(int tdp, int p1_ratio, int ratio)
 {
 	u32 m;
 	u32 power;
@@ -205,18 +113,7 @@ int common_calculate_power_ratio(int tdp, int p1_ratio, int ratio)
 	return power;
 }
 
-static void generate_c_state_entries(void)
-{
-	const acpi_cstate_t *c_state_map;
-	size_t entries;
-
-	c_state_map = soc_get_cstate_map(&entries);
-
-	/* Generate C-state tables */
-	acpigen_write_CST_package(c_state_map, entries);
-}
-
-void generate_p_state_entries(int core, int cores_per_package)
+static void generate_p_state_entries(int core, int cores_per_package)
 {
 	int ratio_min, ratio_max, ratio_turbo, ratio_step;
 	int coord_type, power_max, num_entries;
@@ -226,6 +123,11 @@ void generate_p_state_entries(int core, int cores_per_package)
 	coord_type = cpu_get_coord_type();
 	ratio_min = cpu_get_min_ratio();
 	ratio_max = cpu_get_max_ratio();
+	if (!ratio_min || ratio_max < ratio_min) {
+		printk(BIOS_ERR, "Grantley: invalid P-state ratios %d-%d\n",
+		       ratio_min, ratio_max);
+		return;
+	}
 	clock_max = (ratio_max * cpu_get_bus_clock()) / KHz;
 	turbo = (get_turbo_state() == TURBO_ENABLED);
 
@@ -299,13 +201,17 @@ void generate_p_state_entries(int core, int cores_per_package)
 	acpigen_pop_len();
 }
 
-__weak acpi_tstate_t *soc_get_tss_table(int *entries)
+static acpi_tstate_t *soc_get_tss_table(int *entries)
 {
-	*entries = 0;
-	return NULL;
+	if (cpuid_eax(6) & BIT(5)) {
+		*entries = ARRAY_SIZE(tss_table_fine);
+		return tss_table_fine;
+	}
+	*entries = ARRAY_SIZE(tss_table_coarse);
+	return tss_table_coarse;
 }
 
-void generate_t_state_entries(int core, int cores_per_package)
+static void generate_t_state_entries(int core, int cores_per_package)
 {
 	acpi_tstate_t *soc_tss_table;
 	int entries;
@@ -327,250 +233,9 @@ void generate_t_state_entries(int core, int cores_per_package)
 	acpigen_write_TSS_package(entries, soc_tss_table);
 }
 
-static void generate_cppc_entries(int core_id)
+void grantley_generate_power_states(int core, int cores_per_package)
 {
-	u32 version = CPPC_VERSION_2;
-
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_ACPI_CPU_HYBRID))
-		version = CPPC_VERSION_3;
-
-	if (!(CONFIG(SOC_INTEL_COMMON_BLOCK_ACPI_CPPC) &&
-	      cpuid_eax(6) & CPUID_6_EAX_ISST))
-		return;
-
-	/* Generate GCPC package in first logical core */
-	if (core_id == 0) {
-		struct cppc_config cppc_config;
-		cpu_init_cppc_config(&cppc_config, version);
-		acpigen_write_CPPC_package(&cppc_config);
-	}
-
-	/* Write _CPC entry for each logical core */
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_ACPI_CPU_HYBRID))
-		acpigen_write_CPPC_hybrid_method(core_id);
-	else
-		acpigen_write_CPPC_method();
-}
-
-__weak void soc_power_states_generation(int core_id,
-						int cores_per_package)
-{
-}
-
-static void generate_cpu_entry(int cpu, int core, int cores_per_package)
-{
-	/* Generate processor \_SB.CPUx */
-	acpigen_write_processor_device(cpu * cores_per_package + core);
-
-	/* Generate C-state tables */
-	generate_c_state_entries();
-
-	generate_cppc_entries(core);
-
-	/* Soc specific power states generation */
-	soc_power_states_generation(core, cores_per_package);
-
-	acpigen_write_processor_device_end();
-}
-
-void generate_cpu_entries(const struct device *device)
-{
-	int core_id, cpu_id;
-	int totalcores = dev_count_cpu();
-	unsigned int num_virt;
-	unsigned int num_phys;
-
-	cpu_read_topology(&num_phys, &num_virt);
-
-	int numcpus = totalcores / num_virt;
-
-	printk(BIOS_DEBUG, "Found %d CPU(s) with %d/%d physical/logical core(s) each.\n",
-	       numcpus, num_phys, num_virt);
-
-	for (cpu_id = 0; cpu_id < numcpus; cpu_id++)
-		for (core_id = 0; core_id < num_virt; core_id++)
-			generate_cpu_entry(cpu_id, core_id, num_virt);
-
-	/* PPKG is usually used for thermal management
-	   of the first and only package. */
-	acpigen_write_processor_package("PPKG", 0, num_virt);
-
-	/* Add a method to notify processor nodes */
-	acpigen_write_processor_cnot(num_virt);
-
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_SGX_ENABLE))
-		sgx_fill_ssdt();
-}
-
-
-static bool fill_wdat_timeout_entry(acpi_wdat_entry_t *entry)
-{
-	uint16_t tcobase = tco_get_bar();
-
-	if (tcobase == 0)
-		return false;
-
-	memset((void *)entry, 0, sizeof(acpi_wdat_entry_t));
-
-	entry->action = ACPI_WDAT_SET_COUNTDOWN;
-	entry->instruction = ACPI_WDAT_WRITE_COUNTDOWN | ACPI_WDAT_PRESERVE_REGISTER;
-	entry->mask = TCO_TMR_MASK;
-	entry->register_region.space_id = ACPI_ADDRESS_SPACE_IO;
-	entry->register_region.addrl = tcobase + TCO_TMR;
-	entry->register_region.access_size = ACPI_WDAT_ACCESS_SIZE_WORD;
-
-	return true;
-}
-
-static bool fill_wdat_boot_status_entry(acpi_wdat_entry_t *entry, uint8_t action,
-					uint8_t instruction, uint32_t value)
-{
-	uint16_t tcobase = tco_get_bar();
-
-	if (tcobase == 0)
-		return false;
-
-	memset((void *)entry, 0, sizeof(acpi_wdat_entry_t));
-
-	entry->action = action;
-	entry->instruction = instruction;
-	entry->value = value;
-	entry->mask = TCO2_STS_SECOND_TO;
-	entry->register_region.space_id = ACPI_ADDRESS_SPACE_IO;
-	entry->register_region.addrl = tcobase + TCO_MESSAGE1;
-	entry->register_region.access_size = ACPI_WDAT_ACCESS_SIZE_BYTE;
-
-	return true;
-}
-
-static bool fill_wdat_run_state_entry(acpi_wdat_entry_t *entry, uint8_t action,
-				       uint8_t instruction, uint32_t value)
-{
-	uint16_t tcobase = tco_get_bar();
-
-	if (tcobase == 0)
-		return false;
-
-	memset((void *)entry, 0, sizeof(acpi_wdat_entry_t));
-
-	entry->action = action;
-	entry->instruction = instruction;
-	entry->value = value;
-	entry->mask = TCO1_TMR_HLT;
-	entry->register_region.space_id = ACPI_ADDRESS_SPACE_IO;
-	entry->register_region.addrl = tcobase + TCO1_CNT;
-	entry->register_region.access_size = ACPI_WDAT_ACCESS_SIZE_WORD;
-
-	return true;
-}
-
-static bool fill_wdat_ping_entry(acpi_wdat_entry_t *entry)
-{
-	uint16_t tcobase = tco_get_bar();
-
-	if (tcobase == 0)
-		return false;
-
-	memset((void *)entry, 0, sizeof(acpi_wdat_entry_t));
-
-	entry->action = ACPI_WDAT_RESET;
-	entry->instruction = ACPI_WDAT_WRITE_VALUE;
-	entry->value = 0x01;
-	entry->mask = 0x01;
-	entry->register_region.space_id = ACPI_ADDRESS_SPACE_IO;
-	entry->register_region.addrl = tcobase + TCO_RLD;
-	entry->register_region.access_size = ACPI_WDAT_ACCESS_SIZE_WORD;
-
-	return true;
-}
-
-unsigned long acpi_soc_fill_wdat(acpi_wdat_t *wdat, unsigned long current)
-{
-	if (!wdat)
-		return current;
-
-	uint16_t tcobase = tco_get_bar();
-
-	if (tcobase == 0)
-		goto out_err;
-
-	wdat->pci_segment = 0xff;
-	wdat->pci_bus = 0xff;
-	wdat->pci_device = 0xff;
-	wdat->pci_function = 0xff;
-
-	wdat->timer_period = tco_get_timer_period();
-	wdat->min_count = tco_get_timer_min_value();
-	wdat->max_count = tco_get_timer_max_value();
-	wdat->flags = ACPI_WDAT_FLAG_ENABLED;
-	wdat->entries = 0;
-
-	acpi_wdat_entry_t *entry = (acpi_wdat_entry_t *)current;
-
-	/* Write countdown */
-	if (!fill_wdat_timeout_entry(entry))
-		goto out_err;
-
-	entry++;
-
-	/* Get boot status */
-	if (!fill_wdat_boot_status_entry(entry, ACPI_WDAT_GET_STATUS,
-					 ACPI_WDAT_READ_VALUE, TCO2_STS_SECOND_TO))
-		goto out_err;
-
-	entry++;
-
-	/* Set boot status */
-	if (!fill_wdat_boot_status_entry(entry, ACPI_WDAT_SET_STATUS,
-					 ACPI_WDAT_WRITE_VALUE | ACPI_WDAT_PRESERVE_REGISTER,
-					 0))
-		goto out_err;
-
-	entry++;
-
-	/* Get running status */
-	if (!fill_wdat_run_state_entry(entry, ACPI_WDAT_GET_RUNNING_STATE,
-				       ACPI_WDAT_READ_VALUE, 0))
-		goto out_err;
-
-	entry++;
-
-	/* Start the watchdog */
-	if (!fill_wdat_run_state_entry(entry, ACPI_WDAT_SET_RUNNING_STATE,
-				       ACPI_WDAT_WRITE_VALUE | ACPI_WDAT_PRESERVE_REGISTER,
-				       0))
-		goto out_err;
-
-	entry++;
-
-	/* Get stopped status */
-	if (!fill_wdat_run_state_entry(entry, ACPI_WDAT_GET_STOPPED_STATE,
-				       ACPI_WDAT_READ_VALUE, TCO1_TMR_HLT))
-		goto out_err;
-
-	entry++;
-
-	/* Stop the watchdog */
-	if (!fill_wdat_run_state_entry(entry, ACPI_WDAT_SET_STOPPED_STATE,
-				       ACPI_WDAT_WRITE_VALUE | ACPI_WDAT_PRESERVE_REGISTER,
-				       TCO1_TMR_HLT))
-		goto out_err;
-
-	entry++;
-
-	/* Ping */
-	if (!fill_wdat_ping_entry(entry))
-		goto out_err;
-
-	entry++;
-
-	wdat->entries = ((unsigned long)entry - current) / sizeof(acpi_wdat_entry_t);
-
-	return (unsigned long)entry;
-
-out_err:
-	wdat->flags = ACPI_WDAT_FLAG_DISABLED;
-	printk(BIOS_ERR, "Fail to populate WDAT ACPI Table\n");
-
-	return current;
+	grantley_generate_c_state_entries();
+	generate_p_state_entries(core, cores_per_package);
+	generate_t_state_entries(core / cores_per_package, cores_per_package);
 }
