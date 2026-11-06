@@ -298,8 +298,28 @@ static void iio_ioapic_read_resources(struct device *dev)
 
 static void iio_ioapic_init(struct device *dev)
 {
+	const uintptr_t ioapic_base = iio_ioapic_addr();
+	struct device_path path = { .type = DEVICE_PATH_IOAPIC };
+	struct bus *bus;
+
 	pci_dev_init(dev);
-	ioapic_create_dev(dev, iio_ioapic_addr(), IIO_IOAPIC_GSI_BASE);
+
+	if (!ioapic_base)
+		return;
+	bus = alloc_bus(dev);
+	assert(bus);
+
+	/*
+	 * Leave the redirection table alone: the IIO configures this IOAPIC
+	 * itself, and writing the table here stops the whole window from
+	 * decoding, so the clearing performed by ioapic_setup() fails while
+	 * the ID register still reads back. Announce the IOAPIC only, so that
+	 * it ends up in the MADT and the DMAR scope.
+	 */
+	path.ioapic.ioapic_id = get_ioapic_id(ioapic_base);
+	path.ioapic.addr = ioapic_base;
+	path.ioapic.gsi_base = IIO_IOAPIC_GSI_BASE;
+	assert(alloc_dev(alloc_bus(dev), &path));
 }
 
 static struct device_operations iio_ioapic_ops = {
