@@ -31,7 +31,12 @@ static void grantley_core_init(struct device *cpu)
 	configure_dca_cap();
 	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
 	grantley_configure_cpu_pm();
-	/* Preserve machine-check banks and the existing package C-state limit. */
+	/*
+	 * The uncore banks that reset leaves populated are masked in MCi_CTL and
+	 * carry no timestamp, so they describe no error this CPU could act on.
+	 * Drop them before the payload can mistake them for a live report.
+	 */
+	mca_clear_status();
 }
 
 static void grantley_pre_mp_init(void)
