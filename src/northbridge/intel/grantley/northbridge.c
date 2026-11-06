@@ -35,6 +35,10 @@
 /* Stock firmware places the IIO IOAPIC right above the PCH one. */
 #define IIO_IOAPIC_ABAR_STOCK		(IIO_IOAPIC_ABAR_EN | 0x010)
 #define IIO_IOAPIC_GSI_BASE		24
+
+/* Top of the low MMIO window, 1 MiB granularity. */
+#define IIO_MMIO_TOP			0xa4
+#define IIO_MMIO_TOP_APIC		0xfef00000
 #define GRANTLEY_MMIOH_BASE		0x380000000000ULL
 #define GRANTLEY_MMIOH_END		0x384000000000ULL
 
@@ -301,11 +305,24 @@ static void iio_ioapic_init(struct device *dev)
 	const uintptr_t ioapic_base = iio_ioapic_addr();
 	struct device_path path = { .type = DEVICE_PATH_IOAPIC };
 	struct bus *bus;
+	u32 mmio_top;
 
 	pci_dev_init(dev);
 
 	if (!ioapic_base)
 		return;
+
+	/*
+	 * The low MMIO window of the IIO ends below the APIC range, so nothing
+	 * decodes the address this IOAPIC sits at and every access reads back as
+	 * all ones. Stock firmware lifts the top past the APIC range; do the
+	 * same, keeping the low bits the reset code put there.
+	 */
+	mmio_top = pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_MMIO_TOP);
+	pci_s_write_config32(PCI_DEV(0, 5, 0), IIO_MMIO_TOP, IIO_MMIO_TOP_APIC);
+	printk(BIOS_DEBUG, "IIO: low MMIO top %08x -> %08x\n", mmio_top,
+	       pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_MMIO_TOP));
+
 	bus = alloc_bus(dev);
 	assert(bus);
 
