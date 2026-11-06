@@ -143,6 +143,7 @@ void __noreturn romstage_main(void)
 		/* Persist the validated physical reservations before leaving CAR. */
 		cbmem_initialize_empty();
 		grantley_memmap_save();
+		grantley_save_dimm_info(&uncore_state);
 		romstage_handoff_init(false);
 
 		post_code(0x37);

@@ -69,6 +69,9 @@ EFI_STATUS grantley_pei_memory_map(const struct grantley_uncore_state *state,
 	uint32_t tolm, uint32_t tohm_lo, uint32_t tohm_hi,
 	struct grantley_memory_map *map);
 
+/* Copy DIMM information to CBMEM while the PEIM's HOB arena is live. */
+void grantley_save_dimm_info(const struct grantley_uncore_state *state);
+
 /* Execute UncoreInitPeim in place at its PE ImageBase. */
 EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 				    struct grantley_uncore_state *state);

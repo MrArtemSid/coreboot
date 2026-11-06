@@ -19,6 +19,7 @@ romstage-y += memmap.c
 romstage-y += uncore_runner/pei_services.c
 romstage-y += uncore_runner/pei_image.c
 romstage-y += uncore_runner/pei_hobs.c
+romstage-y += uncore_runner/memory_info.c
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
