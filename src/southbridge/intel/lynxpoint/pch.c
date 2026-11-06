@@ -88,14 +88,6 @@ static void pch_enable_d3hot(struct device *dev)
 void pch_disable_devfn(struct device *dev)
 {
 	switch (dev->path.pci.devfn) {
-	case PCI_DEVFN(17, 4): /* sSATA (Wellsburg) */
-		/*
-		 * The PCH has a single disable bit for its second storage
-		 * complex. A stock firmware dump carries only that bit and
-		 * exposes neither this function nor D31:F5, so use it here.
-		 */
-		RCBA32_OR(FD, PCH_DISABLE_SATA2);
-		break;
 	case PCI_DEVFN(19, 0): /* Audio DSP */
 		RCBA32_OR(FD, PCH_DISABLE_ADSPD);
 		break;
