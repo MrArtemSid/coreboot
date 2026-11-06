@@ -17,6 +17,11 @@
 #define SATA_PORT_MASK	0x3f
 #endif
 
+/* The second storage complex of the 610 series reports four ports. */
+#define SSATA_PORT_MAP	0x0f
+
+#define GHC_AE		(1U << 31)
+
 static inline u32 sir_read(struct device *dev, int idx)
 {
 	pci_write_config32(dev, SATA_SIRI, idx);
@@ -238,11 +243,36 @@ static void ssata_enable(struct device *dev)
 	pci_write_config16(dev, SATA_MAP, 0x0060);
 }
 
+/*
+ * The payload resets the HBA and walks every port it finds, so hand it a
+ * controller that is already in AHCI mode at the register level: without
+ * GHC.AE the first SATA driver that touches the complex stops the boot.
+ */
+static void ssata_init(struct device *dev)
+{
+	uintptr_t abar;
+
+	pci_or_config16(dev, PCI_COMMAND, PCI_COMMAND_MEMORY | PCI_COMMAND_IO);
+
+	/* Let the controller own the ports instead of the legacy decode. */
+	pci_update_config16(dev, SATA_PCS, ~SATA_PORT_MASK, 0x8000 | SSATA_PORT_MAP);
+	udelay(2);
+
+	abar = pci_read_config32(dev, PCI_BASE_ADDRESS_5);
+	printk(BIOS_DEBUG, "sSATA: ABAR %p\n", (void *)abar);
+
+	write32p(abar + 0x04, read32p(abar + 0x04) | GHC_AE);
+	write32p(abar + 0x0c, SSATA_PORT_MAP);
+	(void)read32p(abar + 0x0c);
+	(void)read32p(abar + 0x0c);
+}
+
 static struct device_operations ssata_ops = {
 	.read_resources		= pci_dev_read_resources,
 	.set_resources		= pci_dev_set_resources,
 	.enable_resources	= pci_dev_enable_resources,
 	.enable			= ssata_enable,
+	.init			= ssata_init,
 	.ops_pci		= &pci_dev_ops_pci,
 };
 
