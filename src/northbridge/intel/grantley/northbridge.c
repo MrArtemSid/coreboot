@@ -177,41 +177,37 @@ static void iio_train_link(struct device *rp)
 
 	/* A link that never left Detect has nothing to retrain. */
 	u16 lnksta = pci_read_config16(rp, cap + PCI_EXP_LNKSTA);
-	if (!(lnksta & IIO_LNKSTA_CLS))
+	if (!(lnksta & IIO_LNKSTA_CLS) || !(lnksta & IIO_LNKSTA_NLW))
 		return;
 
 	const u32 lnkcap = pci_read_config32(rp, cap + PCI_EXP_LNKCAP);
-	const u32 target = lnkcap & IIO_LNKCAP_SLS;
+	const unsigned int target = lnkcap & IIO_LNKCAP_SLS;
 	if ((lnksta & IIO_LNKSTA_CLS) >= target)
 		return;
 
-	const u32 lnkctl2 = pci_read_config32(rp, cap + IIO_PCI_EXP_LNKCTL2);
 	pci_write_config32(rp, cap + IIO_PCI_EXP_LNKCTL2,
-			   (lnkctl2 & ~IIO_LNKCTL2_TLS) | target);
+			   (pci_read_config32(rp, cap + IIO_PCI_EXP_LNKCTL2) &
+			    ~IIO_LNKCTL2_TLS) | target);
 	pci_or_config16(rp, cap + PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_RL);
-	mdelay(100);
 
-	/* Data Link Layer Link Active exists only if the port advertises it. */
-	if (lnkcap & PCI_EXP_LNKCAP_DLLLARC) {
-		struct stopwatch sw;
+	/*
+	 * The link drops and has to train again, which takes hundreds of
+	 * milliseconds behind a switch. Poll for its return instead of trusting
+	 * the DLLLA status: some ports advertise it and never report it.
+	 */
+	struct stopwatch sw;
+	stopwatch_init_msecs_expire(&sw, IIO_LINK_TIMEOUT_MS);
+	do {
+		mdelay(10);
+		lnksta = pci_read_config16(rp, cap + PCI_EXP_LNKSTA);
+	} while (!(lnksta & IIO_LNKSTA_CLS) && !stopwatch_expired(&sw));
 
-		stopwatch_init_msecs_expire(&sw, IIO_LINK_TIMEOUT_MS);
-		while (!(pci_read_config16(rp, cap + PCI_EXP_LNKSTA) &
-			 PCI_EXP_LNKSTA_DLLLA)) {
-			if (stopwatch_expired(&sw)) {
-				printk(BIOS_ERR, "%s: link did not come back after retrain\n",
-				       dev_path(rp));
-				return;
-			}
-			udelay(50);
-		}
-	}
-
-	lnksta = pci_read_config16(rp, cap + PCI_EXP_LNKSTA);
 	const unsigned int cls = lnksta & IIO_LNKSTA_CLS;
-	printk(BIOS_INFO, "%s: link at %u MT/s x%u\n", dev_path(rp),
+	printk(cls ? BIOS_INFO : BIOS_WARNING,
+	       "%s: link at %u MT/s x%u, target %u MT/s\n", dev_path(rp),
 	       cls < ARRAY_SIZE(iio_link_speed) ? iio_link_speed[cls] : 0,
-	       (lnksta & IIO_LNKSTA_NLW) >> 4);
+	       (lnksta & IIO_LNKSTA_NLW) >> 4,
+	       target < ARRAY_SIZE(iio_link_speed) ? iio_link_speed[target] : 0);
 }
 
 static void grantley_domain_scan_bus(struct device *dev)
