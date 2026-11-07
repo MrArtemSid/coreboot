@@ -158,42 +158,12 @@ static bool read_physical_slot_number(const struct device *dev, uint8_t *psn)
 	return true;
 }
 
-static void acpigen_write_pci_root_port_devices(const struct device *rp)
-{
-	uint8_t psn;
-	bool have_psn = read_physical_slot_number(rp, &psn);
-
-	struct device *dev = NULL;
-	while ((dev = dev_bus_each_child(rp->downstream, dev))) {
-		if (!is_pci(dev))
-			continue;
-		const char *name = acpi_device_name(dev);
-		if (!name)
-			continue;
-		acpigen_write_device(name);
-		acpigen_write_ADR_pci_device(dev);
-		if (have_psn)
-			acpigen_write_name_integer("_SUN", psn);
-		acpigen_pop_len();
-	}
-}
-
 void acpigen_write_pci_root_port(const struct device *rp)
 {
-	const char *acpi_scope = acpi_device_scope(rp);
-	if (!acpi_scope)
-		return;
-	acpigen_write_scope(acpi_scope);
+	uint8_t psn;
+	const int sun = read_physical_slot_number(rp, &psn) ? psn : -1;
 
-	const char *acpi_name = acpi_device_name(rp);
-	if (!acpi_name)
-		return;
-	acpigen_write_device(acpi_name);
-	acpigen_write_ADR_pci_device(rp);
-	acpigen_write_pci_root_port_devices(rp);
-
-	acpigen_pop_len();
-	acpigen_pop_len();
+	acpigen_pci_root_port_fill_ssdt(rp, sun, false);
 }
 
 void acpigen_write_PRT_pre_routed(const struct device *br)

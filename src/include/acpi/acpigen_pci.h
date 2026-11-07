@@ -17,6 +17,10 @@ void acpigen_write_PRT_GSI_entry_devfn(unsigned int devfn, unsigned int acpi_pin
 void acpigen_write_PRT_source_entry_devfn(unsigned int devfn, unsigned int acpi_pin,
 				    const char *source_path, unsigned int index);
 
+/* A negative sun omits _SUN; names are supplied by the device callbacks. */
+void acpigen_pci_root_port_fill_ssdt(const struct device *rp, int sun,
+				  bool children_enabled_only);
+
 void pci_domain_fill_ssdt(const struct device *domain);
 
 #endif /* ACPIGEN_PCI_H */

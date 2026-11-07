@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <acpi/acpi_device.h>
 #include <acpi/acpigen.h>
 #include <acpi/acpigen_pci.h>
 #include <assert.h>
@@ -7,6 +8,37 @@
 #include <device/pci_def.h>
 #include <device/pci_type.h>
 #include <types.h>
+
+void acpigen_pci_root_port_fill_ssdt(const struct device *rp, int sun,
+				  bool children_enabled_only)
+{
+	const char *scope = acpi_device_scope(rp);
+	const char *name = acpi_device_name(rp);
+
+	if (!scope || !name)
+		return;
+
+	acpigen_write_scope(scope);
+	acpigen_write_device(name);
+	acpigen_write_ADR_pci_device(rp);
+
+	struct device *child = NULL;
+	while ((child = dev_bus_each_child(rp->downstream, child))) {
+		if (!is_pci(child) || (children_enabled_only && !child->enabled))
+			continue;
+		name = acpi_device_name(child);
+		if (!name)
+			continue;
+		acpigen_write_device(name);
+		acpigen_write_ADR_pci_device(child);
+		if (sun >= 0)
+			acpigen_write_name_integer("_SUN", sun);
+		acpigen_write_device_end();
+	}
+
+	acpigen_write_device_end();
+	acpigen_write_scope_end();
+}
 
 void acpigen_write_ADR_pci_devfn(pci_devfn_t devfn)
 {
