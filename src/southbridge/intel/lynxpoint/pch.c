@@ -169,6 +169,14 @@ void pch_disable_devfn(struct device *dev)
 	case PCI_DEVFN(31, 3): /* SMBUS */
 		RCBA32_OR(FD, PCH_DISABLE_SMBUS);
 		break;
+	case PCI_DEVFN(17, 4): /* sSATA (Wellsburg) */
+		/*
+		 * Wellsburg puts the second storage complex at this function and
+		 * does not implement D31:F5, so the case below never runs for it.
+		 * Both share the one bit in the function disable register.
+		 */
+		RCBA32_OR(FD, PCH_DISABLE_SATA2);
+		break;
 	case PCI_DEVFN(31, 5): /* SATA #2 */
 		RCBA32_OR(FD, PCH_DISABLE_SATA2);
 		break;
