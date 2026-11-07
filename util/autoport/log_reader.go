@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -267,10 +268,12 @@ func (l *LogDevReader) GetDMI() (ret DMIData) {
 
 func (l *LogDevReader) GetAzaliaCodecs() (ret []AzaliaCodec) {
 	cardno := -1
+	// A card does not have to expose codec 0: a board with a single codec at
+	// index 2 is common, so any pin file identifies the card.
 	for i := 0; i < 10; i++ {
-		pin, err := os.Open(l.InputDirectory + "/pin_hwC" + strconv.Itoa(i) + "D0")
-		if err == nil {
-			pin.Close()
+		matches, err := filepath.Glob(l.InputDirectory + "/pin_hwC" +
+			strconv.Itoa(i) + "D*")
+		if err == nil && len(matches) > 0 {
 			cardno = i
 			break
 		}
