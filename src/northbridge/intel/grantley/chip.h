@@ -20,6 +20,8 @@
 struct northbridge_intel_grantley_config {
 	bool vtd_support;
 	bool start_iio_links;
+	/* Opt in to the pre-scan endpoint readiness workaround. */
+	bool iio_readiness_quirk;
 	u8 iou0_bifurcation;	/* 00:02.0 */
 	u8 iou1_bifurcation;	/* 00:03.0 */
 	u8 iou2_bifurcation;	/* 00:01.0 */

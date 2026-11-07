@@ -2,6 +2,7 @@
 
 chip northbridge/intel/grantley
 	register "start_iio_links" = "true"
+	register "iio_readiness_quirk" = "true"
 	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
 	# The x16 slot is the only port on this stack, so keep all lanes on one link.
 	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"

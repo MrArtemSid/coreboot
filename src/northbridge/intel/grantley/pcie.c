@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <timer.h>
+#include "chip.h"
 
 #define IIO_PCI_EXP_LNKCTL2	0x30
 #define  IIO_LNKCTL2_TLS		0x000f
@@ -142,8 +143,16 @@ static void iio_scan_bus(struct bus *bus, unsigned int min_devfn, unsigned int m
 
 static void iio_scan_bridge(struct device *dev)
 {
+	const struct device *domain = dev_get_domain(dev);
+	const struct northbridge_intel_grantley_config *cfg = domain ? domain->chip_info : NULL;
+
+	if (!cfg || !cfg->iio_readiness_quirk) {
+		pciexp_scan_bridge(dev);
+		return;
+	}
+
 	/*
-	 * grantley_init() started all stacks before enumeration. Share a deadline
+	 * grantley_iio_init() started all stacks before enumeration. Share a deadline
 	 * rather than restarting the discovery window for every empty port.
 	 */
 	if (!iio_initial_link_deadline_set) {
