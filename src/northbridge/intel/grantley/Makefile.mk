@@ -24,6 +24,7 @@ romstage-y += uncore_runner/memory_info.c
 postcar-y += memmap.c
 ramstage-y += memmap.c
 ramstage-y += northbridge.c
+ramstage-y += iio.c
 ramstage-y += pcu.c
 ramstage-y += pcie.c
 
