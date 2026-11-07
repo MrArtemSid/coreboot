@@ -85,7 +85,7 @@ void early_pch_init_grantley(void)
 	/* Clear only the early W1C status, preserving ME/reset/wake evidence. */
 	write32((void *)(uintptr_t)(CONFIG_FIXED_RCBA_MMIO_BASE + PRSTS), BIT(4));
 
-
+	program_hsio_sata_wbg_b0();
 	if (CONFIG(WELLSBURG_DISABLE_SSATA))
 		ssata_disable();
 

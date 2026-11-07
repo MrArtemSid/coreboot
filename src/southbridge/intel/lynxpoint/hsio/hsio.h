@@ -35,6 +35,8 @@ static inline void hsio_xhci_shared_update_row(const struct hsio_table_row row)
 	hsio_xhci_shared_update(row.addr, row.and, row.or);
 }
 
+void program_hsio_sata_wbg_b0(void);
+
 void program_hsio_sata_lpt_h_cx(const bool is_mobile);
 void program_hsio_xhci_lpt_h_cx(void);
 void program_hsio_igbe_lpt_h_cx(void);

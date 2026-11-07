@@ -53,6 +53,11 @@ static void sata_init(struct device *dev)
 		return;
 	}
 
+	/* The primary Wellsburg SATA controller uses server-specific PM settings. */
+	const bool wellsburg = dev->device == PCI_DID_INTEL_WBG_SATA_IDE ||
+		dev->device == PCI_DID_INTEL_WBG_SATA_AHCI ||
+		dev->device == PCI_DID_INTEL_WBG_SATA_RAID;
+
 	/* SATA configuration */
 
 	/* Enable memory space decoding for ABAR */
@@ -177,8 +182,8 @@ static void sata_init(struct device *dev)
 	else
 		sir_write(dev, 0x64, 0x883c9001);
 
-	/* Step 2: SIR 68h[15:0] = 880Ah */
-	sir_unset_and_set_mask(dev, 0x68, 0xffff, 0x880a);
+	/* Step 2: Wellsburg uses the server power optimizer timing. */
+	sir_unset_and_set_mask(dev, 0x68, 0xffff, wellsburg ? 0x882d : 0x880a);
 
 	/* Step 3: SIR 60h[3] = 1 */
 	sir_unset_and_set_mask(dev, 0x60, 0, 1 << 3);
@@ -197,10 +202,16 @@ static void sata_init(struct device *dev)
 		RCBA32_AND_OR(0x333c, 0xffcfffff, 0x00c00000);
 	}
 
-	reg32 = pci_read_config32(dev, 0x300);
-	reg32 |= (1 << 17) | (1 << 16);
-	reg32 |= (1 << 31) | (1 << 30) | (1 << 29);
-	pci_write_config32(dev, 0x300, reg32);
+	if (wellsburg) {
+		/* Do not apply the Lynx Point bits 29:31 to Wellsburg. */
+		pci_or_config32(dev, 0x300, 1 << 19);
+		pci_or_config32(dev, 0x300, (1 << 17) | (1 << 16));
+	} else {
+		reg32 = pci_read_config32(dev, 0x300);
+		reg32 |= (1 << 17) | (1 << 16);
+		reg32 |= (1 << 31) | (1 << 30) | (1 << 29);
+		pci_write_config32(dev, 0x300, reg32);
+	}
 }
 
 static void sata_enable(struct device *dev)
@@ -256,6 +267,10 @@ static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_LP_SATA_RAID_1,
 	PCI_DID_INTEL_LPT_LP_SATA_RAID_PREM,
 	PCI_DID_INTEL_LPT_LP_SATA_RAID_2,
+	PCI_DID_INTEL_WBG_SATA_IDE,
+	PCI_DID_INTEL_WBG_SATA_AHCI,
+	PCI_DID_INTEL_WBG_SATA_RAID,
+	PCI_DID_INTEL_WBG_SSATA_AHCI,
 	0
 };
 
