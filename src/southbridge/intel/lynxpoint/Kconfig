@@ -96,4 +96,12 @@ config DISABLE_ME_PCI
 	  This will prevent the OS (and userspace apps) from interacting with
 	  the ME via the PCI interface after boot.
 
+config WELLSBURG_DISABLE_SSATA
+	bool
+	depends on NORTHBRIDGE_INTEL_GRANTLEY
+	help
+	  Take both functions of the unused second storage complex off the bus,
+	  so neither the payload nor the OS enumerates it and probes ports that
+	  the board does not wire.
+
 endif

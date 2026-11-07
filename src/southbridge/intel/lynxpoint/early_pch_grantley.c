@@ -14,6 +14,33 @@
 
 #define GCS_ALTERNATE_ACCESS BIT(4)
 
+/*
+ * Device 0x11 hosts the PCH MS unit (8086:8d7c, named MROM in coreboot's
+ * own devicetrees). Its function-hide register controls the functions of
+ * that device, including the second storage complex at 0x11.4 / 0x11.5.
+ */
+#define PCH_MSUNIT_DEVFN	PCI_DEV(0, 0x11, 0)
+#define MSUNIT_DEVFUNCHIDE	0xd4
+#define MSUNIT_HIDE_SSATA	BIT(4)
+#define MSUNIT_HIDE_SSATA2	BIT(5)
+
+/*
+ * The second storage complex is not wired on this class of board, yet it is
+ * still enumerated after reset and Linux binds ata_piix to four ports that it
+ * cannot reach. Both of its functions can be taken off the bus by their owner,
+ * which leaves nothing for the payload or the OS to probe.
+ */
+static void ssata_disable(void)
+{
+	if (pci_read_config16(PCH_MSUNIT_DEVFN, PCI_VENDOR_ID) == 0xffff) {
+		printk(BIOS_DEBUG, "sSATA: MS unit absent, cannot hide it\n");
+		return;
+	}
+
+	pci_or_config32(PCH_MSUNIT_DEVFN, MSUNIT_DEVFUNCHIDE,
+			MSUNIT_HIDE_SSATA | MSUNIT_HIDE_SSATA2);
+}
+
 /* RTC state-machine recovery must precede memory initialization. */
 void early_pch_init_grantley(void)
 {
@@ -58,6 +85,9 @@ void early_pch_init_grantley(void)
 	/* Clear only the early W1C status, preserving ME/reset/wake evidence. */
 	write32((void *)(uintptr_t)(CONFIG_FIXED_RCBA_MMIO_BASE + PRSTS), BIT(4));
 
+
+	if (CONFIG(WELLSBURG_DISABLE_SSATA))
+		ssata_disable();
 
 	/* The native path reaches this through early_pch_init_native(). */
 	early_thermal_init();
