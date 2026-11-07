@@ -11,10 +11,42 @@
 #define DEFAULT_PMBASE		0x1000
 #define DEFAULT_GPIOBASE	0x1400
 #define DEFAULT_GPIOSIZE	0x400
+#define DEFAULT_PMBASE_SIZE	0x100
+#else
+/*
+ * Grantley platforms use the server reference I/O map, where the 128-byte
+ * ACPI/PM block starts at 0x400.  The SMBus BAR of such a platform sits at
+ * 0x580 (see FIXED_SMBUS_IO_BASE) so the two LPC windows do not overlap:
+ * PM1_TMR is at PMBASE + 8 and the TCO block at PMBASE + 0x60.
+ *
+ * DEFAULT_PMBASE_SIZE is the number of bytes the block decodes (PMSIZE in
+ * southbridge/intel/common/pmbase.c) and the size of the ramstage PMBASE
+ * resource.  At 0x400 it must not be the historical 256-byte span: that would
+ * cover the GPIO block at 0x480 and the PIC ELCR at 0x4d0.
+ */
+#if CONFIG(NORTHBRIDGE_INTEL_GRANTLEY)
+#define DEFAULT_PMBASE		0x400
+#define DEFAULT_PMBASE_SIZE	0x80
 #else
 #define DEFAULT_PMBASE		0x500
+#define DEFAULT_PMBASE_SIZE	0x100
+#endif
 #define DEFAULT_GPIOBASE	0x480
 #define DEFAULT_GPIOSIZE	0x80
+#endif
+
+/*
+ * The length the ACPI _CRS entry publishes for the PM block.  Grantley
+ * declares the 0x80 bytes it decodes.  Client and LP builds keep the 0xff
+ * byte this file declared before the length was parameterised, so their DSDT
+ * stays byte-identical; only the ramstage resource follows
+ * DEFAULT_PMBASE_SIZE there, and that resource is inert on those maps because
+ * pch_lpc_add_io_resource() drops a range that ends below 0x1000.
+ */
+#if CONFIG(NORTHBRIDGE_INTEL_GRANTLEY)
+#define DEFAULT_PMBASE_ASL_SIZE	DEFAULT_PMBASE_SIZE
+#else
+#define DEFAULT_PMBASE_ASL_SIZE	0xff
 #endif
 
 #ifndef __ACPI__

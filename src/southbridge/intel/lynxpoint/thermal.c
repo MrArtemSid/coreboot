@@ -39,8 +39,10 @@ void early_thermal_init(void)
 	 * to handle false events during setting up those registers.
 	 */
 
-	/* Step 1: Program CTT */
-	write16p(TBARB_TEMP + 0x10, 0x0154);
+	/* Step 1: Program CTT, PCH hot and alert high trip points */
+	write16p(TBARB_TEMP + 0x10, 0x0154);	/* 120 C */
+	write16p(TBARB_TEMP + 0x60, 0x0122);	/* 95 C */
+	write16p(TBARB_TEMP + 0x14, 0x010e);	/* 85 C */
 
 	/* Step 2: Clear trip status from TSS and TAS */
 	write8p(TBARB_TEMP + 0x06, 0xff);
@@ -55,6 +57,9 @@ void early_thermal_init(void)
 	 *         then write 0x01 to TSREL, else leave at default.
 	 */
 	write8p(TBARB_TEMP + 0x0a, 0x01);
+
+	/* Step 5: Enable the sensor, the kernel driver needs it to report */
+	write8p(TBARB_TEMP + 0x08, read8p(TBARB_TEMP + 0x08) | 0x01);
 
 	/* Disable temporary BAR */
 	pci_and_config32(THERMAL_DEV, 0x40, ~1);

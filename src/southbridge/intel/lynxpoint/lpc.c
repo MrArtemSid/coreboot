@@ -724,7 +724,7 @@ static void pch_lpc_add_io_resources(struct device *dev)
 	pch_lpc_add_io_resource(dev, get_gpiobase(), DEFAULT_GPIOSIZE, GPIOBASE);
 
 	/* PMBASE */
-	pch_lpc_add_io_resource(dev, get_pmbase(), 256, PMBASE);
+	pch_lpc_add_io_resource(dev, get_pmbase(), DEFAULT_PMBASE_SIZE, PMBASE);
 
 	/* LPC Generic IO Decode range. */
 	if (dev->chip_info) {
@@ -849,6 +849,14 @@ static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_HM97,
 	PCI_DID_INTEL_LPT_Z97,
 	PCI_DID_INTEL_LPT_H97,
+	PCI_DID_INTEL_WBG_LPC_C612,
+	PCI_DID_INTEL_WBG_LPC_X99,
+	PCI_DID_INTEL_WBG_LPC_X99_ALT,
+	PCI_DID_INTEL_WBG_LPC_C610,
+	PCI_DID_INTEL_WBG_LPC_PROD,
+	PCI_DID_INTEL_WBG_LPC_BASE,
+	PCI_DID_INTEL_WBG_LPC_HEDT,
+	PCI_DID_INTEL_WBG_LPC_PREMIUM_A,
 	0
 };
 
