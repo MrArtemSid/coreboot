@@ -70,6 +70,8 @@ func init() {
 	RegisterPCI(0x8086, 0x9c20, azalia{})
 	/* Lynx Point Refresh (9 Series PCH) */
 	RegisterPCI(0x8086, 0x8ca0, azalia{})
+	/* Wellsburg (C610 / C612 / X99) */
+	RegisterPCI(0x8086, 0x8d20, azalia{})
 	/* Panther Lake */
 	RegisterPCI(0x8086, 0xe428, azalia{})
 	RegisterPCI(0x8086, 0xe328, azalia{})
