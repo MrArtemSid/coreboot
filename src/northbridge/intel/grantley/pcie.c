@@ -176,6 +176,55 @@ static void iio_scan_bridge(struct device *dev)
 	do_pci_scan_bridge(dev, iio_scan_bus);
 }
 
+static const char *iio_root_port_acpi_name(const struct device *dev)
+{
+	if (!is_pci(dev) || !dev->upstream)
+		return NULL;
+
+	/* Only direct children inherit this port's naming callback. */
+	if (dev->upstream->dev && dev->upstream->dev->ops == &iio_root_port_ops)
+		return dev->name;
+
+	if (dev->upstream->secondary != 0)
+		return NULL;
+
+	/* Keep CPU IIO ports separate from the PCH's RP01..RP08 namespace. */
+	switch (dev->path.pci.devfn) {
+	case PCI_DEVFN(1, 0): return "IIO0";
+	case PCI_DEVFN(1, 1): return "IIO1";
+	case PCI_DEVFN(2, 0): return "IIO2";
+	case PCI_DEVFN(2, 1): return "IIO3";
+	case PCI_DEVFN(2, 2): return "IIO4";
+	case PCI_DEVFN(2, 3): return "IIO5";
+	case PCI_DEVFN(3, 0): return "IIO6";
+	case PCI_DEVFN(3, 1): return "IIO7";
+	case PCI_DEVFN(3, 2): return "IIO8";
+	case PCI_DEVFN(3, 3): return "IIO9";
+	default: return NULL;
+	}
+}
+
+static void iio_root_port_init(struct device *dev)
+{
+	struct device *child = NULL;
+
+	while ((child = dev_bus_each_child(dev->downstream, child))) {
+		if (!is_pci(child) || !child->enabled)
+			continue;
+
+		/* As on Xeon SP, give each PCI function a distinct ACPI name. */
+		char *name = xmalloc(ACPI_NAME_BUFFER_SIZE);
+		snprintf(name, ACPI_NAME_BUFFER_SIZE, "DC%02X", child->path.pci.devfn);
+		child->name = name;
+	}
+}
+
+static void iio_root_port_fill_ssdt(const struct device *dev)
+{
+	if (dev->enabled)
+		acpigen_pci_root_port_fill_ssdt(dev, -1, true);
+}
+
 /* Preserve the generic PCIe bridge's lack of subsystem-ID programming. */
 static struct pci_operations iio_root_port_pci_ops = {
 	.set_subsystem = NULL,
@@ -185,8 +234,11 @@ static struct device_operations iio_root_port_ops = {
 	.read_resources = pci_bus_read_resources,
 	.set_resources = pci_dev_set_resources,
 	.enable_resources = pci_bus_enable_resources,
+	.init = iio_root_port_init,
 	.scan_bus = iio_scan_bridge,
 	.reset_bus = pci_bus_reset,
+	.acpi_name = iio_root_port_acpi_name,
+	.acpi_fill_ssdt = iio_root_port_fill_ssdt,
 	.ops_pci = &iio_root_port_pci_ops,
 };
 

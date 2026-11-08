@@ -108,10 +108,59 @@ static uintptr_t iio_ioapic_addr(void)
 	return IO_APIC_ADDR | ((abar & 0xfff) << 8);
 }
 
+static unsigned long grantley_fill_dmar(unsigned long current)
+{
+	const unsigned long tmp = current;
+	const uintptr_t iio_ioapic = iio_ioapic_addr();
+
+	current += acpi_create_dmar_drhd_4k(current, DRHD_INCLUDE_PCI_ALL, 0,
+					    GRANTLEY_VTD_BASE);
+	current += acpi_create_dmar_ds_ioapic_from_hw(current, IO_APIC_ADDR,
+						      PCH_IOAPIC_PCI_BUS,
+						      PCH_IOAPIC_PCI_SLOT, 0);
+	if (iio_ioapic)
+		current += acpi_create_dmar_ds_ioapic_from_hw(current, iio_ioapic,
+							      0, 5, 4);
+	for (size_t i = 0; i < 8; i++)
+		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
+							PCH_HPET_PCI_SLOT, i);
+	acpi_dmar_drhd_fixup(tmp, current);
+
+	return current;
+}
+
+static unsigned long grantley_write_acpi_tables(const struct device *dev,
+						unsigned long current,
+						struct acpi_rsdp *rsdp)
+{
+	if (!(pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_VTBAR) & IIO_VTBAR_EN))
+		return current;
+
+	acpi_dmar_t *const dmar = (acpi_dmar_t *)current;
+	printk(BIOS_DEBUG, "ACPI:    * DMAR\n");
+	acpi_create_dmar(dmar, DMAR_INTR_REMAP, grantley_fill_dmar);
+	current += dmar->header.length;
+	current = acpi_align_current(current);
+	acpi_add_table(rsdp, dmar);
+
+	return current;
+}
+
+static const char *grantley_domain_acpi_name(const struct device *dev)
+{
+	if (dev->path.type == DEVICE_PATH_DOMAIN)
+		return "PCI0";
+
+	return NULL;
+}
+
 struct device_operations grantley_pci_domain_ops = {
 	.read_resources   = grantley_domain_read_resources,
 	.set_resources    = pci_domain_set_resources,
 	.scan_bus         = grantley_domain_scan_bus,
+	.acpi_name        = grantley_domain_acpi_name,
+	.acpi_fill_ssdt   = pci_domain_fill_ssdt,
+	.write_acpi_tables = grantley_write_acpi_tables,
 	.ops_pci          = &pci_dev_ops_pci,
 };
 
