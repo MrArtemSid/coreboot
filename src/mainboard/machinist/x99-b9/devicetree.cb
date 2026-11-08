@@ -67,6 +67,7 @@ chip northbridge/intel/grantley
 			end
 			device pci 1f.2 on end # SATA Controller (AHCI)
 			device pci 1f.3 on end # SMBus Controller
+			device pci 1f.5 off end # SATA Controller (Legacy)
 		end
 	end
 end
