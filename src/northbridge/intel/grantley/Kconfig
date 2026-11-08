@@ -6,6 +6,8 @@ config NORTHBRIDGE_INTEL_GRANTLEY
 	select SEPARATE_ROMSTAGE
 	select ACPI_S1_NOT_SUPPORTED
 	select DRAM_SUPPORT_DDR4
+	select UDK_2017_BINDING
+	select DRIVERS_EFI_VARIABLE_STORE
 	select DRIVERS_INTEL_OC_MAILBOX
 
 if NORTHBRIDGE_INTEL_GRANTLEY
@@ -23,6 +25,47 @@ config DCACHE_RAM_BASE
 config DCACHE_RAM_SIZE
 	hex
 	default 0x100000
+
+config HAVE_INTEL_UNCORE_BIN
+	bool "Add Intel Grantley Uncore binary (UncoreInitPeim)"
+	default n
+	help
+	  Select this option to add the Intel Grantley Uncore binary
+	  (UncoreInitPeim) to CBFS for DDR4 memory and uncore initialization.
+
+config INTEL_UNCORE_BIN_FILE
+	string "Intel Grantley Uncore binary path and filename"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/uncore.bin"
+	help
+	  The path and filename of the UncoreInitPeim binary to add to CBFS.
+
+config GRANTLEY_INTELSETUP_FILE
+	string "IntelSetup default variable path and filename"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/intelsetup.bin"
+	help
+	  Raw IntelSetup payload, the setup structure served to
+	  UncoreInitPeim. When the file does not exist, the variable is not
+	  provided and the module uses its built-in defaults.
+
+config GRANTLEY_UNCORE_RC_SERIAL
+	bool "Enable UncoreInitPeim serial debug output"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default y
+	help
+	  Set serialDebugMsgLvl in the IntelSetup payload to 1 so the
+	  UncoreInitPeim prints its own messages on COM1. Has no
+	  effect when the board does not set
+	  GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET.
+
+config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
+	hex
+	depends on HAVE_INTEL_UNCORE_BIN
+	default 0x0
+	help
+	  Offset of serialDebugMsgLvl in the board's IntelSetup payload,
+	  or 0 when it is not known.
 
 config DCACHE_BSP_STACK_SIZE
 	hex
