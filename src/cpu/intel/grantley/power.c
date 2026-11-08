@@ -122,9 +122,20 @@ bool grantley_cpu_pm_supported(void)
 {
 	const uint32_t signature = cpuid_eax(1);
 
-	/* Early HSX needs DDR crossover policy; BDX has different MPLL policy. */
-	return grantley_cpu_model(signature) == GRANTLEY_HASWELL_EP &&
-		(signature & 0xf) >= 2;
+	switch (grantley_cpu_model(signature)) {
+	case GRANTLEY_HASWELL_EP:
+		/* Pre-production HSX steppings lack the DDR crossover policy. */
+		return (signature & 0xf) >= 2;
+	case GRANTLEY_BROADWELL_EP:
+		/*
+		 * Broadwell-EP exposes the same C/P-state MSRs and PCU mailboxes.
+		 * Keep the Haswell-EP memory PLL policy (SAPM MPLL off stays
+		 * disabled) until a Broadwell-EP DDR power policy is validated.
+		 */
+		return true;
+	default:
+		return false;
+	}
 }
 
 void grantley_configure_cpu_pm(void)

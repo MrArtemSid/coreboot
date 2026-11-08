@@ -66,7 +66,7 @@ static void configure_sapm(pci_devfn_t pcu)
 	const u32 mask = PCU_SAPM_MPLL_OFF_ENABLE;
 	const u32 desired = before & ~PCU_SAPM_MPLL_OFF_ENABLE;
 
-	/* Production Haswell-EP keeps the memory PLL on. */
+	/* Production Haswell-EP and Broadwell-EP keep the memory PLL on. */
 	if (before == UINT32_MAX)
 		die("Grantley: SAPMCTL is inaccessible\n");
 	if (before != desired) {
@@ -98,7 +98,7 @@ static void configure_pcu_misc(pci_devfn_t pcu)
 
 	/*
 	 * Enable the PL2 safety net and disable the package C-state RCOMP path.
-	 * Production HSX parts need both while the memory PLL keeps running.
+	 * Production HSX/BDX parts need both while the memory PLL keeps running.
 	 */
 	desired = data | required;
 	printk(BIOS_DEBUG, "Grantley: PCU_MISC_CONFIG=%08x -> %08x\n", data, desired);

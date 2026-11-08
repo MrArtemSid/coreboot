@@ -59,6 +59,10 @@ static u32 cpu_get_power_max(void)
 
 static u32 cpu_get_max_turbo_ratio(void)
 {
+	/*
+	 * Bits 7:0 hold the one-active-core turbo ratio on Haswell-EP and
+	 * Broadwell-EP alike; the upper bits describe more active cores.
+	 */
 	return rdmsr(MSR_TURBO_RATIO_LIMIT).lo & 0xff;
 }
 
@@ -131,6 +135,17 @@ static void generate_p_state_entries(int core, int cores_per_package)
 	clock_max = (ratio_max * cpu_get_bus_clock()) / KHz;
 	turbo = (get_turbo_state() == TURBO_ENABLED);
 
+	if (turbo) {
+		ratio_turbo = cpu_get_max_turbo_ratio();
+		/* A turbo ratio at or below the base ratio is not a P-state. */
+		if (ratio_turbo <= ratio_max) {
+			printk(BIOS_WARNING,
+			       "Grantley: turbo ratio %d does not exceed %d, not advertised\n",
+			       ratio_turbo, ratio_max);
+			turbo = false;
+		}
+	}
+
 	/* Calculate CPU TDP in mW */
 	power_max = cpu_get_power_max();
 
@@ -162,7 +177,6 @@ static void generate_p_state_entries(int core, int cores_per_package)
 
 	/* P[T] is Turbo state if enabled */
 	if (turbo) {
-		ratio_turbo = cpu_get_max_turbo_ratio();
 		clock = (ratio_turbo * cpu_get_bus_clock()) / KHz;
 
 		/* Add entry for Turbo ratio */

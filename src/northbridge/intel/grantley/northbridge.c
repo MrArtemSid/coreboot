@@ -43,8 +43,9 @@
 
 /*
  * Hook called by coreboot microcode update subsystem in ramstage.
- * If Haswell-EP turbo unlock is requested, skip updating microcode so
+ * If the Haswell-EP turbo unlock is requested, skip updating microcode so
  * the CPU retains the unpatched state required for all-core turbo boost.
+ * Other models have no unlock sequence here, so their microcode is updated.
  */
 int soc_skip_ucode_update(u32 current_patch_id, u32 new_patch_id)
 {
@@ -57,6 +58,8 @@ int soc_skip_ucode_update(u32 current_patch_id, u32 new_patch_id)
 			printk(BIOS_INFO, "Grantley: Haswell-EP Turbo Unlock enabled; skipping microcode update\n");
 			return 1;
 		}
+		printk(BIOS_WARNING,
+		       "Grantley: Turbo Unlock is implemented for Haswell-EP only\n");
 	}
 	return 0;
 }

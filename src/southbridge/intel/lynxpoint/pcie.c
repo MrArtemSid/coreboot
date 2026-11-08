@@ -335,6 +335,11 @@ static void pcie_enable_clock_gating(void)
 		pci_or_config8(dev, 0xe8, 1);
 #endif
 
+		/*
+		 * The extra PECR1 bit is part of the client Broadwell PCH
+		 * sequence. Broadwell-EP keeps the PCH on Wellsburg, where no
+		 * equivalent bit is documented, so it takes the Haswell path.
+		 */
 		if (cpu_is_broadwell()) {
 			pci_or_config32(dev, 0x324, (1 << 5) | (1 << 14));
 		} else {

@@ -41,7 +41,7 @@ void mainboard_romstage_entry(void)
 	       signature, host, pch);
 	printk(BIOS_INFO, "CPU model: %s\n",
 	       grantley_cpu_model(signature) == GRANTLEY_HASWELL_EP ?
-	       "Haswell-EP" : "Broadwell-EP (not hardware-validated)");
+	       "Haswell-EP" : "Broadwell-EP");
 
 	if (!grantley_pch_is_supported(pch & 0xffff, pch >> 16))
 		printk(BIOS_WARNING, "Grantley: unrecognized PCH %04x:%04x, "
