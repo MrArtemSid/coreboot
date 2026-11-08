@@ -2,6 +2,8 @@
 
 #include <console/console.h>
 #include <device/device.h>
+#include "chip.h"
+#include "iio.h"
 
 static void grantley_skeleton_stop(struct device *dev)
 {
@@ -14,6 +16,12 @@ struct device_operations grantley_pci_domain_ops = {
 	.init = grantley_skeleton_stop,
 };
 
+static void grantley_init(void *chip_info)
+{
+	grantley_iio_init(chip_info);
+}
+
 struct chip_operations northbridge_intel_grantley_ops = {
 	.name = "Intel Haswell-EP / Broadwell-EP Northbridge",
+	.init = grantley_init,
 };

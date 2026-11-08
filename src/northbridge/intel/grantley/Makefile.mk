@@ -48,5 +48,6 @@ grantley-no-raminit:
 $(obj)/coreboot.rom: grantley-no-raminit
 endif
 ramstage-y += northbridge.c
+ramstage-y += iio.c
 
 endif
