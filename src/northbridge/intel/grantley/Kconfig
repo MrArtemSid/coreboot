@@ -1,0 +1,43 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+config NORTHBRIDGE_INTEL_GRANTLEY
+	bool
+	select CPU_INTEL_GRANTLEY
+	select SEPARATE_ROMSTAGE
+	select ACPI_S1_NOT_SUPPORTED
+	select DRAM_SUPPORT_DDR4
+	select DRIVERS_INTEL_OC_MAILBOX
+
+if NORTHBRIDGE_INTEL_GRANTLEY
+
+config ECAM_MMCONF_BASE_ADDRESS
+	default 0x80000000
+
+config ECAM_MMCONF_BUS_NUMBER
+	default 256
+
+config DCACHE_RAM_BASE
+	hex
+	default 0xfe100000
+
+config DCACHE_RAM_SIZE
+	hex
+	default 0x100000
+
+config DCACHE_BSP_STACK_SIZE
+	hex
+	default 0x10000
+	help
+	  Stack for coreboot's own romstage code; the vendor PEIM runs on
+	  the descending stack the romstage reserves for it.
+
+config FIXED_MCHBAR_MMIO_BASE
+	default 0xfed10000
+
+config FIXED_DMIBAR_MMIO_BASE
+	default 0xfed18000
+
+config FIXED_EPBAR_MMIO_BASE
+	default 0xfed19000
+
+endif
