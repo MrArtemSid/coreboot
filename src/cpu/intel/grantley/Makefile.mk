@@ -13,6 +13,9 @@ bootblock-y += platform.c
 romstage-y += platform.c
 ramstage-y += platform.c
 
+ramstage-y += cpu_init.c
+ramstage-$(CONFIG_HAVE_SMI_HANDLER) += smm.c
+smm-$(CONFIG_HAVE_SMI_HANDLER) += smm_finalize.c
 
 # No client Haswell power management, SMM relocation or memory-init ABI.
 subdirs-y += ../microcode
