@@ -32,6 +32,12 @@ static void grantley_core_init(struct device *cpu)
 	configure_dca_cap();
 	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
 	/*
+	 * Clear Turbo Disable so the turbo P-state is advertised in _PSS, as
+	 * Haswell does; the fused ratio limits stay untouched.
+	 */
+	enable_turbo();
+	grantley_configure_cpu_pm();
+	/*
 	 * The uncore banks that reset leaves populated are masked in MCi_CTL and
 	 * carry no timestamp, so they describe no error this CPU could act on.
 	 * Drop them before the payload can mistake them for a live report.
@@ -110,6 +116,9 @@ struct device_operations grantley_cpu_bus_ops = {
 	.init             = mp_cpu_bus_init,
 #if CONFIG(HAVE_SMI_HANDLER)
 	.final            = grantley_cpu_finalize,
+#endif
+#if CONFIG(HAVE_ACPI_TABLES)
+	.acpi_fill_ssdt   = grantley_cpu_fill_ssdt,
 #endif
 };
 

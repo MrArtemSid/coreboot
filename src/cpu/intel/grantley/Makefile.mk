@@ -13,7 +13,9 @@ bootblock-y += platform.c
 romstage-y += platform.c
 ramstage-y += platform.c
 
-ramstage-y += cpu_init.c
+ramstage-y += cpu_init.c power.c
+ramstage-$(CONFIG_HAVE_ACPI_TABLES) += acpi.c cstates.c power_states.c
+subdirs-$(CONFIG_HAVE_ACPI_TABLES) += ../turbo
 ramstage-$(CONFIG_HAVE_SMI_HANDLER) += smm.c
 smm-$(CONFIG_HAVE_SMI_HANDLER) += smm_finalize.c
 

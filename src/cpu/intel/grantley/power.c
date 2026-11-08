@@ -1,0 +1,135 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#include <console/console.h>
+#include <cpu/cpu.h>
+#include <cpu/intel/common/common.h>
+#include <cpu/intel/speedstep.h>
+#include <cpu/x86/msr.h>
+#include "grantley.h"
+
+#define MSR_PLATFORM_INFO		0xce
+#define MSR_IA32_PERF_CTL		0x199
+#define MSR_MISC_PWR_MGMT		0x1aa
+#define MSR_POWER_CTL			0x1fc
+#define MSR_PKG_POWER_LIMIT		0x610
+#define MSR_PKG_POWER_SKU		0x614
+
+#define MONITOR_FSM_ENABLE		BIT(18)
+#define CST_IO_MWAIT_REDIRECTION		BIT(10)
+#define CST_CONFIG_LOCK			BIT(15)
+#define SINGLE_PCTL_ENABLE		BIT(0)
+#define MISC_PWR_MGMT_LOCK		BIT(13)
+#define POWER_CTL_SAPM_IMC_C2_POLICY	BIT(2)
+#define PLATFORM_INFO_TDP_PROGRAMMABLE	BIT(29)
+#define PKG_POWER_LIMIT_MASK		0x7fff
+#define PKG_POWER_LIMIT_ENABLE		BIT(15)
+#define PKG_POWER_LIMIT_LOCK		BIT(31)
+
+/*
+ * Keep the Xeon SP split between per-CPU setup and package handoff, but use
+ * the C-state MSR layout that this platform's firmware uses.
+ */
+static void configure_c_states(uint32_t features)
+{
+	msr_t msr;
+
+	if (features & BIT(3)) {
+		msr = rdmsr(IA32_MISC_ENABLE);
+		msr.lo |= MONITOR_FSM_ENABLE;
+		wrmsr(IA32_MISC_ENABLE, msr);
+	}
+
+	msr = rdmsr(MSR_PKG_CST_CONFIG_CONTROL);
+	if (!(msr.lo & CST_CONFIG_LOCK)) {
+		/* _CST uses native MWAIT, not I/O-to-MWAIT redirection. */
+		if (msr.lo & CST_IO_MWAIT_REDIRECTION) {
+			msr.lo &= ~CST_IO_MWAIT_REDIRECTION;
+			wrmsr(MSR_PKG_CST_CONFIG_CONTROL, msr);
+		}
+	}
+	/* Preserve the existing package limit and demotion; do not enable package C6. */
+
+	msr = rdmsr(MSR_POWER_CTL);
+	/* Leave the IMC C2 policy disabled: the memory PLL remains on. */
+	/* Preserve automatic C1E policy; native MWAIT C1E is independent. */
+	msr.lo &= ~POWER_CTL_SAPM_IMC_C2_POLICY;
+	wrmsr(MSR_POWER_CTL, msr);
+}
+
+static void configure_p_states(uint32_t features)
+{
+	msr_t msr;
+	uint32_t ratio;
+
+	if (!(features & BIT(7)))
+		return;
+
+	msr = rdmsr(MSR_MISC_PWR_MGMT);
+	if (!(msr.lo & MISC_PWR_MGMT_LOCK)) {
+		/* Hardware coordinates package requests; _PSD reads this actual bit. */
+		msr.lo &= ~SINGLE_PCTL_ENABLE;
+		wrmsr(MSR_MISC_PWR_MGMT, msr);
+	}
+
+	/* Start at the fused non-turbo ratio, without changing turbo limits. */
+	ratio = rdmsr(MSR_PLATFORM_INFO).lo & 0xff00;
+	if (ratio) {
+		msr = rdmsr(MSR_IA32_PERF_CTL);
+		msr.lo = (msr.lo & ~0xff00) | ratio;
+		wrmsr(MSR_IA32_PERF_CTL, msr);
+	}
+}
+
+bool grantley_cpu_pm_supported(void)
+{
+	const uint32_t signature = cpuid_eax(1);
+
+	/* Early HSX needs DDR crossover policy; BDX has different MPLL policy. */
+	return grantley_cpu_model(signature) == GRANTLEY_HASWELL_EP &&
+		(signature & 0xf) >= 2;
+}
+
+void grantley_configure_cpu_pm(void)
+{
+	const uint32_t features = cpu_get_feature_flags_ecx();
+
+	if (!grantley_cpu_pm_supported())
+		return;
+	configure_c_states(features);
+	configure_p_states(features);
+	printk(BIOS_DEBUG, "Grantley: CPU%u PM CST=%08x POWER_CTL=%08x MISC_PWR=%08x\n",
+	       (unsigned int)cpu_index(), rdmsr(MSR_PKG_CST_CONFIG_CONTROL).lo,
+	       rdmsr(MSR_POWER_CTL).lo, rdmsr(MSR_MISC_PWR_MGMT).lo);
+}
+
+/* Called once on the BSP before CPL3; preserve active PL1 and all PL2 fields. */
+void grantley_configure_package_power_limit(void)
+{
+	msr_t limit = rdmsr(MSR_PKG_POWER_LIMIT);
+	const uint32_t tdp = rdmsr(MSR_PKG_POWER_SKU).lo & PKG_POWER_LIMIT_MASK;
+
+	printk(BIOS_DEBUG, "Grantley: PKG_POWER_LIMIT=%08x:%08x, SKU TDP raw=%u\n",
+	       limit.hi, limit.lo, tdp);
+	if ((limit.lo & PKG_POWER_LIMIT_ENABLE) && (limit.lo & PKG_POWER_LIMIT_MASK))
+		return;
+
+	if ((limit.hi & PKG_POWER_LIMIT_LOCK) ||
+	    !(rdmsr(MSR_PLATFORM_INFO).lo & PLATFORM_INFO_TDP_PROGRAMMABLE) || !tdp) {
+		printk(BIOS_WARNING, "Grantley: cannot initialize missing PL1; preserving RAPL\n");
+		return;
+	}
+
+	/* SKU and limit share RAPL units. Preserve the time window, clamp and PL2. */
+	limit.lo &= ~PKG_POWER_LIMIT_MASK;
+	limit.lo |= tdp | PKG_POWER_LIMIT_ENABLE;
+	wrmsr(MSR_PKG_POWER_LIMIT, limit);
+	limit = rdmsr(MSR_PKG_POWER_LIMIT);
+	if ((limit.lo & (PKG_POWER_LIMIT_MASK | PKG_POWER_LIMIT_ENABLE)) !=
+	    (tdp | PKG_POWER_LIMIT_ENABLE)) {
+		printk(BIOS_WARNING, "Grantley: PL1 readback differs, PKG_POWER_LIMIT=%08x:%08x\n",
+		       limit.hi, limit.lo);
+		return;
+	}
+	printk(BIOS_DEBUG, "Grantley: initialized PL1 from SKU, PKG_POWER_LIMIT=%08x:%08x\n",
+	       limit.hi, limit.lo);
+}
