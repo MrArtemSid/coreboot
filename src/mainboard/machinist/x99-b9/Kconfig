@@ -1,0 +1,23 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if BOARD_MACHINIST_X99_B9
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select NORTHBRIDGE_INTEL_GRANTLEY
+	select SOUTHBRIDGE_INTEL_LYNXPOINT
+	select SERIRQ_CONTINUOUS_MODE
+	select BOARD_ROMSIZE_KB_16384
+	select AZALIA_USE_LEGACY_VERB_TABLE
+	select HAVE_ACPI_TABLES
+
+config MAINBOARD_DIR
+	default "machinist/x99-b9"
+
+config MAINBOARD_PART_NUMBER
+	default "X99 B9"
+
+config BOOTBLOCK_CONSOLE
+	default y
+
+endif # BOARD_MACHINIST_X99_B9

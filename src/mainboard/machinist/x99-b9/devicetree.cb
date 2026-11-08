@@ -1,0 +1,44 @@
+## SPDX-License-Identifier: GPL-2.0-or-later
+
+chip northbridge/intel/grantley
+
+	device domain 0x0 on
+		ops grantley_pci_domain_ops
+		chip cpu/intel/grantley
+			device cpu_cluster 0x0 on
+				ops grantley_cpu_bus_ops
+			end
+		end
+
+		# CPU IIO PCI Express Root Ports
+		device pci 00.0 on end # Server Host bridge
+		device pci 01.0 on end # PCIe Root Port 1 (x4)
+		device pci 01.1 on end # PCIe Root Port 1 (x4 M.2 NVMe)
+		device pci 02.0 on end # PCIe Root Port 2 (x16 slot)
+		device pci 03.0 on end # PCIe Root Port 3 (x8 slot)
+		device pci 03.2 on end # PCIe Root Port 3 (x8)
+		device pci 05.0 on end # IIO System Management / MMCFG
+		device pci 05.1 on end # IIO Hot Plug
+		device pci 05.2 on end # IIO RAS, Error Status
+		device pci 05.4 on end # IIO I/O APIC
+
+		chip southbridge/intel/lynxpoint
+			register "gen1_dec" = "LPC_IO(0xa00, 0x40)"
+			register "gen3_dec" = "LPC_IO(0xca0, 0x10)"
+			register "gen4_dec" = "LPC_IO(0x600, 0x20)"
+			register "gpe0_en_1" = "0x202"
+			register "sata_port_map" = "0x07"
+
+			device pci 14.0 on end # xHCI Controller
+			device pci 16.0 on end # MEI 1
+			device pci 1a.0 on end # EHCI 2
+			device pci 1b.0 on end # High Definition Audio
+			device pci 1c.0 on end # PCIe Port 1
+			device pci 1c.7 on end # PCIe Port 8
+			device pci 1d.0 on end # EHCI 1
+			device pci 1f.0 on end # LPC bridge
+			device pci 1f.2 on end # SATA Controller (AHCI)
+			device pci 1f.3 on end # SMBus Controller
+		end
+	end
+end
