@@ -1,4 +1,8 @@
 chip northbridge/intel/grantley # Intel Haswell-EP / Broadwell-EP (Grantley LGA2011-3)
+	register "start_iio_links" = "true"
+	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou2_bifurcation" = "IIO_BIFURCATE_X4X4"
 	chip cpu/intel/grantley
 		device cpu_cluster 0x0 on
 			ops grantley_cpu_bus_ops
@@ -75,6 +79,29 @@ chip northbridge/intel/grantley # Intel Haswell-EP / Broadwell-EP (Grantley LGA2
 			end
 			device pci 1f.0 on # LPC bridge
 				subsystemid 0x8086 0x7270
+				chip superio/common
+					device pnp 2e.0 on # passes SIO base addr to SSDT gen
+						chip superio/nuvoton/nct5539d
+							device pnp 2e.2 on # UART A
+								io  0x60 = 0x3f8
+								irq 0x70 = 4
+							end
+							device pnp 2e.5 on # PS/2 KBC
+								io  0x60 = 0x60
+								io  0x62 = 0x64
+								irq 0x70 = 1 # Keyboard
+								irq 0x72 = 12 # Mouse
+							end
+							device pnp 2e.b on # HW Monitor
+								io  0x60 = 0xa20
+								irq 0x70 = 0
+							end
+						end
+					end
+				end
+				chip drivers/pc80/tpm
+					device pnp 0c31.0 on end # TPM on the J9A1 header
+				end
 			end
 			device pci 1f.2 on # SATA Controller (AHCI)
 				subsystemid 0x8086 0x7270

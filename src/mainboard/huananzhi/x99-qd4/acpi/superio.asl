@@ -1,3 +1,3 @@
-/* SPDX-License-Identifier: CC-PDDC */
+/* SPDX-License-Identifier: GPL-2.0-only */
 
-/* No Super I/O ACPI objects are emitted yet. */
+#include <drivers/pc80/pc/ps2_controller.asl>
