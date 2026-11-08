@@ -23,6 +23,9 @@ romstage-y += uncore_runner/memory_info.c
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
+ramstage-y += northbridge.c
+ramstage-y += iio.c
+ramstage-y += pcie.c
 
 cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
 uncore_bin_file := $(call strip_quotes,$(CONFIG_INTEL_UNCORE_BIN_FILE))
@@ -47,7 +50,4 @@ grantley-no-raminit:
 
 $(obj)/coreboot.rom: grantley-no-raminit
 endif
-ramstage-y += northbridge.c
-ramstage-y += iio.c
-
 endif
