@@ -25,6 +25,7 @@ postcar-y += memmap.c
 ramstage-y += memmap.c
 ramstage-y += northbridge.c
 ramstage-y += iio.c
+ramstage-y += pcu.c
 ramstage-y += pcie.c
 
 cbfs-files-$(CONFIG_HAVE_INTEL_UNCORE_BIN) += uncore.bin
