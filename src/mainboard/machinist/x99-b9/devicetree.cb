@@ -1,6 +1,10 @@
 ## SPDX-License-Identifier: GPL-2.0-or-later
 
 chip northbridge/intel/grantley
+	register "start_iio_links" = "true"
+	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou2_bifurcation" = "IIO_BIFURCATE_X4X4"
 
 	device domain 0x0 on
 		ops grantley_pci_domain_ops
@@ -15,8 +19,8 @@ chip northbridge/intel/grantley
 		device pci 01.0 on end # PCIe Root Port 1 (x4)
 		device pci 01.1 on end # PCIe Root Port 1 (x4 M.2 NVMe)
 		device pci 02.0 on end # PCIe Root Port 2 (x16 slot)
-		device pci 03.0 on end # PCIe Root Port 3 (x8 slot)
-		device pci 03.2 on end # PCIe Root Port 3 (x8)
+		device pci 03.0 on end # PCIe Root Port 3 (x16 slot)
+		device pci 03.2 off end # PCIe Root Port 3, x8 half (absent in x16 mode)
 		device pci 05.0 on end # IIO System Management / MMCFG
 		device pci 05.1 on end # IIO Hot Plug
 		device pci 05.2 on end # IIO RAS, Error Status
@@ -36,7 +40,31 @@ chip northbridge/intel/grantley
 			device pci 1c.0 on end # PCIe Port 1
 			device pci 1c.7 on end # PCIe Port 8
 			device pci 1d.0 on end # EHCI 1
-			device pci 1f.0 on end # LPC bridge
+			device pci 1f.0 on     # LPC bridge
+				chip superio/common
+					device pnp 2e.0 on # passes SIO base addr to SSDT gen
+						chip superio/nuvoton/nct5539d
+							device pnp 2e.2 on # UART A
+								io  0x60 = 0x3f8
+								irq 0x70 = 4
+							end
+							device pnp 2e.5 on # PS/2 KBC
+								io  0x60 = 0x60
+								io  0x62 = 0x64
+								irq 0x70 = 1 # Keyboard
+								irq 0x72 = 12 # Mouse
+							end
+							device pnp 2e.b on # Hardware Monitor
+								io  0x60 = 0xa20
+								irq 0x70 = 0
+							end
+						end
+					end
+				end
+				chip drivers/pc80/tpm
+					device pnp 0c31.0 on end # TPM on the JLPC1 header
+				end
+			end
 			device pci 1f.2 on end # SATA Controller (AHCI)
 			device pci 1f.3 on end # SMBus Controller
 		end
