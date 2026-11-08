@@ -1,0 +1,93 @@
+chip northbridge/intel/grantley # Intel Haswell-EP / Broadwell-EP (Grantley LGA2011-3)
+	chip cpu/intel/grantley
+		device cpu_cluster 0x0 on
+			ops grantley_cpu_bus_ops
+		end
+	end
+	device domain 0x0 on
+		ops grantley_pci_domain_ops
+		device pci 00.0 on # Server Host bridge Host bridge
+		end
+		device pci 01.0 on # PCIe Root Port 1 (x16 slot)
+		end
+		device pci 02.0 on # PCIe Root Port 2 (x16 slot)
+		end
+		device pci 03.0 on # PCIe Root Port 3 (x8 slot)
+		end
+		device pci 05.0 on # Address Map / IIO Misc
+		end
+		device pci 05.1 on # IIO Hot Plug
+		end
+		device pci 05.2 on # IIO RAS, Error Status
+		end
+		device pci 05.4 on # IIO I/O APIC
+		end
+		chip southbridge/intel/lynxpoint # Intel 8 Series Lynx Point PCH
+			register "docking_supported" = "0"
+			register "gen1_dec" = "LPC_IO(0xa00, 0x40)"
+			register "gen2_dec" = "0x00000000"
+			register "gen3_dec" = "0x00000000"
+			register "gen4_dec" = "LPC_IO(0x600, 0x20)"
+			register "gpe0_en_1" = "0x202"
+			register "gpe0_en_2" = "0x0"
+			register "sata_port0_gen3_dtle" = "0x5"
+			register "sata_port1_gen3_dtle" = "0x5"
+			register "sata_port_map" = "0x30"
+			device pci 14.0 on # xHCI Controller
+				subsystemid 0x8086 0x7270
+			end
+			device pci 16.0 off # Management Engine Interface 1
+			end
+			device pci 16.1 off # Management Engine Interface 2
+			end
+			device pci 16.2 off # Management Engine IDE-R
+			end
+			device pci 16.3 off # Management Engine KT
+			end
+			device pci 19.0 off # Intel Gigabit Ethernet
+			end
+			device pci 1a.0 on # USB2 EHCI #2
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1b.0 on # High Definition Audio
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1c.0 on # PCIe Port #1
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1c.1 off # PCIe Port #2
+			end
+			device pci 1c.2 on # PCIe Port #3
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1c.3 off # PCIe Port #4
+			end
+			device pci 1c.4 off # PCIe Port #5
+			end
+			device pci 1c.5 off # PCIe Port #6
+			end
+			device pci 1c.6 off # PCIe Port #7
+			end
+			device pci 1c.7 off # PCIe Port #8
+			end
+			device pci 1d.0 on # USB2 EHCI #1
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1f.0 on # LPC bridge
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1f.2 on # SATA Controller (AHCI)
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1f.3 on # SMBus
+				subsystemid 0x8086 0x7270
+			end
+			device pci 1f.5 off # SATA Controller (Legacy)
+			end
+			device pci 1f.6 off # Thermal
+			end
+		end
+		device pci 01.1 on
+		end
+	end
+end

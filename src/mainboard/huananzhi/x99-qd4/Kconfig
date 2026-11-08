@@ -1,0 +1,26 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+if BOARD_HUANANZHI_X99_QD4
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select AZALIA_USE_LEGACY_VERB_TABLE
+	select BOARD_ROMSIZE_KB_16384
+	select HAVE_ACPI_RESUME
+	select HAVE_ACPI_TABLES
+	select NORTHBRIDGE_INTEL_GRANTLEY
+	select SERIRQ_CONTINUOUS_MODE
+	select SOUTHBRIDGE_INTEL_LYNXPOINT
+
+config MAINBOARD_DIR
+	string
+	default "huananzhi/x99-qd4"
+
+config MAINBOARD_PART_NUMBER
+	string
+	default "X99-QD4"
+
+config USBDEBUG_HCD_INDEX # FIXME: check this
+	int
+	default 2
+endif
