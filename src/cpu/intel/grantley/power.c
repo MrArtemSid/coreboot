@@ -5,7 +5,45 @@
 #include <cpu/intel/common/common.h>
 #include <cpu/intel/speedstep.h>
 #include <cpu/x86/msr.h>
+#include <drivers/intel/oc_mailbox/oc_mailbox.h>
 #include "grantley.h"
+
+#define OC_MBOX_PLANE_CORE		0
+#define OC_MBOX_PLANE_CACHE		2
+#define OC_MBOX_CMD_OVERRIDE_WRITE	0x11
+
+static void set_voltage_offset(uint8_t plane, int16_t offset_mv)
+{
+	const union oc_mailbox_interface cmd = {
+		.cmd_code = OC_MBOX_CMD_OVERRIDE_WRITE,
+		.param1   = plane,
+	};
+	/* FIVR offset is 11-bit signed fixed point in units of 1/1024 V */
+	int32_t val = ((int32_t)offset_mv * 1024) / 1000;
+	uint32_t data = ((uint32_t)val & 0x7ff) << 21;
+
+	printk(BIOS_INFO,
+	       "Grantley: Setting plane %u voltage offset %d mV (data 0x%08x)\n",
+	       plane, offset_mv, data);
+	if (oc_mailbox_write(cmd, data) < 0)
+		printk(BIOS_ERR,
+		       "Grantley: Failed to write OC mailbox for plane %u\n",
+		       plane);
+}
+
+void grantley_apply_cpu_overrides(const struct grantley_cpu_params *params)
+{
+	if (!params)
+		return;
+
+	if (params->core_voltage_offset_mv != 0)
+		set_voltage_offset(OC_MBOX_PLANE_CORE,
+				   params->core_voltage_offset_mv);
+
+	if (params->uncore_voltage_offset_mv != 0)
+		set_voltage_offset(OC_MBOX_PLANE_CACHE,
+				   params->uncore_voltage_offset_mv);
+}
 
 #define MSR_PLATFORM_INFO		0xce
 #define MSR_IA32_PERF_CTL		0x199

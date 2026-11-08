@@ -7,6 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* CPU power and overclocking / undervolting parameters */
+struct grantley_cpu_params {
+	bool enable_turbo_unlock;      /* Haswell-EP v3 all-core turbo unlock */
+	int16_t core_voltage_offset_mv;   /* Core offset: e.g. -50, -60, -70 mV */
+	int16_t uncore_voltage_offset_mv; /* Uncore / Ring offset: e.g. -50 mV */
+};
+
+void mainboard_cpu_init_params(struct grantley_cpu_params *params);
+void grantley_apply_cpu_overrides(const struct grantley_cpu_params *params);
 void grantley_configure_cpu_pm(void);
 bool grantley_cpu_pm_supported(void);
 void grantley_configure_package_power_limit(void);

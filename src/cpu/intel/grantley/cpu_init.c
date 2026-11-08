@@ -47,11 +47,15 @@ static void grantley_core_init(struct device *cpu)
 
 static void grantley_pre_mp_init(void)
 {
+	struct grantley_cpu_params params = { 0 };
+
 	/* Cache the patch on the BSP before APs can enter intel_microcode_find(). */
 	intel_microcode_load_unlocked(intel_microcode_find());
 	/* Common MP startup snapshots these MTRRs and installs them on each AP. */
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
+	mainboard_cpu_init_params(&params);
+	grantley_apply_cpu_overrides(&params);
 	program_oc_mailbox();
 }
 
@@ -72,6 +76,9 @@ static void get_microcode_info(const void **microcode, size_t *size, int *parall
 {
 	const void *patch = intel_microcode_find();
 
+	/* SIPI assembly writes the patch directly; apply the platform policy here. */
+	if (patch && soc_skip_ucode_update(get_current_microcode_rev(), get_microcode_rev(patch)))
+		patch = NULL;
 	*microcode = patch;
 	*size = patch ? get_microcode_size(patch) : 0;
 	*parallel = 0;

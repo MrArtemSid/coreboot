@@ -41,6 +41,26 @@
 #define GRANTLEY_MMIOH_BASE		0x380000000000ULL
 #define GRANTLEY_MMIOH_END		0x384000000000ULL
 
+/*
+ * Hook called by coreboot microcode update subsystem in ramstage.
+ * If Haswell-EP turbo unlock is requested, skip updating microcode so
+ * the CPU retains the unpatched state required for all-core turbo boost.
+ */
+int soc_skip_ucode_update(u32 current_patch_id, u32 new_patch_id)
+{
+	struct grantley_cpu_params params;
+	mainboard_cpu_init_params(&params);
+
+	if (params.enable_turbo_unlock) {
+		uint32_t sig = cpuid_eax(1);
+		if (grantley_cpu_model(sig) == GRANTLEY_HASWELL_EP) {
+			printk(BIOS_INFO, "Grantley: Haswell-EP Turbo Unlock enabled; skipping microcode update\n");
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static void grantley_domain_read_resources(struct device *dev)
 {
 	const struct grantley_memory_map *map = grantley_get_memory_map();
