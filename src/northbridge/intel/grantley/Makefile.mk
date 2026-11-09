@@ -26,6 +26,7 @@ romstage-$(CONFIG_SOUTHBRIDGE_INTEL_LYNXPOINT) += uncore_runner/me_uma.c
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
+ramstage-y += iio_dma.c
 ramstage-y += northbridge.c
 ramstage-y += pcu.c
 ramstage-y += pcie.c
