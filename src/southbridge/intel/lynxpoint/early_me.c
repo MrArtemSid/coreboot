@@ -6,11 +6,20 @@
 #include <console/console.h>
 #include <delay.h>
 #include <halt.h>
-#include <northbridge/intel/haswell/haswell.h>
 #include <timer.h>
 
 #include "me.h"
 #include "pch.h"
+
+#if CONFIG(NORTHBRIDGE_INTEL_GRANTLEY)
+/* The IIO VT-d device decodes the ME UMA as the ME non-coherent memory range. */
+#define MESEG_DEV	PCI_DEV(0, 5, 0)
+#define MESEG_REG	0xf0
+#else
+#include <northbridge/intel/haswell/haswell.h>
+#define MESEG_DEV	HOST_BRIDGE
+#define MESEG_REG	MESEG_BASE
+#endif
 
 static const char *me_ack_values[] = {
 	[ME_HFS_ACK_NO_DID]	= "No DID Ack received",
@@ -127,8 +136,8 @@ int intel_early_me_init_done(u8 status)
 	};
 
 	/* MEBASE from MESEG_BASE[35:20] */
-	const u32 mebase_l = pci_read_config32(HOST_BRIDGE, MESEG_BASE + 0);
-	const u32 mebase_h = pci_read_config32(HOST_BRIDGE, MESEG_BASE + 4) & 0xf;
+	const u32 mebase_l = pci_read_config32(MESEG_DEV, MESEG_REG + 0);
+	const u32 mebase_h = pci_read_config32(MESEG_DEV, MESEG_REG + 4) & 0xf;
 	did.uma_base = (mebase_l >> 20) | (mebase_h << 12);
 
 	/* Send message to ME */
