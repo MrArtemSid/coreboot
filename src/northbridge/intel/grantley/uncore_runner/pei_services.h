@@ -60,6 +60,9 @@ struct grantley_uncore_state {
 	BOOLEAN dram_initialized;
 };
 
+/* ME UMA interface the memory initializer uses to hand off the ME UMA. */
+extern const EFI_PEI_PPI_DESCRIPTOR grantley_me_uma_ppi_desc;
+
 /* Serve this payload as the IntelSetup variable; NULL means none. */
 void grantley_pei_set_intelsetup(struct grantley_uncore_state *state,
 				 const void *data, size_t size);

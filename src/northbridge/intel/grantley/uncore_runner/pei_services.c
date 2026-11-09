@@ -605,5 +605,11 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	EFI_STATUS status = grantley_install_ppi(&state->services_ptr, g_initial_ppis);
 	if (status != EFI_SUCCESS)
 		return status;
+	if (CONFIG(SOUTHBRIDGE_INTEL_LYNXPOINT)) {
+		status = grantley_install_ppi(&state->services_ptr,
+					      &grantley_me_uma_ppi_desc);
+		if (status != EFI_SUCCESS)
+			return status;
+	}
 	return grantley_init_platform_info_hob(state);
 }

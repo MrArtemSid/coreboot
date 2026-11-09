@@ -21,6 +21,7 @@ romstage-y += uncore_runner/pei_services.c
 romstage-y += uncore_runner/pei_image.c
 romstage-y += uncore_runner/pei_hobs.c
 romstage-y += uncore_runner/memory_info.c
+romstage-$(CONFIG_SOUTHBRIDGE_INTEL_LYNXPOINT) += uncore_runner/me_uma.c
 
 postcar-y += memmap.c
 ramstage-y += memmap.c
