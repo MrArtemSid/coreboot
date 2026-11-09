@@ -23,11 +23,14 @@
 #define  IIO_LNKSTA_NLW		0x03f0
 #define  IIO_RTCAP_CRSSV		0x0001
 /*
- * Discovery window shared by all ports. It matches the margin the links need
- * to come up, so a slow link is not dropped just because enumeration reached
- * the port early; an explicit retrain gets the longer timeout below.
+ * Discovery window shared by all ports, counted from the first scan. The links
+ * need up to 400 ms to train after bifurcation is started and another 200 ms
+ * for Gen3 equalization. Bifurcation is started in romstage, so the window
+ * covers both even when ramstage reaches the ports early. An empty port uses
+ * up the shared window, so it must not be shorter than the training time. An
+ * explicit retrain gets the longer timeout below.
  */
-#define IIO_LINK_DISCOVERY_TIMEOUT_MS	400
+#define IIO_LINK_DISCOVERY_TIMEOUT_MS	600
 #define IIO_LINK_TIMEOUT_MS		1000
 
 static struct device_operations iio_root_port_ops;
@@ -163,7 +166,7 @@ static void iio_scan_bridge(struct device *dev)
 	}
 
 	/*
-	 * grantley_iio_init() started all stacks before enumeration. Share a deadline
+	 * grantley_iio_init() started all stacks in romstage. Share a deadline
 	 * rather than restarting the discovery window for every empty port.
 	 */
 	if (!iio_initial_link_deadline_set) {
