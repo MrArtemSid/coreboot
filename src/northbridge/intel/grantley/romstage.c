@@ -15,6 +15,9 @@
 #include <romstage_common.h>
 #include <romstage_handoff.h>
 #include <southbridge/intel/lynxpoint/pch.h>
+#include <static.h>
+#include "chip.h"
+#include "iio.h"
 #include "platform.h"
 #include "memmap.h"
 
@@ -149,6 +152,9 @@ void mainboard_romstage_entry(void)
 
 		post_code(0x37);
 		printk(BIOS_INFO, "Grantley: memory initialization complete\n");
+
+		/* Let the links train while the later stages load. */
+		grantley_iio_init(config_of_soc());
 		return;
 	}
 

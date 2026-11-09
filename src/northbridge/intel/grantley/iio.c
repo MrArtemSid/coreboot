@@ -117,7 +117,7 @@ void grantley_iio_init(const struct northbridge_intel_grantley_config *cfg)
 	iio_start_bifurcation(3, cfg->iou1_bifurcation);
 
 	/*
-	 * The links train asynchronously; enumeration polls the ports for a ready
-	 * link, so there is nothing to wait for here.
+	 * The links train asynchronously while postcar and ramstage load;
+	 * enumeration polls the ports for a ready link.
 	 */
 }

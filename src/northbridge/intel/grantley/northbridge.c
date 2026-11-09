@@ -18,7 +18,6 @@
 #include <cpu/x86/smm.h>
 #include <types.h>
 #include "chip.h"
-#include "iio.h"
 #include "platform.h"
 #include "memmap.h"
 #include <southbridge/intel/lynxpoint/pch.h>
@@ -265,8 +264,6 @@ static void grantley_init(void *chip_info)
 	if (cfg->vtd_support)
 		pci_s_write_config32(PCI_DEV(0, 5, 0), IIO_VTBAR,
 				     GRANTLEY_VTD_BASE | IIO_VTBAR_EN);
-
-	grantley_iio_init(cfg);
 }
 
 struct chip_operations northbridge_intel_grantley_ops = {
