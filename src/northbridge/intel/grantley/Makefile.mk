@@ -17,6 +17,7 @@ ramstage-y += platform.c
 romstage-y += romstage.c
 romstage-y += memmap.c
 romstage-y += iio.c
+romstage-y += iio_phy.c
 romstage-y += uncore_runner/pei_services.c
 romstage-y += uncore_runner/pei_image.c
 romstage-y += uncore_runner/pei_hobs.c

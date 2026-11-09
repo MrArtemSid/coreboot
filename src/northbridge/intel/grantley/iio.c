@@ -6,6 +6,7 @@
 #include <device/pciexp.h>
 #include "chip.h"
 #include "iio.h"
+#include "iio_phy.h"
 
 /* Fields of the port link capability that the bifurcation decides. */
 #define IIO_LNKCAP_PORT		(0xffU << 24)
@@ -80,6 +81,9 @@ void grantley_iio_init(const struct northbridge_intel_grantley_config *cfg)
 {
 	if (!cfg->start_iio_links)
 		return;
+
+	/* The receivers have to be set up before the links start training. */
+	grantley_iio_phy_init();
 
 	/*
 	 * Widths each function of a stack ends up with, indexed by the
