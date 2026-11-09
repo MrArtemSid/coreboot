@@ -23,17 +23,20 @@
 #define  IIO_LNKSTA_NLW		0x03f0
 #define  IIO_RTCAP_CRSSV		0x0001
 /*
- * Discovery window shared by all ports, counted from the first scan. The links
+ * Discovery windows shared by all ports, counted from the first scan. The links
  * need up to 400 ms to train after bifurcation is started and another 200 ms
  * for Gen3 equalization. Bifurcation is started in romstage, so the window
- * covers both even when ramstage reaches the ports early. An empty port uses
- * up the shared window, so it must not be shorter than the training time. An
+ * covers both even when ramstage reaches the ports early. A port that has not
+ * left Detect by the shorter window has no receiver on the other end; giving
+ * up on it early keeps empty ports from using up the training window. An
  * explicit retrain gets the longer timeout below.
  */
+#define IIO_LINK_DETECT_TIMEOUT_MS	100
 #define IIO_LINK_DISCOVERY_TIMEOUT_MS	600
 #define IIO_LINK_TIMEOUT_MS		1000
 
 static struct device_operations iio_root_port_ops;
+static struct stopwatch iio_initial_detect_deadline;
 static struct stopwatch iio_initial_link_deadline;
 static bool iio_initial_link_deadline_set;
 
@@ -56,6 +59,36 @@ static bool iio_wait_for_link(struct device *rp, unsigned int cap, struct stopwa
 	printk(BIOS_DEBUG, "%s: link not ready, LnkSta=%04x after %ld ms\n",
 	       dev_path(rp), pci_read_config16(rp, cap + PCI_EXP_LNKSTA),
 	       (long)stopwatch_duration_msecs(sw));
+	return false;
+}
+
+/* Wait for a link brought up by bifurcation, giving up early on an empty port. */
+static bool iio_wait_for_initial_link(struct device *rp, unsigned int cap)
+{
+	u16 lnksta;
+
+	do {
+		if (iio_link_ready(rp, cap)) {
+			stopwatch_tick(&iio_initial_link_deadline);
+			printk(BIOS_DEBUG, "%s: link up, LnkSta=%04x at %ld ms\n", dev_path(rp),
+			       pci_read_config16(rp, cap + PCI_EXP_LNKSTA),
+			       (long)stopwatch_duration_msecs(&iio_initial_link_deadline));
+			return true;
+		}
+
+		lnksta = pci_read_config16(rp, cap + PCI_EXP_LNKSTA);
+		if (!(lnksta & (PCI_EXP_LNKSTA_LT | IIO_LNKSTA_NLW)) &&
+		    stopwatch_expired(&iio_initial_detect_deadline)) {
+			printk(BIOS_DEBUG, "%s: no device detected, LnkSta=%04x\n",
+			       dev_path(rp), lnksta);
+			return false;
+		}
+		udelay(100);
+	} while (!stopwatch_expired(&iio_initial_link_deadline));
+
+	printk(BIOS_DEBUG, "%s: link not ready, LnkSta=%04x after %ld ms\n",
+	       dev_path(rp), pci_read_config16(rp, cap + PCI_EXP_LNKSTA),
+	       (long)stopwatch_duration_msecs(&iio_initial_link_deadline));
 	return false;
 }
 
@@ -137,7 +170,7 @@ static void iio_scan_bus(struct bus *bus, unsigned int min_devfn, unsigned int m
 	const u32 lnkcap = pci_read_config32(rp, cap + PCI_EXP_LNKCAP);
 	if (pci_read_config16(rp, cap + PCI_EXP_LNKCTL) & PCI_EXP_LNKCTL_LD)
 		return;
-	if (!iio_wait_for_link(rp, cap, &iio_initial_link_deadline))
+	if (!iio_wait_for_initial_link(rp, cap))
 		return;
 
 	if (!iio_wait_for_endpoint(bus, cap, lnkcap))
@@ -166,10 +199,12 @@ static void iio_scan_bridge(struct device *dev)
 	}
 
 	/*
-	 * grantley_iio_init() started all stacks in romstage. Share a deadline
-	 * rather than restarting the discovery window for every empty port.
+	 * grantley_iio_init() started all stacks in romstage. Share the deadlines
+	 * rather than restarting the discovery windows for every empty port.
 	 */
 	if (!iio_initial_link_deadline_set) {
+		stopwatch_init_msecs_expire(&iio_initial_detect_deadline,
+					    IIO_LINK_DETECT_TIMEOUT_MS);
 		stopwatch_init_msecs_expire(&iio_initial_link_deadline,
 					    IIO_LINK_DISCOVERY_TIMEOUT_MS);
 		iio_initial_link_deadline_set = true;
