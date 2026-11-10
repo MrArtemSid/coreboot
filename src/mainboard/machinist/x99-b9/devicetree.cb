@@ -2,6 +2,7 @@
 
 chip northbridge/intel/grantley
 	register "start_iio_links" = "true"
+	register "vtd_support" = "true"
 	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
 	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"
 	register "iou2_bifurcation" = "IIO_BIFURCATE_X4X4"
