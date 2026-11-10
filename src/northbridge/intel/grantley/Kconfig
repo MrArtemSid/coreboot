@@ -67,6 +67,20 @@ config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
 	  Offset of serialDebugMsgLvl in the board's IntelSetup payload,
 	  or 0 when it is not known.
 
+config GRANTLEY_ME_UMA
+	bool "Hand the ME UMA over to the ME during memory init"
+	depends on HAVE_INTEL_UNCORE_BIN && SOUTHBRIDGE_INTEL_LYNXPOINT
+	help
+	  Provide the ME UMA interface to UncoreInitPeim, so the memory
+	  initializer reserves the UMA the ME asks for, programs the IIO
+	  ME range and sends DRAM Init Done to the ME.
+
+	  Without it the memory initializer finds no ME UMA interface and
+	  skips the handoff, leaving the ME in the state it reached on its
+	  own.
+	  This is experimental: leave it disabled unless the ME region on
+	  the board is known to come up in normal operation.
+
 config DCACHE_BSP_STACK_SIZE
 	hex
 	default 0x10000
