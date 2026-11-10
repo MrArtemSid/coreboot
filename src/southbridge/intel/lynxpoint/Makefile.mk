@@ -35,7 +35,12 @@ bootblock-y += early_pch.c
 romstage-y += early_usb.c me_status.c early_pch.c
 romstage-$(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY) += early_pch_grantley.c thermal.c
 romstage-$(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY) += hsio/common.c hsio/wbg_b0.c
+# On Grantley the early ME code only serves the optional ME UMA handoff.
+ifeq ($(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY),y)
+romstage-$(CONFIG_GRANTLEY_ME_UMA) += early_me.c
+else
 romstage-y += early_me.c
+endif
 romstage-y += pmutil.c
 romstage-y += iobp.c
 
