@@ -177,10 +177,8 @@ static void generate_p_state_entries(int core, int cores_per_package)
 
 	/* P[T] is Turbo state if enabled */
 	if (turbo) {
-		clock = (ratio_turbo * cpu_get_bus_clock()) / KHz;
-
 		/* Add entry for Turbo ratio */
-		acpigen_write_PSS_package(clock,		/* MHz */
+		acpigen_write_PSS_package(clock_max + 1,	/* MHz */
 					  power_max,		/* mW */
 					  PSS_LATENCY_TRANSITION,/* lat1 */
 					  PSS_LATENCY_BUSMASTER,/* lat2 */
