@@ -11,6 +11,10 @@
  * The memory initializer sizes the ME UMA, carves it out of the memory map,
  * programs the IIO ME range and sends DRAM Init Done through this interface.
  * Each service maps onto the common Lynx Point ME helpers.
+ *
+ * The initializer treats a missing interface as a failed previous boot and
+ * always retrains memory, so the interface is installed even without the
+ * handoff; it then reports no UMA and leaves the ME alone.
  */
 struct grantley_me_uma_ppi {
 	UINT32 (EFIAPI *send_uma_size)(EFI_PEI_SERVICES **services, void *ffs_header);
@@ -38,6 +42,9 @@ struct grantley_me_uma_ppi {
  */
 static bool me_uma_usable(void)
 {
+	if (!CONFIG(GRANTLEY_ME_UMA))
+		return false;
+
 	union me_hfs hfs = { .raw = pci_read_config32(PCH_ME_DEV, PCI_ME_HFS) };
 
 	if (hfs.error_code != ME_HFS_ERROR_NONE ||
@@ -51,6 +58,9 @@ static bool me_uma_usable(void)
 
 static UINT32 EFIAPI me_send_uma_size(EFI_PEI_SERVICES **services, void *ffs_header)
 {
+	if (!CONFIG(GRANTLEY_ME_UMA))
+		return 0;
+
 	intel_early_me_status();
 
 	if (!me_uma_usable() || intel_early_me_init())
@@ -66,7 +76,7 @@ static EFI_STATUS EFIAPI me_cpu_replacement_check(EFI_PEI_SERVICES **services,
 		return EFI_INVALID_PARAMETER;
 
 	*next_step = ME_BIOS_ACTION_NONE;
-	if (intel_early_me_cpu_replacement_check())
+	if (CONFIG(GRANTLEY_ME_UMA) && intel_early_me_cpu_replacement_check())
 		*force_full_training = 1;
 
 	return EFI_SUCCESS;

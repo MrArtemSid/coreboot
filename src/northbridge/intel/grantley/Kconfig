@@ -75,9 +75,8 @@ config GRANTLEY_ME_UMA
 	  initializer reserves the UMA the ME asks for, programs the IIO
 	  ME range and sends DRAM Init Done to the ME.
 
-	  Without it the memory initializer finds no ME UMA interface and
-	  skips the handoff, leaving the ME in the state it reached on its
-	  own.
+	  Without it the interface reports no ME UMA and skips the handoff,
+	  leaving the ME in the state it reached on its own.
 	  This is experimental: leave it disabled unless the ME region on
 	  the board is known to come up in normal operation.
 
