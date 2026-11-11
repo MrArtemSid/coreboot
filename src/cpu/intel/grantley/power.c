@@ -58,6 +58,7 @@ void grantley_apply_cpu_overrides(const struct grantley_cpu_params *params)
 #define SINGLE_PCTL_ENABLE		BIT(0)
 #define MISC_PWR_MGMT_LOCK		BIT(13)
 #define POWER_CTL_SAPM_IMC_C2_POLICY	BIT(2)
+#define POWER_CTL_EPB_ENABLE		BIT(18)
 #define PLATFORM_INFO_TDP_PROGRAMMABLE	BIT(29)
 #define PKG_POWER_LIMIT_MASK		0x7fff
 #define PKG_POWER_LIMIT_ENABLE		BIT(15)
@@ -91,6 +92,8 @@ static void configure_c_states(uint32_t features)
 	/* Leave the IMC C2 policy disabled: the memory PLL remains on. */
 	/* Preserve automatic C1E policy; native MWAIT C1E is independent. */
 	msr.lo &= ~POWER_CTL_SAPM_IMC_C2_POLICY;
+	/* Expose IA32_ENERGY_PERF_BIAS and its CPUID bit, as on Haswell. */
+	msr.lo |= POWER_CTL_EPB_ENABLE;
 	wrmsr(MSR_POWER_CTL, msr);
 }
 

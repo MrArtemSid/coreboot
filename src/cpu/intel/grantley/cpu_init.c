@@ -30,13 +30,14 @@ static void grantley_core_init(struct device *cpu)
 	/* These common helpers test CPUID and respect locked feature control. */
 	set_vmx_and_lock();
 	configure_dca_cap();
-	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
 	/*
 	 * Clear Turbo Disable so the turbo P-state is advertised in _PSS, as
 	 * Haswell does; the fused ratio limits stay untouched.
 	 */
 	enable_turbo();
 	grantley_configure_cpu_pm();
+	/* EPB is only visible once the PM setup above has enabled it. */
+	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
 	/*
 	 * The uncore banks that reset leaves populated are masked in MCi_CTL and
 	 * carry no timestamp, so they describe no error this CPU could act on.
