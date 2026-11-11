@@ -146,6 +146,8 @@ void mainboard_romstage_entry(void)
 
 		/* Persist the validated physical reservations before leaving CAR. */
 		cbmem_initialize_empty();
+		if (CONFIG(CACHE_MRC_SETTINGS))
+			grantley_training_cache_save(&uncore_state);
 		grantley_memmap_save();
 		grantley_save_dimm_info(&uncore_state);
 		romstage_handoff_init(false);

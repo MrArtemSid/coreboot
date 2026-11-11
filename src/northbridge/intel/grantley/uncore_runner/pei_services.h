@@ -18,6 +18,13 @@
 /* serialDebugMsgLvl; 1 is SDBG_MIN. */
 #define GRANTLEY_RC_SERIAL_SDBG_MIN	1
 
+/* AttemptFastBootCold in the IntelSetup memory policy: 0 off, 1 on, 2 auto. */
+#define GRANTLEY_INTELSETUP_FAST_BOOT_COLD	0x1209
+
+/* The module exports its trained configuration as chunks of at most 0xF000. */
+#define GRANTLEY_CACHE_CHUNK		0xF000
+#define GRANTLEY_CACHE_MAX_CHUNKS	8
+
 /* Vendor GUID of the IntelSetup variable. */
 #define GRANTLEY_INTELSETUP_VENDOR_GUID { 0xec87d643, 0xeba4, 0x4bb5, \
 	{ 0xa1, 0xe5, 0x3f, 0x3e, 0x36, 0xb2, 0x0d, 0xa9 } }
@@ -58,6 +65,20 @@ struct grantley_uncore_state {
 	EFI_PHYSICAL_ADDRESS dram_base;
 	UINT64 dram_size;
 	BOOLEAN dram_initialized;
+
+	/* Training-cache capture and restore (CACHE_MRC_SETTINGS). */
+	uint8_t *cache_scratch;		/* DRAM scratch for oversized HOBs */
+	UINTN cache_scratch_cap;
+	UINTN cache_scratch_used;
+	struct {
+		void *hob;
+		UINTN payload;
+	} cache_chunk[GRANTLEY_CACHE_MAX_CHUNKS];
+	UINTN cache_chunk_count;
+	const uint8_t *cache_data;	/* restored cache, served on read */
+	size_t cache_total;
+	bool cache_loaded;
+	UINTN cache_pool_mark;		/* pool slot shared by the read parts */
 };
 
 /* ME UMA interface the memory initializer uses to hand off the ME UMA. */
@@ -88,5 +109,16 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 				    void *pool_buf, UINTN pool_size,
 				    void *hob_buf, UINTN hob_size);
+
+/* Training cache (training_cache.c). */
+bool grantley_training_cache_is_export(const struct grantley_uncore_state *state,
+				       UINT16 type, UINT16 length);
+bool grantley_training_cache_redirect(struct grantley_uncore_state *state,
+				      UINT16 length, UINT16 aligned_length,
+				      void **hob);
+void grantley_training_cache_save(struct grantley_uncore_state *state);
+EFI_STATUS grantley_training_cache_get(struct grantley_uncore_state *state,
+				       const CHAR16 *name, const EFI_GUID *guid,
+				       UINTN *data_size, void *data);
 
 #endif /* NORTHBRIDGE_INTEL_GRANTLEY_PEI_SERVICES_H */

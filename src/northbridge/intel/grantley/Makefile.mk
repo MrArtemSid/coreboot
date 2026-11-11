@@ -19,6 +19,7 @@ romstage-y += memmap.c
 romstage-y += iio.c
 romstage-y += iio_phy.c
 romstage-y += uncore_runner/pei_services.c
+romstage-$(CONFIG_CACHE_MRC_SETTINGS) += uncore_runner/training_cache.c
 romstage-y += uncore_runner/pei_image.c
 romstage-y += uncore_runner/pei_hobs.c
 romstage-y += uncore_runner/memory_info.c

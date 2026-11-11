@@ -129,6 +129,19 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 
 	/* Align length to 8 bytes without wrapping the 16-bit HOB length. */
 	UINT16 aligned_length = (length + 7) & ~7;
+
+	/*
+	 * The training export is far larger than the CAR HOB arena, so route all
+	 * of its chunks to the DRAM scratch and keep the arena free for the HOBs
+	 * coreboot consumes (the DIMM map in particular).
+	 */
+	if (CONFIG(CACHE_MRC_SETTINGS) &&
+	    grantley_training_cache_is_export(state, type, length)) {
+		if (grantley_training_cache_redirect(state, length, aligned_length, hob))
+			return EFI_SUCCESS;
+		return EFI_OUT_OF_RESOURCES;
+	}
+
 	if (state->hob_allocated > state->hob_size)
 		return EFI_OUT_OF_RESOURCES;
 	UINTN remaining = state->hob_size - state->hob_allocated;
@@ -184,6 +197,20 @@ static EFI_STATUS EFIAPI grantley_install_pei_memory(
 	state->dram_base = memory_begin;
 	state->dram_size = memory_length;
 	state->dram_initialized = TRUE;
+
+	/*
+	 * Give the training-data export a DRAM landing zone at the base of the
+	 * freshly trained window: its chunks are far larger than the CAR HOB
+	 * arena. coreboot's CBMEM lives at the top of memory, so the bottom is
+	 * free until the export is stashed right after the module returns.
+	 */
+	if (CONFIG(CACHE_MRC_SETTINGS)) {
+		const UINTN cap = GRANTLEY_CACHE_MAX_CHUNKS * (UINTN)(GRANTLEY_CACHE_CHUNK + 8);
+		if (memory_length >= cap) {
+			state->cache_scratch = (uint8_t *)(uintptr_t)memory_begin;
+			state->cache_scratch_cap = cap;
+		}
+	}
 	return EFI_SUCCESS;
 }
 
@@ -282,6 +309,16 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	if (!state || !ppi || !variable_name || !vendor_guid || !data_size)
 		return EFI_INVALID_PARAMETER;
 
+	if (CONFIG(CACHE_MRC_SETTINGS) && !grantley_is_intelsetup(variable_name)) {
+		EFI_STATUS status = grantley_training_cache_get(state, variable_name,
+				vendor_guid, data_size, data);
+		if (status != EFI_NOT_FOUND) {
+			if (status == EFI_SUCCESS && attributes)
+				*attributes = 0;
+			return status;
+		}
+	}
+
 	if (!state->setup || !grantley_is_intelsetup(variable_name) ||
 	    memcmp(vendor_guid, &setup_guid, sizeof(setup_guid)) != 0)
 		return EFI_NOT_FOUND;
@@ -295,6 +332,13 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	if (CONFIG(GRANTLEY_UNCORE_RC_SERIAL) && serial_level_offset &&
 	    serial_level_offset < state->setup_size)
 		((uint8_t *)data)[serial_level_offset] = GRANTLEY_RC_SERIAL_SDBG_MIN;
+	/*
+	 * AttemptFastBootCold = enabled, so the module tries the cached
+	 * configuration before training. It validates the data and falls back to
+	 * full training on any mismatch.
+	 */
+	if (CONFIG(CACHE_MRC_SETTINGS) && GRANTLEY_INTELSETUP_FAST_BOOT_COLD < state->setup_size)
+		((uint8_t *)data)[GRANTLEY_INTELSETUP_FAST_BOOT_COLD] = 1; /* enabled */
 
 	*data_size = state->setup_size;
 	if (attributes)

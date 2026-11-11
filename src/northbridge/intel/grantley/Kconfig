@@ -9,8 +9,14 @@ config NORTHBRIDGE_INTEL_GRANTLEY
 	select UDK_2017_BINDING
 	select DRIVERS_EFI_VARIABLE_STORE
 	select DRIVERS_INTEL_OC_MAILBOX
+	select CACHE_MRC_SETTINGS
 
 if NORTHBRIDGE_INTEL_GRANTLEY
+
+# Two slots of the module's 136 KiB training export plus the slot metadata.
+config MRC_SETTINGS_CACHE_SIZE
+	hex
+	default 0x50000
 
 config ECAM_MMCONF_BASE_ADDRESS
 	default 0x80000000
