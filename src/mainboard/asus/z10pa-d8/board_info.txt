@@ -1,0 +1,11 @@
+Vendor name: ASUS
+Board name: Z10PA-D8 Series
+Category: server
+ROM protocol: SPI
+ROM socketed: n
+Flashrom support: y
+
+Notes:
+Dual-socket LGA2011-3 server board (two Xeon E5 v3, C612/Wellsburg PCH).
+The captured board carries two E5-2673 v3 and 2 x 16 GiB DDR4-2133 RDIMM.
+Board sources, stock logs and blobs: https://github.com/coreboot-x99/coreboot_asus_z10pa-d8

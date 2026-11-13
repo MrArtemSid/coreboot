@@ -1,0 +1,57 @@
+## SPDX-License-Identifier: GPL-2.0-only
+
+chip northbridge/intel/grantley # Haswell-EP / Broadwell-EP (LGA2011-3)
+	register "start_iio_links" = "true"
+	register "vtd_support" = "1"
+
+	# Widths taken from the stock LnkCap of each enabled function:
+	# 00:02.0 reports Port #3 x16, 00:03.0 reports Port #7 x16 and 00:01.0
+	# reports Port #1 x8 with no 01.1/01.2 present.
+	register "iou0_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou1_bifurcation" = "IIO_BIFURCATE_X16"
+	register "iou2_bifurcation" = "IIO_BIFURCATE_X8"
+
+	device domain 0x0 on
+		ops grantley_pci_domain_ops
+
+		chip cpu/intel/grantley
+			device cpu_cluster 0x0 on
+				ops grantley_cpu_bus_ops
+			end
+		end
+
+		device pci 00.0 on end # Server host bridge / DMI2
+		device pci 01.0 on end # PCIe root port 1 (x8)
+		device pci 02.0 on end # PCIe root port 2 (x16)
+		device pci 03.0 on end # PCIe root port 3 (x16)
+		device pci 05.0 on end # IIO address map / system management
+		device pci 05.1 on end # IIO hot plug
+		device pci 05.2 on end # IIO RAS, error status
+		device pci 05.4 on end # IIO I/O APIC
+
+		chip southbridge/intel/lynxpoint # C612/Wellsburg
+			# LPC generic decode windows and GPE enables as left by stock.
+			register "gen1_dec" = "LPC_IO(0x200, 0x100)"
+			register "gen2_dec" = "0x00000000"
+			register "gen3_dec" = "LPC_IO(0xca0, 0x10)"
+			register "gen4_dec" = "LPC_IO(0x600, 0x20)"
+			register "gpe0_en_1" = "0x200"
+			register "sata_port_map" = "0x3f"
+
+			device pci 11.0 on end # SPSR
+			device pci 11.4 on end # sSATA controller (AHCI)
+			device pci 14.0 on end # xHCI controller
+			device pci 16.0 on end # Management Engine interface 1
+			device pci 16.1 on end # Management Engine interface 2
+			device pci 1a.0 on end # EHCI #2
+			device pci 1c.0 on end # PCIe port 1
+			device pci 1c.4 on end # PCIe port 5
+			device pci 1c.5 on end # PCIe port 6
+			device pci 1c.7 on end # PCIe port 8
+			device pci 1d.0 on end # EHCI #1
+			device pci 1f.0 on end # LPC bridge
+			device pci 1f.2 on end # SATA controller (AHCI)
+			device pci 1f.3 on end # SMBus
+		end
+	end
+end
