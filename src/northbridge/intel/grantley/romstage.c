@@ -6,6 +6,7 @@
 #include <cbfs.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
+#include <cpu/x86/msr.h>
 #include <cpu/intel/grantley/grantley.h>
 #include <cpu/intel/grantley/grantley_routing.h>
 #include <device/pci_def.h>
@@ -99,6 +100,20 @@ void mainboard_romstage_entry(void)
 			if (status != EFI_SUCCESS)
 				die("Grantley: PlatformInfo board identity failure\n");
 		}
+
+		/*
+		 * Two values the module reads before it can say anything itself.
+		 * CPUBUSNO names the buses this socket owns and the module dead-loops
+		 * when the register is invalid; PLATFORM_INFO[15:8] is the ratio every
+		 * one of its delays is computed from, so a zero there turns each of
+		 * them into a spin that never ends. Neither is printed by the release
+		 * build, and both are cheap to rule out here.
+		 */
+		const msr_t cpubusno = rdmsr(0x300);		/* CPUBUSNO */
+		const msr_t platform_info = rdmsr(0xce);	/* PLATFORM_INFO */
+		printk(BIOS_INFO, "Grantley: CPUBUSNO %08x:%08x ratio %u\n",
+		       cpubusno.hi, cpubusno.lo,
+		       (unsigned int)((platform_info.lo >> 8) & 0xff));
 
 		post_code(0x35);
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");
