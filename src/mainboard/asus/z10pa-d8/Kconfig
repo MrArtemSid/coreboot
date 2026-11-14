@@ -25,6 +25,11 @@ config BOOTBLOCK_CONSOLE
 config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
 	default 0x2ee
 
+# The 6211-byte payload is not the 6090-byte one the other X99 ports use, so
+# attemptFastBootCold has not been located in it yet; leave the byte alone.
+config GRANTLEY_INTELSETUP_FAST_BOOT_COLD_OFFSET
+	default 0x0
+
 config GRANTLEY_ME_UMA
 	default y
 
