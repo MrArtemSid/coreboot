@@ -3,13 +3,16 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include <cf9_reset.h>
 #include <device/mmio.h>
+#include <halt.h>
 #include <post.h>
 #include <console/console.h>
 #include <cpu/cpu.h>
 #undef NULL
 #include "pei_services.h"
 #include "pei_image.h"
+#include "pei_trace.h"
 #include "../memmap.h"
 
 static struct grantley_uncore_state *g_state;
@@ -31,6 +34,9 @@ static EFI_STATUS EFIAPI grantley_install_ppi(
 	const EFI_PEI_PPI_DESCRIPTOR *ppi_list)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	grantley_pei_trace(GRANTLEY_PEI_INSTALL_PPI,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
 
 	if (!state || !ppi_list)
 		return EFI_INVALID_PARAMETER;
@@ -64,6 +70,14 @@ static EFI_STATUS EFIAPI grantley_locate_ppi(
 	void **ppi)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
+	uint32_t guid_lo = 0, guid_hi = 0;
+
+	if (guid) {
+		memcpy(&guid_lo, guid, sizeof(guid_lo));
+		memcpy(&guid_hi, (const uint8_t *)guid + sizeof(guid_lo), sizeof(guid_hi));
+	}
+	grantley_pei_trace(GRANTLEY_PEI_LOCATE_PPI,
+			   (uintptr_t)__builtin_return_address(0), guid_lo, guid_hi);
 
 	if (!state || !guid || !ppi)
 		return EFI_INVALID_PARAMETER;
@@ -96,10 +110,38 @@ static EFI_STATUS EFIAPI grantley_get_boot_mode(
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
+	grantley_pei_trace(GRANTLEY_PEI_GET_BOOT_MODE,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
+
 	if (!state || !mode)
 		return EFI_INVALID_PARAMETER;
 
 	*mode = state->boot_mode;
+	return EFI_SUCCESS;
+}
+
+/*
+ * The module sets the boot mode before it decides how much of memory to
+ * configure, so the request is stored rather than refused: the log line is also
+ * the cheapest way to see which branch it intends to take.
+ */
+static EFI_STATUS EFIAPI grantley_set_boot_mode(
+	const struct _EFI_PEI_SERVICES **services,
+	EFI_BOOT_MODE mode)
+{
+	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	grantley_pei_trace(GRANTLEY_PEI_SET_BOOT_MODE,
+			   (uintptr_t)__builtin_return_address(0), mode, 0);
+
+	if (!state)
+		return EFI_INVALID_PARAMETER;
+	/* 0x21 and above are reserved in PiBootMode.h. */
+	if (mode > BOOT_IN_RECOVERY_MODE)
+		return EFI_INVALID_PARAMETER;
+
+	printk(BIOS_INFO, "PEIM: boot mode %u\n", (unsigned int)mode);
+	state->boot_mode = mode;
 	return EFI_SUCCESS;
 }
 
@@ -108,6 +150,9 @@ static EFI_STATUS EFIAPI grantley_get_hob_list(
 	void **hob_list)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	grantley_pei_trace(GRANTLEY_PEI_GET_HOB_LIST,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
 
 	if (!state || !hob_list)
 		return EFI_INVALID_PARAMETER;
@@ -123,6 +168,9 @@ static EFI_STATUS EFIAPI grantley_create_hob(
 	void **hob)
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
+
+	grantley_pei_trace(GRANTLEY_PEI_CREATE_HOB,
+			   (uintptr_t)__builtin_return_address(0), type, length);
 
 	if (!state || !hob || length < sizeof(EFI_HOB_GENERIC_HEADER) || length > 65528)
 		return EFI_INVALID_PARAMETER;
@@ -221,6 +269,9 @@ static EFI_STATUS EFIAPI grantley_allocate_pool(
 {
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
+	grantley_pei_trace(GRANTLEY_PEI_ALLOCATE_POOL,
+			   (uintptr_t)__builtin_return_address(0), size, 0);
+
 	if (!state || !buffer)
 		return EFI_INVALID_PARAMETER;
 
@@ -244,6 +295,9 @@ static VOID EFIAPI grantley_copy_mem(
 	void *source,
 	UINTN length)
 {
+	grantley_pei_trace(GRANTLEY_PEI_COPY_MEM,
+			   (uintptr_t)__builtin_return_address(0), length, 0);
+
 	if (destination && source && length)
 		memcpy(destination, source, length);
 }
@@ -256,6 +310,8 @@ static EFI_STATUS EFIAPI grantley_report_status_code(
 	const void *caller_id,
 	const void *data)
 {
+	grantley_pei_trace(GRANTLEY_PEI_REPORT_STATUS_CODE,
+			   (uintptr_t)__builtin_return_address(0), value, instance);
 	post_code((uint8_t)value);
 	return EFI_SUCCESS;
 }
@@ -304,6 +360,8 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	static const EFI_GUID setup_guid = GRANTLEY_INTELSETUP_VENDOR_GUID;
 	const size_t serial_level_offset =
 		CONFIG_GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET;
+	const size_t fast_boot_offset =
+		CONFIG_GRANTLEY_INTELSETUP_FAST_BOOT_COLD_OFFSET;
 	struct grantley_uncore_state *state = grantley_get_uncore_state();
 
 	if (!state || !ppi || !variable_name || !vendor_guid || !data_size)
@@ -335,10 +393,13 @@ static EFI_STATUS EFIAPI grantley_get_variable(
 	/*
 	 * AttemptFastBootCold = enabled, so the module tries the cached
 	 * configuration before training. It validates the data and falls back to
-	 * full training on any mismatch.
+	 * full training on any mismatch. The offset moves with the board's
+	 * IntelSetup layout, so a board that has not verified it leaves the
+	 * option at zero and is never handed a modified policy byte.
 	 */
-	if (CONFIG(CACHE_MRC_SETTINGS) && GRANTLEY_INTELSETUP_FAST_BOOT_COLD < state->setup_size)
-		((uint8_t *)data)[GRANTLEY_INTELSETUP_FAST_BOOT_COLD] = 1; /* enabled */
+	if (CONFIG(CACHE_MRC_SETTINGS) && fast_boot_offset &&
+	    fast_boot_offset < state->setup_size)
+		((uint8_t *)data)[fast_boot_offset] = 1; /* enabled */
 
 	*data_size = state->setup_size;
 	if (attributes)
@@ -429,9 +490,64 @@ EFI_STATUS grantley_run_uncore_peim(const void *pe_base, size_t pe_size,
 	return status;
 }
 
-static EFI_STATUS EFIAPI grantley_ffs_stub(void)
+/*
+ * The module walks the firmware volumes looking for a file with a raw section,
+ * so the three FFS services are reported as "not found" and it moves on. Its
+ * error test is a sign test on the 32-bit status, which EFI_NOT_FOUND passes.
+ */
+static EFI_STATUS EFIAPI grantley_ffs_find_next_volume(void)
 {
+	grantley_pei_trace(GRANTLEY_PEI_FFS_FIND_NEXT_VOLUME,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
 	return EFI_NOT_FOUND;
+}
+
+static EFI_STATUS EFIAPI grantley_ffs_find_next_file(void)
+{
+	grantley_pei_trace(GRANTLEY_PEI_FFS_FIND_NEXT_FILE,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
+	return EFI_NOT_FOUND;
+}
+
+static EFI_STATUS EFIAPI grantley_ffs_find_section_data(void)
+{
+	grantley_pei_trace(GRANTLEY_PEI_FFS_FIND_SECTION_DATA,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
+	return EFI_NOT_FOUND;
+}
+
+/*
+ * UncoreInitPeim locates this PPI and then calls it without inspecting the
+ * lookup result, so the interface must exist: it is the path the memory
+ * initializer uses when its own programming requires the platform to restart.
+ */
+static EFI_STATUS EFIAPI grantley_reset_ppi_reset(const struct _EFI_PEI_SERVICES **services)
+{
+	grantley_pei_trace(GRANTLEY_PEI_RESET_SYSTEM,
+			   (uintptr_t)__builtin_return_address(0), 0, 0);
+	printk(BIOS_INFO, "PEIM: platform reset requested\n");
+	do_full_reset();
+	halt();
+}
+
+static const struct {
+	EFI_STATUS (EFIAPI *reset_system)(const struct _EFI_PEI_SERVICES **);
+} g_reset_ppi = { grantley_reset_ppi_reset };
+
+/*
+ * UncoreInitPeim requests a platform reset through the deprecated
+ * EFI_PEI_SERVICES.ResetSystem slot, not only through the reset PPI. Answering
+ * EFI_UNSUPPORTED leaves it running in a state it expected to be gone from, which
+ * is indistinguishable from a hang on a board whose console has gone quiet, so the
+ * request is honoured and the reset is logged.
+ */
+static EFI_STATUS EFIAPI grantley_reset_system(const struct _EFI_PEI_SERVICES **services)
+{
+	grantley_pei_trace(GRANTLEY_PEI_RESET_SYSTEM,
+			   (uintptr_t)__builtin_return_address(0), 1, 0);
+	printk(BIOS_INFO, "PEIM: platform reset requested\n");
+	do_full_reset();
+	halt();
 }
 
 /* The module never calls the remaining services. */
@@ -472,6 +588,10 @@ static EFI_GUID g_mem_size_guid = {
 	0x9a7ef41e, 0xc140, 0x4bd1,
 	{ 0xb8, 0x84, 0x1e, 0x11, 0x24, 0x0b, 0x4c, 0xe6 }
 };
+static EFI_GUID g_reset_ppi_guid = {
+	0xef398d58, 0x9dfd, 0x4103,
+	{ 0xbf, 0x94, 0x78, 0xc6, 0xf4, 0xfe, 0x71, 0x2f }
+};
 static EFI_GUID g_platform_info_guid = {
 	0x1e2acc41, 0xe26a, 0x483d,
 	{ 0xaf, 0xc7, 0xa0, 0x56, 0xc3, 0x4e, 0x08, 0x7b }
@@ -511,6 +631,11 @@ static const struct {
 		EFI_PHYSICAL_ADDRESS, UINT64, UINT32, EFI_PHYSICAL_ADDRESS *);
 } g_memory_test = { grantley_base_memory_test };
 
+static const EFI_PEI_PPI_DESCRIPTOR g_reset_ppi_desc = {
+	EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
+	&g_reset_ppi_guid, (void *)&g_reset_ppi
+};
+
 static const EFI_PEI_PPI_DESCRIPTOR g_initial_ppis[] = {
 	{ EFI_PEI_PPI_DESCRIPTOR_PPI, &g_read_only_var_guid,
 	  (void *)&g_read_only_var },
@@ -533,19 +658,19 @@ static const EFI_PEI_SERVICES g_pei_services_template = {
 	.LocatePpi          = (EFI_PEI_LOCATE_PPI)grantley_locate_ppi,
 	.NotifyPpi          = (EFI_PEI_NOTIFY_PPI)grantley_unsupported_service,
 	.GetBootMode        = (EFI_PEI_GET_BOOT_MODE)grantley_get_boot_mode,
-	.SetBootMode        = (EFI_PEI_SET_BOOT_MODE)grantley_unsupported_service,
+	.SetBootMode        = (EFI_PEI_SET_BOOT_MODE)grantley_set_boot_mode,
 	.GetHobList         = (EFI_PEI_GET_HOB_LIST)grantley_get_hob_list,
 	.CreateHob          = (EFI_PEI_CREATE_HOB)grantley_create_hob,
-	.FfsFindNextVolume  = (EFI_PEI_FFS_FIND_NEXT_VOLUME2)grantley_ffs_stub,
-	.FfsFindNextFile    = (EFI_PEI_FFS_FIND_NEXT_FILE2)grantley_ffs_stub,
-	.FfsFindSectionData = (EFI_PEI_FFS_FIND_SECTION_DATA2)grantley_ffs_stub,
+	.FfsFindNextVolume  = (EFI_PEI_FFS_FIND_NEXT_VOLUME2)grantley_ffs_find_next_volume,
+	.FfsFindNextFile    = (EFI_PEI_FFS_FIND_NEXT_FILE2)grantley_ffs_find_next_file,
+	.FfsFindSectionData = (EFI_PEI_FFS_FIND_SECTION_DATA2)grantley_ffs_find_section_data,
 	.InstallPeiMemory   = (EFI_PEI_INSTALL_PEI_MEMORY)grantley_install_pei_memory,
 	.AllocatePages      = (EFI_PEI_ALLOCATE_PAGES)grantley_unsupported_service,
 	.AllocatePool       = (EFI_PEI_ALLOCATE_POOL)grantley_allocate_pool,
 	.CopyMem            = (EFI_PEI_COPY_MEM)grantley_copy_mem,
 	.SetMem             = (EFI_PEI_SET_MEM)grantley_unsupported_service,
 	.ReportStatusCode   = (EFI_PEI_REPORT_STATUS_CODE)grantley_report_status_code,
-	.ResetSystem        = (EFI_PEI_RESET_SYSTEM)grantley_unsupported_service,
+	.ResetSystem        = (EFI_PEI_RESET_SYSTEM)grantley_reset_system,
 };
 
 static void grantley_init_hob_list(struct grantley_uncore_state *state, void *hob_buf)
@@ -650,6 +775,9 @@ EFI_STATUS grantley_pei_services_init(struct grantley_uncore_state *state,
 	if (status != EFI_SUCCESS)
 		return status;
 	status = grantley_install_ppi(&state->services_ptr, &grantley_me_uma_ppi_desc);
+	if (status != EFI_SUCCESS)
+		return status;
+	status = grantley_install_ppi(&state->services_ptr, &g_reset_ppi_desc);
 	if (status != EFI_SUCCESS)
 		return status;
 	return grantley_init_platform_info_hob(state);

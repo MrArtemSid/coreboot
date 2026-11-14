@@ -73,6 +73,28 @@ config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
 	  Offset of serialDebugMsgLvl in the board's IntelSetup payload,
 	  or 0 when it is not known.
 
+config GRANTLEY_INTELSETUP_FAST_BOOT_COLD_OFFSET
+	hex
+	depends on HAVE_INTEL_UNCORE_BIN && CACHE_MRC_SETTINGS
+	default 0x1209
+	help
+	  Offset of attemptFastBootCold in the board's IntelSetup payload, or 0
+	  to leave the byte alone. The field moves with the payload layout, so a
+	  board whose payload is not the 6090-byte one must set this to 0 until
+	  the offset is read from its own setup forms: writing a policy byte at
+	  the wrong offset is silent and changes memory init behaviour.
+
+config GRANTLEY_UNCORE_TRACE
+	bool "Log the PEI services the memory initializer calls"
+	depends on HAVE_INTEL_UNCORE_BIN
+	default n
+	help
+	  Print every call the opaque memory initializer makes into the PEI
+	  services table, with the address it called from. A release build of
+	  the module carries no output of its own, so without this a stall
+	  inside it cannot be told apart from slow DRAM training. Each slot has
+	  its own message budget; exceeding it only stops that slot's messages.
+
 config GRANTLEY_ME_UMA
 	bool "Hand the ME UMA over to the ME during memory init"
 	depends on HAVE_INTEL_UNCORE_BIN && SOUTHBRIDGE_INTEL_LYNXPOINT
