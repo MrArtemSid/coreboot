@@ -23,6 +23,10 @@ config MAINBOARD_PART_NUMBER
 	string
 	default "X99-QD4"
 
+# A single-socket desktop board: the HEDT platform type.
+config GRANTLEY_PLATFORM_TYPE
+	default 0x13
+
 config USBDEBUG_HCD_INDEX # FIXME: check this
 	int
 	default 2

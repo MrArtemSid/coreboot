@@ -731,14 +731,18 @@ static EFI_STATUS grantley_init_platform_info_hob(struct grantley_uncore_state *
 	*(uint16_t *)(data + 0x1a) = 0;
 	/* ExtendedInfoValid = 1 at offset 0x2c */
 	data[0x2c] = 1;
-	/* HEDT board type; mainboards may override it. */
-	data[0x46] = 0x13;
+	/* BoardId: the module loads platformType straight from this byte. */
+	data[0x46] = CONFIG_GRANTLEY_PLATFORM_TYPE;
 	/* MemTsegSize at offset 0x85 */
 #if CONFIG(SMM_TSEG)
 	*(uint32_t *)(data + 0x85) = CONFIG_SMM_TSEG_SIZE;
 #endif
-	/* SysData.SysSioExist = 1 at offset 0x9e */
-	data[0x9e] = 1;
+	/*
+	 * SysData.SysSioExist is at 0xBA: this build compiles the payload with
+	 * LT_FLAG and ME_SUPPORT_FLAG, which grow EFI_PLATFORM_MEM_DATA, and 0x9E
+	 * is the second byte of MemLtMemSize rather than the start of SysData.
+	 */
+	data[0xba] = 1;
 
 	state->platform_info = data;
 	return EFI_SUCCESS;

@@ -25,6 +25,10 @@ config MAINBOARD_PART_NUMBER
 config BOOTBLOCK_CONSOLE
 	default y
 
+# A single-socket desktop board: the HEDT platform type.
+config GRANTLEY_PLATFORM_TYPE
+	default 0x13
+
 config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
 	default 0x2d6
 

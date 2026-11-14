@@ -84,6 +84,17 @@ config GRANTLEY_INTELSETUP_FAST_BOOT_COLD_OFFSET
 	  the offset is read from its own setup forms: writing a policy byte at
 	  the wrong offset is silent and changes memory init behaviour.
 
+config GRANTLEY_PLATFORM_TYPE
+	hex
+	depends on HAVE_INTEL_UNCORE_BIN
+	default 0x0
+	help
+	  EFI_PLATFORM_TYPE the memory initializer is told it runs on, stored as
+	  BoardId in the PlatformInfo HOB. It selects the QPI EPARAM tables and,
+	  for the HEDT values 0x13-0x15, clears the ECC policy outright, so a
+	  server board must not inherit a HEDT type. The 2-socket CRB reference
+	  value is 0x00; 0x13 is the single-socket HEDT type.
+
 config GRANTLEY_UNCORE_TRACE
 	bool "Log the PEI services the memory initializer calls"
 	depends on HAVE_INTEL_UNCORE_BIN
